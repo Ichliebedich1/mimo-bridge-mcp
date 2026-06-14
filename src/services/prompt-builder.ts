@@ -61,7 +61,7 @@ export function writeTaskBrief(config: TaskConfig, taskId: string, round: number
 }
 
 export function buildReplyBrief(message: string): string {
-  return `# 回复\n\n${message}\n`;
+  return `# 任务说明\n\n## 回复内容\n\n${message}\n`;
 }
 
 export function writeReplyBrief(message: string, taskId: string, round: number, briefsDir: string): string {

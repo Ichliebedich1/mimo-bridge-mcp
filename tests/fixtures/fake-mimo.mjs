@@ -34,19 +34,13 @@ if (!args.includes("--format") || !args.includes("json")) {
   process.exit(1);
 }
 
-if (!isContinue) {
-  if (!fileArg) {
-    process.stderr.write("错误: 新任务缺少 --file 参数\n");
-    process.exit(1);
-  }
-  if (!dirArg) {
-    process.stderr.write("错误: 新任务缺少 --dir 参数\n");
-    process.exit(1);
-  }
-}
-
 if (!fileArg) {
   process.stderr.write("错误: 缺少 --file 参数\n");
+  process.exit(1);
+}
+
+if (!dirArg) {
+  process.stderr.write("错误: 缺少 --dir 参数\n");
   process.exit(1);
 }
 
@@ -67,7 +61,7 @@ try {
 }
 
 if (isContinue && !sessionIdArg) {
-  process.stderr.write("错误: 续接任务缺少 --session 参数\n");
+  process.stderr.write("错误: 续接任务缺少有效的 --session 参数\n");
   process.exit(1);
 }
 

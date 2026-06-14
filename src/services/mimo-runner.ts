@@ -117,10 +117,12 @@ export function runMimoTask(
       questions,
       issues,
       raw_log_path: logPath,
+      error: null,
     };
 
     if (code !== 0) {
       result.status = "failed";
+      result.error = `MiMo 退出码: ${code}`;
       result.issues.push(`MiMo 退出码: ${code}`);
     }
 

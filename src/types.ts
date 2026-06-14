@@ -72,6 +72,7 @@ export interface TaskResult {
   questions: string[];
   issues: string[];
   raw_log_path: string;
+  error: string | null;
 }
 
 export interface StartTaskInput {
