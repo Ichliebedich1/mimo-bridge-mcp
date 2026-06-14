@@ -1,9 +1,11 @@
-import { readFileSync } from "node:fs";
+import { readFileSync, existsSync } from "node:fs";
 
 const args = process.argv.slice(2);
 
 let isContinue = false;
 let sessionIdArg = null;
+let fileArg = null;
+let dirArg = null;
 let fileContent = "";
 
 for (let i = 0; i < args.length; i++) {
@@ -13,11 +15,11 @@ for (let i = 0; i < args.length; i++) {
     i++;
   }
   if (args[i] === "--file" && args[i + 1]) {
-    try {
-      fileContent = readFileSync(args[i + 1], "utf-8");
-    } catch {
-      // ignore
-    }
+    fileArg = args[i + 1];
+    i++;
+  }
+  if (args[i] === "--dir" && args[i + 1]) {
+    dirArg = args[i + 1];
     i++;
   }
 }
@@ -30,6 +32,33 @@ if (!args.includes("run")) {
 if (!args.includes("--format") || !args.includes("json")) {
   process.stderr.write("错误: 缺少 --format json 参数\n");
   process.exit(1);
+}
+
+if (!isContinue) {
+  if (!fileArg) {
+    process.stderr.write("错误: 新任务缺少 --file 参数\n");
+    process.exit(1);
+  }
+  if (!existsSync(fileArg)) {
+    process.stderr.write(`错误: 任务说明文件不存在: ${fileArg}\n`);
+    process.exit(1);
+  }
+  if (!dirArg) {
+    process.stderr.write("错误: 新任务缺少 --dir 参数\n");
+    process.exit(1);
+  }
+}
+
+if (fileArg) {
+  try {
+    fileContent = readFileSync(fileArg, "utf-8");
+    if (!fileContent.includes("# 任务说明")) {
+      process.stderr.write("警告: 任务说明文件缺少 '# 任务说明' 标记\n");
+    }
+  } catch {
+    process.stderr.write(`错误: 无法读取任务说明文件: ${fileArg}\n`);
+    process.exit(1);
+  }
 }
 
 const sessionId = isContinue && sessionIdArg ? sessionIdArg : "ses_fake_" + Math.random().toString(36).slice(2, 10);

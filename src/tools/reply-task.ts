@@ -5,6 +5,7 @@ import type { TaskResult } from "../types.js";
 import { validateSessionId } from "../services/path-guard.js";
 import { writeReplyBrief } from "../services/prompt-builder.js";
 import { runMimoTask } from "../services/mimo-runner.js";
+import { globalRunningTasks } from "../services/running-tasks.js";
 
 export const ReplyTaskSchema = z.object({
   task_id: z.string().min(1, "任务 ID 不能为空"),
@@ -14,11 +15,13 @@ export const ReplyTaskSchema = z.object({
 export type ReplyTaskInput = z.infer<typeof ReplyTaskSchema>;
 
 export function createReplyTaskHandler(config: Config, taskStore: TaskStore) {
-  const runningTasks = new Map<string, { cancel: () => void }>();
-
   return {
     schema: ReplyTaskSchema,
     handler: async (input: ReplyTaskInput) => {
+      if (globalRunningTasks.hasAny()) {
+        return { error: "已有任务在运行中，第一版只支持同时运行一个写任务" };
+      }
+
       const task = taskStore.getTask(input.task_id);
       if (!task) {
         return { error: `任务不存在: ${input.task_id}` };
@@ -37,11 +40,11 @@ export function createReplyTaskHandler(config: Config, taskStore: TaskStore) {
         return { error: sessionValidation.reason };
       }
 
-      if (task.current_round >= task.config.max_rounds) {
+      if (task.current_round > task.config.max_rounds) {
         return { error: `已达到最大沟通轮数: ${task.config.max_rounds}` };
       }
 
-      writeReplyBrief(input.message, task.task_id, task.current_round + 1, `${config.runtimeDir}/briefs`);
+      writeReplyBrief(input.message, task.task_id, task.current_round, `${config.runtimeDir}/briefs`);
 
       taskStore.updateTaskStatus(task.task_id, "running");
 
@@ -59,15 +62,15 @@ export function createReplyTaskHandler(config: Config, taskStore: TaskStore) {
           }
           taskStore.updateTaskResult(task.task_id, result);
           taskStore.updateTaskStatus(task.task_id, result.status);
-          runningTasks.delete(task.task_id);
+          globalRunningTasks.unregister(task.task_id);
         },
         (error: string) => {
           taskStore.updateTaskStatus(task.task_id, "failed", error);
-          runningTasks.delete(task.task_id);
+          globalRunningTasks.unregister(task.task_id);
         }
       );
 
-      runningTasks.set(task.task_id, { cancel: handle.cancel });
+      globalRunningTasks.register(task.task_id, handle.cancel);
 
       return {
         task_id: task.task_id,
@@ -75,13 +78,7 @@ export function createReplyTaskHandler(config: Config, taskStore: TaskStore) {
       };
     },
     cancelTask: (taskId: string) => {
-      const handle = runningTasks.get(taskId);
-      if (handle) {
-        handle.cancel();
-        runningTasks.delete(taskId);
-        return true;
-      }
-      return false;
+      return globalRunningTasks.cancel(taskId);
     },
   };
 }

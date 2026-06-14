@@ -64,15 +64,32 @@ export function validateEditablePaths(
   editablePaths: string[],
   workspacePath: string
 ): PathGuardResult {
+  let normalizedWorkspace: string;
+  try {
+    normalizedWorkspace = realpathSync(workspacePath);
+  } catch {
+    normalizedWorkspace = normalize(resolve(workspacePath));
+  }
+
   for (const relPath of editablePaths) {
     if (relPath.includes("..")) {
       return { allowed: false, reason: `路径不允许包含 .. : ${relPath}` };
     }
 
-    const fullPath = normalize(resolve(workspacePath, relPath));
-    const normalizedWorkspace = normalize(resolve(workspacePath));
+    const fullPath = resolve(workspacePath, relPath);
 
-    const rel = relative(normalizedWorkspace, fullPath);
+    let normalizedFull: string;
+    try {
+      if (existsSync(fullPath)) {
+        normalizedFull = realpathSync(fullPath);
+      } else {
+        normalizedFull = normalize(fullPath);
+      }
+    } catch {
+      normalizedFull = normalize(fullPath);
+    }
+
+    const rel = relative(normalizedWorkspace, normalizedFull);
     if (rel.startsWith("..") || isAbsolute(rel)) {
       return { allowed: false, reason: `路径超出工作区范围: ${relPath}` };
     }

@@ -1,6 +1,6 @@
 import { existsSync } from "node:fs";
 import { resolve } from "node:path";
-import { execSync } from "node:child_process";
+import { execFileSync } from "node:child_process";
 
 export interface Config {
   mimoNodePath: string;
@@ -33,7 +33,10 @@ export function loadConfig(): Config {
   }
 
   try {
-    const nodeVersion = execSync(`"${mimoNodePath}" --version`, { encoding: "utf-8" }).trim();
+    const nodeVersion = execFileSync(mimoNodePath, ["--version"], {
+      encoding: "utf-8",
+      timeout: 5000,
+    }).trim();
     process.stderr.write(`MiMo Node.js 版本: ${nodeVersion}\n`);
   } catch (err) {
     throw new Error(`无法获取 MiMo Node.js 版本: ${err}`);
