@@ -146,6 +146,7 @@ export class TaskStore {
     if (result.questions !== undefined) task.questions = result.questions;
     if (result.issues !== undefined) task.issues = result.issues;
     if (result.raw_log_path !== undefined) task.raw_log_path = result.raw_log_path;
+    if (result.error !== undefined) task.error = result.error;
 
     this.saveTask(task);
     return task;

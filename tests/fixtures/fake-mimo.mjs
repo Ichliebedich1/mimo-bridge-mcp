@@ -2,6 +2,8 @@ import { readFileSync, existsSync } from "node:fs";
 
 const args = process.argv.slice(2);
 
+const scenario = process.env.FAKE_MIMO_SCENARIO || "success";
+
 let isContinue = false;
 let sessionIdArg = null;
 let fileArg = null;
@@ -63,6 +65,29 @@ try {
 if (isContinue && !sessionIdArg) {
   process.stderr.write("错误: 续接任务缺少有效的 --session 参数\n");
   process.exit(1);
+}
+
+if (scenario === "no_session") {
+  process.stdout.write(JSON.stringify({ type: "text", timestamp: Date.now(), part: { text: "No session" } }) + "\n");
+  process.exit(0);
+}
+
+if (scenario === "exit_error") {
+  process.stderr.write("错误: 模拟退出错误\n");
+  process.exit(1);
+}
+
+if (scenario === "timeout") {
+  setTimeout(() => {}, 300000);
+  process.exit(0);
+}
+
+if (scenario === "stderr") {
+  process.stderr.write("警告: 这是一个警告\n");
+}
+
+if (scenario === "malformed") {
+  process.stdout.write("这不是JSON\n");
 }
 
 const sessionId = isContinue && sessionIdArg ? sessionIdArg : "ses_fake_" + Math.random().toString(36).slice(2, 10);
