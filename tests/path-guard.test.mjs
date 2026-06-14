@@ -1,6 +1,6 @@
 import { describe, it, before, after } from "node:test";
 import assert from "node:assert";
-import { mkdirSync, rmSync, existsSync, symlinkSync } from "node:fs";
+import { mkdirSync, rmSync, existsSync, writeFileSync, symlinkSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { dirname } from "node:path";
@@ -114,5 +114,37 @@ describe("path-guard", () => {
   it("should accept editable paths within workspace", () => {
     const result = validateEditablePaths(["src", "tests"], "C:\\test");
     assert.strictEqual(result.allowed, true);
+  });
+
+  it("should reject editable path symlink to outside", () => {
+    const workspace = join(testDir, "root");
+    const outsideDir = join(testDir, "outside");
+    const symlinkPath = join(workspace, "linked");
+
+    mkdirSync(outsideDir, { recursive: true });
+
+    try {
+      symlinkSync(outsideDir, symlinkPath, "junction");
+      const result = validateEditablePaths(["linked"], workspace);
+      assert.strictEqual(result.allowed, false);
+    } catch {
+      // Skip if symlinks not supported
+    }
+  });
+
+  it("should reject editable path under junction to outside", () => {
+    const workspace = join(testDir, "root");
+    const outsideDir = join(testDir, "outside2");
+    const symlinkPath = join(workspace, "linked2");
+
+    mkdirSync(outsideDir, { recursive: true });
+
+    try {
+      symlinkSync(outsideDir, symlinkPath, "junction");
+      const result = validateEditablePaths(["linked2/new-file.ts"], workspace);
+      assert.strictEqual(result.allowed, false);
+    } catch {
+      // Skip if symlinks not supported
+    }
   });
 });

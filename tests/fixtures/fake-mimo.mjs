@@ -39,26 +39,36 @@ if (!isContinue) {
     process.stderr.write("错误: 新任务缺少 --file 参数\n");
     process.exit(1);
   }
-  if (!existsSync(fileArg)) {
-    process.stderr.write(`错误: 任务说明文件不存在: ${fileArg}\n`);
-    process.exit(1);
-  }
   if (!dirArg) {
     process.stderr.write("错误: 新任务缺少 --dir 参数\n");
     process.exit(1);
   }
 }
 
-if (fileArg) {
-  try {
-    fileContent = readFileSync(fileArg, "utf-8");
-    if (!fileContent.includes("# 任务说明")) {
-      process.stderr.write("警告: 任务说明文件缺少 '# 任务说明' 标记\n");
-    }
-  } catch {
-    process.stderr.write(`错误: 无法读取任务说明文件: ${fileArg}\n`);
+if (!fileArg) {
+  process.stderr.write("错误: 缺少 --file 参数\n");
+  process.exit(1);
+}
+
+if (!existsSync(fileArg)) {
+  process.stderr.write(`错误: 任务说明文件不存在: ${fileArg}\n`);
+  process.exit(1);
+}
+
+try {
+  fileContent = readFileSync(fileArg, "utf-8");
+  if (!fileContent.includes("# 任务说明")) {
+    process.stderr.write("错误: 任务说明文件缺少 '# 任务说明' 标记\n");
     process.exit(1);
   }
+} catch {
+  process.stderr.write(`错误: 无法读取任务说明文件: ${fileArg}\n`);
+  process.exit(1);
+}
+
+if (isContinue && !sessionIdArg) {
+  process.stderr.write("错误: 续接任务缺少 --session 参数\n");
+  process.exit(1);
 }
 
 const sessionId = isContinue && sessionIdArg ? sessionIdArg : "ses_fake_" + Math.random().toString(36).slice(2, 10);

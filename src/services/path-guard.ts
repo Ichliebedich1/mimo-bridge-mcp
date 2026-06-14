@@ -1,4 +1,4 @@
-import { resolve, normalize, relative, isAbsolute } from "node:path";
+import { resolve, normalize, relative, isAbsolute, dirname, basename } from "node:path";
 import { existsSync, lstatSync, realpathSync } from "node:fs";
 
 export interface PathGuardResult {
@@ -60,6 +60,26 @@ export function validateWorkspacePath(
   return { allowed: true };
 }
 
+function resolveRealPath(pathToResolve: string): string {
+  if (existsSync(pathToResolve)) {
+    try {
+      return realpathSync(pathToResolve);
+    } catch {
+      return normalize(pathToResolve);
+    }
+  }
+
+  const parent = dirname(pathToResolve);
+  const child = basename(pathToResolve);
+
+  if (parent === pathToResolve) {
+    return normalize(pathToResolve);
+  }
+
+  const realParent = resolveRealPath(parent);
+  return resolve(realParent, child);
+}
+
 export function validateEditablePaths(
   editablePaths: string[],
   workspacePath: string
@@ -78,16 +98,7 @@ export function validateEditablePaths(
 
     const fullPath = resolve(workspacePath, relPath);
 
-    let normalizedFull: string;
-    try {
-      if (existsSync(fullPath)) {
-        normalizedFull = realpathSync(fullPath);
-      } else {
-        normalizedFull = normalize(fullPath);
-      }
-    } catch {
-      normalizedFull = normalize(fullPath);
-    }
+    const normalizedFull = resolveRealPath(fullPath);
 
     const rel = relative(normalizedWorkspace, normalizedFull);
     if (rel.startsWith("..") || isAbsolute(rel)) {
