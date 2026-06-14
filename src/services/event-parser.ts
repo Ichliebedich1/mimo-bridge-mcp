@@ -9,6 +9,7 @@ export interface ParsedResult {
 
 export function createEventParser(): {
   parse: (data: string) => ParsedResult;
+  flush: () => ParsedResult;
   getSummary: (result: ParsedResult) => string;
   extractQuestions: (result: ParsedResult) => string[];
   extractIssues: (result: ParsedResult) => string[];
@@ -19,6 +20,30 @@ export function createEventParser(): {
   const rawLines: string[] = [];
   let sessionId: string | null = null;
 
+  function processLine(line: string): void {
+    const trimmed = line.trim();
+    if (!trimmed) return;
+
+    rawLines.push(trimmed);
+
+    try {
+      const event = JSON.parse(trimmed) as MimoEvent;
+      events.push(event);
+
+      if (event.sessionID) {
+        sessionId = event.sessionID;
+      }
+      if (event.part?.sessionID) {
+        sessionId = event.part.sessionID;
+      }
+      if (event.type === "text" && event.part?.text) {
+        textChunks.push(event.part.text);
+      }
+    } catch {
+      // 保留无效 JSON 行作为原始日志
+    }
+  }
+
   function parse(data: string): ParsedResult {
     buffer += data;
 
@@ -26,30 +51,19 @@ export function createEventParser(): {
     buffer = lines.pop() || "";
 
     for (const line of lines) {
-      const trimmed = line.trim();
-      if (!trimmed) continue;
-
-      rawLines.push(trimmed);
-
-      try {
-        const event = JSON.parse(trimmed) as MimoEvent;
-        events.push(event);
-
-        if (event.sessionID) {
-          sessionId = event.sessionID;
-        }
-        if (event.part?.sessionID) {
-          sessionId = event.part.sessionID;
-        }
-        if (event.type === "text" && event.part?.text) {
-          textChunks.push(event.part.text);
-        }
-      } catch {
-        // 保留无效 JSON 行作为原始日志
-      }
+      processLine(line);
     }
 
-    return { sessionId, textChunks, events, rawLines };
+    return { sessionId, textChunks: [...textChunks], events: [...events], rawLines: [...rawLines] };
+  }
+
+  function flush(): ParsedResult {
+    if (buffer.trim()) {
+      processLine(buffer);
+      buffer = "";
+    }
+
+    return { sessionId, textChunks: [...textChunks], events: [...events], rawLines: [...rawLines] };
   }
 
   function getSummary(result: ParsedResult): string {
@@ -100,5 +114,5 @@ export function createEventParser(): {
     return [...new Set(issues)];
   }
 
-  return { parse, getSummary, extractQuestions, extractIssues };
+  return { parse, flush, getSummary, extractQuestions, extractIssues };
 }

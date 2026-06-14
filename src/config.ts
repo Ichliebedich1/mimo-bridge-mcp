@@ -1,5 +1,6 @@
 import { existsSync } from "node:fs";
 import { resolve } from "node:path";
+import { execSync } from "node:child_process";
 
 export interface Config {
   mimoNodePath: string;
@@ -29,6 +30,13 @@ export function loadConfig(): Config {
   }
   if (!existsSync(mimoEntryPath)) {
     throw new Error(`MIMO_ENTRY_PATH 指向的文件不存在: ${mimoEntryPath}`);
+  }
+
+  try {
+    const nodeVersion = execSync(`"${mimoNodePath}" --version`, { encoding: "utf-8" }).trim();
+    process.stderr.write(`MiMo Node.js 版本: ${nodeVersion}\n`);
+  } catch (err) {
+    throw new Error(`无法获取 MiMo Node.js 版本: ${err}`);
   }
 
   return {

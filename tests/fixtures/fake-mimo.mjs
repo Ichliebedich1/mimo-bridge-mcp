@@ -2,14 +2,14 @@ import { readFileSync } from "node:fs";
 
 const args = process.argv.slice(2);
 
-const sessionId = "ses_fake_" + Math.random().toString(36).slice(2, 10);
-
 let isContinue = false;
+let sessionIdArg = null;
 let fileContent = "";
 
 for (let i = 0; i < args.length; i++) {
   if (args[i] === "--session" && args[i + 1]) {
     isContinue = true;
+    sessionIdArg = args[i + 1];
     i++;
   }
   if (args[i] === "--file" && args[i + 1]) {
@@ -31,6 +31,8 @@ if (!args.includes("--format") || !args.includes("json")) {
   process.stderr.write("错误: 缺少 --format json 参数\n");
   process.exit(1);
 }
+
+const sessionId = isContinue && sessionIdArg ? sessionIdArg : "ses_fake_" + Math.random().toString(36).slice(2, 10);
 
 const events = [];
 

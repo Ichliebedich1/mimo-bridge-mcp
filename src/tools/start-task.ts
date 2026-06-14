@@ -24,6 +24,10 @@ export function createStartTaskHandler(config: Config, taskStore: TaskStore) {
   return {
     schema: StartTaskSchema,
     handler: async (input: StartTaskInput) => {
+      if (runningTasks.size > 0) {
+        return { error: "已有任务在运行中，第一版只支持同时运行一个写任务" };
+      }
+
       const workspaceValidation = validateWorkspacePath(input.workspace_path, config.allowedRoots);
       if (!workspaceValidation.allowed) {
         return { error: workspaceValidation.reason };
@@ -54,7 +58,7 @@ export function createStartTaskHandler(config: Config, taskStore: TaskStore) {
         runtime_timeout_seconds: input.runtime_timeout_seconds,
       });
 
-      writeTaskBrief(task.config, task.task_id, `${config.runtimeDir}/briefs`);
+      writeTaskBrief(task.config, task.task_id, 1, `${config.runtimeDir}/briefs`);
 
       taskStore.updateTaskStatus(task.task_id, "running");
 

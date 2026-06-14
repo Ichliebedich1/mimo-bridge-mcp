@@ -1,7 +1,9 @@
-import { readFileSync, writeFileSync, mkdirSync, existsSync, readdirSync } from "node:fs";
-import { join, dirname } from "node:path";
+import { readFileSync, writeFileSync, mkdirSync, existsSync, readdirSync, renameSync, unlinkSync } from "node:fs";
+import { join, resolve, normalize } from "node:path";
 import { randomUUID } from "node:crypto";
 import type { TaskState, TaskConfig, TaskStatus } from "../types.js";
+
+const TASK_ID_PATTERN = /^task_[a-f0-9]{12}$/;
 
 export class TaskStore {
   private tasksDir: string;
@@ -9,9 +11,9 @@ export class TaskStore {
   private logsDir: string;
 
   constructor(runtimeDir: string) {
-    this.tasksDir = join(runtimeDir, "tasks");
-    this.briefsDir = join(runtimeDir, "briefs");
-    this.logsDir = join(runtimeDir, "logs");
+    this.tasksDir = resolve(runtimeDir, "tasks");
+    this.briefsDir = resolve(runtimeDir, "briefs");
+    this.logsDir = resolve(runtimeDir, "logs");
 
     this.ensureDir(this.tasksDir);
     this.ensureDir(this.briefsDir);
@@ -24,6 +26,22 @@ export class TaskStore {
     }
   }
 
+  private validateTaskId(taskId: string): boolean {
+    return TASK_ID_PATTERN.test(taskId);
+  }
+
+  private getTaskFilePath(taskId: string): string | null {
+    if (!this.validateTaskId(taskId)) {
+      return null;
+    }
+    const filePath = resolve(this.tasksDir, `${taskId}.json`);
+    const normalizedTasksDir = normalize(this.tasksDir) + (this.tasksDir.endsWith("/") || this.tasksDir.endsWith("\\") ? "" : "/");
+    if (!filePath.startsWith(normalizedTasksDir) && !filePath.startsWith(normalize(this.tasksDir))) {
+      return null;
+    }
+    return filePath;
+  }
+
   createTask(config: TaskConfig): TaskState {
     const taskId = `task_${randomUUID().replace(/-/g, "").slice(0, 12)}`;
     const now = new Date().toISOString();
@@ -34,7 +52,7 @@ export class TaskStore {
       agent: "mimo",
       session_id: null,
       config,
-      current_round: 0,
+      current_round: 1,
       created_at: now,
       updated_at: now,
       summary: "",
@@ -51,7 +69,9 @@ export class TaskStore {
   }
 
   getTask(taskId: string): TaskState | null {
-    const filePath = join(this.tasksDir, `${taskId}.json`);
+    const filePath = this.getTaskFilePath(taskId);
+    if (!filePath) return null;
+
     if (!existsSync(filePath)) {
       return null;
     }
@@ -64,19 +84,33 @@ export class TaskStore {
   }
 
   saveTask(task: TaskState): void {
-    const filePath = join(this.tasksDir, `${task.task_id}.json`);
+    const filePath = this.getTaskFilePath(task.task_id);
+    if (!filePath) {
+      throw new Error(`Invalid task_id: ${task.task_id}`);
+    }
+
     const tmpPath = `${filePath}.tmp`;
 
     task.updated_at = new Date().toISOString();
 
-    writeFileSync(tmpPath, JSON.stringify(task, null, 2), "utf-8");
-    writeFileSync(filePath, JSON.stringify(task, null, 2), "utf-8");
+    const content = JSON.stringify(task, null, 2);
+
+    writeFileSync(tmpPath, content, "utf-8");
 
     try {
-      const { unlinkSync } = require("node:fs");
-      unlinkSync(tmpPath);
+      renameSync(tmpPath, filePath);
     } catch {
-      // ignore cleanup errors
+      try {
+        writeFileSync(filePath, content, "utf-8");
+      } finally {
+        try {
+          if (existsSync(tmpPath)) {
+            unlinkSync(tmpPath);
+          }
+        } catch {
+          // ignore cleanup errors
+        }
+      }
     }
   }
 
@@ -120,7 +154,7 @@ export class TaskStore {
   listTasks(limit: number = 20): TaskState[] {
     try {
       const files = readdirSync(this.tasksDir)
-        .filter((f) => f.endsWith(".json"))
+        .filter((f) => f.endsWith(".json") && !f.endsWith(".tmp"))
         .sort()
         .reverse()
         .slice(0, limit);

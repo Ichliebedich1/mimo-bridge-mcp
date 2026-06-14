@@ -52,9 +52,9 @@ export function buildTaskBrief(config: TaskConfig): string {
   return lines.join("\n");
 }
 
-export function writeTaskBrief(config: TaskConfig, taskId: string, briefsDir: string): string {
+export function writeTaskBrief(config: TaskConfig, taskId: string, round: number, briefsDir: string): string {
   const briefContent = buildTaskBrief(config);
-  const briefPath = `${briefsDir}/${taskId}-round-${config.max_rounds > 0 ? 1 : 0}.md`;
+  const briefPath = `${briefsDir}/${taskId}-round-${round}.md`;
 
   writeFileSync(briefPath, briefContent, "utf-8");
   return briefPath;

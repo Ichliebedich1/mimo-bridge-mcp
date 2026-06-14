@@ -1,5 +1,5 @@
-import { resolve, normalize, isAbsolute } from "node:path";
-import { existsSync, lstatSync } from "node:fs";
+import { resolve, normalize, relative, isAbsolute } from "node:path";
+import { existsSync, lstatSync, realpathSync } from "node:fs";
 
 export interface PathGuardResult {
   allowed: boolean;
@@ -14,7 +14,16 @@ export function validateWorkspacePath(
     return { allowed: false, reason: "workspace_path 必须是绝对路径" };
   }
 
-  const normalized = normalize(resolve(workspacePath));
+  let normalized: string;
+  try {
+    normalized = realpathSync(workspacePath);
+  } catch {
+    try {
+      normalized = normalize(resolve(workspacePath));
+    } catch {
+      return { allowed: false, reason: `路径解析失败: ${workspacePath}` };
+    }
+  }
 
   if (!existsSync(normalized)) {
     return { allowed: false, reason: `路径不存在: ${normalized}` };
@@ -30,8 +39,15 @@ export function validateWorkspacePath(
   }
 
   const isAllowed = allowedRoots.some((root) => {
-    const normalizedRoot = normalize(resolve(root));
-    return normalized.startsWith(normalizedRoot);
+    let normalizedRoot: string;
+    try {
+      normalizedRoot = realpathSync(root);
+    } catch {
+      normalizedRoot = normalize(resolve(root));
+    }
+
+    const rel = relative(normalizedRoot, normalized);
+    return !rel.startsWith("..") && !isAbsolute(rel);
   });
 
   if (!isAllowed) {
@@ -54,8 +70,10 @@ export function validateEditablePaths(
     }
 
     const fullPath = normalize(resolve(workspacePath, relPath));
+    const normalizedWorkspace = normalize(resolve(workspacePath));
 
-    if (!fullPath.startsWith(normalize(resolve(workspacePath)))) {
+    const rel = relative(normalizedWorkspace, fullPath);
+    if (rel.startsWith("..") || isAbsolute(rel)) {
       return { allowed: false, reason: `路径超出工作区范围: ${relPath}` };
     }
   }
@@ -64,7 +82,7 @@ export function validateEditablePaths(
 }
 
 export function validateSessionId(sessionId: string): PathGuardResult {
-  const pattern = /^ses_[a-zA-Z0-9]+$/;
+  const pattern = /^ses_[a-zA-Z0-9_]+$/;
   if (!pattern.test(sessionId)) {
     return { allowed: false, reason: `session_id 格式无效: ${sessionId}` };
   }

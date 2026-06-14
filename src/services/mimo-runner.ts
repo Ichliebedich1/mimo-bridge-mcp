@@ -1,7 +1,8 @@
-import { spawn, type ChildProcess } from "node:child_process";
-import { writeFileSync, appendFileSync } from "node:fs";
-import type { TaskState, TaskConfig, TaskResult } from "../types.js";
-import { createEventParser, type ParsedResult } from "./event-parser.js";
+import { spawn, type ChildProcess, execSync } from "node:child_process";
+import { appendFileSync } from "node:fs";
+import { platform } from "node:os";
+import type { TaskState, TaskResult } from "../types.js";
+import { createEventParser } from "./event-parser.js";
 
 export interface RunnerOptions {
   mimoNodePath: string;
@@ -37,6 +38,7 @@ export function runMimoTask(
     shell: false,
     stdio: ["pipe", "pipe", "pipe"],
     env: { ...process.env },
+    windowsHide: true,
   });
 
   const handle: RunnerHandle = {
@@ -94,7 +96,7 @@ export function runMimoTask(
       timeoutId = null;
     }
 
-    const parsed = parser.parse("");
+    const parsed = parser.flush();
     const summary = parser.getSummary(parsed);
     const questions = parser.extractQuestions(parsed);
     const issues = parser.extractIssues(parsed);
@@ -144,7 +146,7 @@ function buildMimoArgs(task: TaskState, runtimeDir: string): string[] {
 
   const briefPath = `${runtimeDir}/briefs/${task.task_id}-round-${task.current_round}.md`;
 
-  if (task.session_id && task.current_round > 0) {
+  if (task.session_id && task.current_round > 1) {
     args.push("--session", task.session_id);
   }
 
@@ -157,6 +159,17 @@ function buildMimoArgs(task: TaskState, runtimeDir: string): string[] {
 }
 
 function killProcessTree(proc: ChildProcess): void {
+  const isWindows = platform() === "win32";
+
+  if (isWindows && proc.pid) {
+    try {
+      execSync(`taskkill /T /F /PID ${proc.pid}`, { stdio: "ignore" });
+      return;
+    } catch {
+      // taskkill 失败，尝试其他方式
+    }
+  }
+
   try {
     if (proc.pid) {
       process.kill(-proc.pid, "SIGTERM");
@@ -172,7 +185,15 @@ function killProcessTree(proc: ChildProcess): void {
   setTimeout(() => {
     try {
       if (proc.exitCode === null) {
-        proc.kill("SIGKILL");
+        if (isWindows && proc.pid) {
+          try {
+            execSync(`taskkill /T /F /PID ${proc.pid}`, { stdio: "ignore" });
+          } catch {
+            proc.kill("SIGKILL");
+          }
+        } else {
+          proc.kill("SIGKILL");
+        }
       }
     } catch {
       // 忽略

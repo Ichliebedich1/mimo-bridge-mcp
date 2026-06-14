@@ -88,6 +88,51 @@ describe("event-parser", () => {
     assert.strictEqual(result.rawLines.length, 2);
   });
 
+  it("should flush buffer on end", () => {
+    const parser = createEventParser();
+
+    const event = JSON.stringify({
+      type: "text",
+      timestamp: Date.now(),
+      sessionID: "ses_flush",
+      part: { id: "prt1", messageID: "msg1", sessionID: "ses_flush", type: "text", text: "Flushed" },
+    });
+
+    parser.parse(event);
+
+    const result = parser.flush();
+
+    assert.strictEqual(result.sessionId, "ses_flush");
+    assert.strictEqual(result.textChunks[0], "Flushed");
+  });
+
+  it("should handle last event without newline", () => {
+    const parser = createEventParser();
+
+    const event1 = JSON.stringify({
+      type: "step_start",
+      timestamp: Date.now(),
+      sessionID: "ses_no_newline",
+      part: { id: "prt1", messageID: "msg1", sessionID: "ses_no_newline", type: "step-start" },
+    }) + "\n";
+
+    const event2 = JSON.stringify({
+      type: "text",
+      timestamp: Date.now(),
+      sessionID: "ses_no_newline",
+      part: { id: "prt2", messageID: "msg1", sessionID: "ses_no_newline", type: "text", text: "No Newline" },
+    });
+
+    parser.parse(event1);
+    parser.parse(event2);
+
+    const result = parser.flush();
+
+    assert.strictEqual(result.sessionId, "ses_no_newline");
+    assert.strictEqual(result.textChunks[0], "No Newline");
+    assert.strictEqual(result.events.length, 2);
+  });
+
   it("should extract questions from text", () => {
     const parser = createEventParser();
 
