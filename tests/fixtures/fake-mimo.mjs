@@ -1,4 +1,5 @@
 import { readFileSync, existsSync } from "node:fs";
+import { spawn } from "node:child_process";
 
 const args = process.argv.slice(2);
 
@@ -78,7 +79,17 @@ if (scenario === "exit_error") {
 }
 
 if (scenario === "timeout") {
-  setTimeout(() => {}, 300000);
+  setInterval(() => {}, 1000);
+  process.exit(0);
+}
+
+if (scenario === "cancel") {
+  const child = spawn(process.execPath, ["-e", "setInterval(() => {}, 1000)"], {
+    shell: false,
+    stdio: "ignore",
+  });
+  child.unref();
+  setInterval(() => {}, 1000);
   process.exit(0);
 }
 
@@ -88,6 +99,29 @@ if (scenario === "stderr") {
 
 if (scenario === "malformed") {
   process.stdout.write("这不是JSON\n");
+}
+
+if (scenario === "fragmented") {
+  const sessionId = isContinue && sessionIdArg ? sessionIdArg : "ses_fake_" + Math.random().toString(36).slice(2, 10);
+
+  const event = JSON.stringify({
+    type: "text",
+    timestamp: Date.now(),
+    sessionID: sessionId,
+    part: {
+      id: "prt_text_001",
+      messageID: "msg_001",
+      sessionID: sessionId,
+      type: "text",
+      text: "碎片化输出测试",
+    },
+  });
+
+  for (let i = 0; i < event.length; i += 10) {
+    process.stdout.write(event.slice(i, i + 10));
+  }
+  process.stdout.write("\n");
+  process.exit(0);
 }
 
 const sessionId = isContinue && sessionIdArg ? sessionIdArg : "ses_fake_" + Math.random().toString(36).slice(2, 10);

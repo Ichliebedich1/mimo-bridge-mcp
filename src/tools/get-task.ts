@@ -28,6 +28,7 @@ export function createGetTaskHandler(taskStore: TaskStore) {
         questions: task.questions,
         issues: task.issues,
         raw_log_path: task.raw_log_path,
+        stderr_log_path: task.stderr_log_path,
         error: task.error,
       };
 

@@ -61,6 +61,7 @@ export class TaskStore {
       questions: [],
       issues: [],
       raw_log_path: "",
+      stderr_log_path: "",
       error: null,
     };
 

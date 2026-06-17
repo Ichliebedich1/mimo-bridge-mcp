@@ -117,6 +117,7 @@ export function runMimoTask(
       questions,
       issues,
       raw_log_path: logPath,
+      stderr_log_path: stderrLogPath,
       error: null,
     };
 

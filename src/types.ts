@@ -33,6 +33,7 @@ export interface TaskState {
   questions: string[];
   issues: string[];
   raw_log_path: string;
+  stderr_log_path: string;
   error: string | null;
 }
 
@@ -72,6 +73,7 @@ export interface TaskResult {
   questions: string[];
   issues: string[];
   raw_log_path: string;
+  stderr_log_path: string;
   error: string | null;
 }
 
