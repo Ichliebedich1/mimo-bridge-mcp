@@ -80,7 +80,6 @@ if (scenario === "exit_error") {
 
 if (scenario === "timeout") {
   setInterval(() => {}, 1000);
-  process.exit(0);
 }
 
 if (scenario === "cancel") {
@@ -90,7 +89,6 @@ if (scenario === "cancel") {
   });
   child.unref();
   setInterval(() => {}, 1000);
-  process.exit(0);
 }
 
 if (scenario === "stderr") {
