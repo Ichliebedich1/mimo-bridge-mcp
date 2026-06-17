@@ -1,5 +1,14 @@
 import type { MimoEvent } from "../types.js";
 
+function extractJson(str: string): string | null {
+  const start = str.indexOf("{");
+  const end = str.lastIndexOf("}");
+  if (start !== -1 && end !== -1 && end > start) {
+    return str.substring(start, end + 1);
+  }
+  return null;
+}
+
 export interface ParsedResult {
   sessionId: string | null;
   textChunks: string[];
@@ -24,10 +33,13 @@ export function createEventParser(): {
     const trimmed = line.trim();
     if (!trimmed) return;
 
-    rawLines.push(trimmed);
+    const jsonStr = extractJson(trimmed);
+    if (!jsonStr) return;
+
+    rawLines.push(jsonStr);
 
     try {
-      const event = JSON.parse(trimmed) as MimoEvent;
+      const event = JSON.parse(jsonStr) as MimoEvent;
       events.push(event);
 
       if (event.sessionID) {

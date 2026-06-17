@@ -1,6 +1,5 @@
-import { spawn, type ChildProcess, execSync } from "node:child_process";
 import { appendFileSync } from "node:fs";
-import { platform } from "node:os";
+import * as pty from "node-pty";
 import type { TaskState, TaskResult } from "../types.js";
 import { createEventParser } from "./event-parser.js";
 
@@ -13,7 +12,7 @@ export interface RunnerOptions {
 }
 
 export interface RunnerHandle {
-  process: ChildProcess;
+  process: pty.IPty;
   cancel: () => void;
 }
 
@@ -31,64 +30,108 @@ export function runMimoTask(
 
   const args = buildMimoArgs(task, runtimeDir);
 
+  process.stderr.write(`[mimo-runner] Spawning with PTY: ${mimoNodePath} ${[mimoEntryPath, ...args].join(" ")}\n`);
+
   let timeoutId: ReturnType<typeof setTimeout> | null = null;
   let cancelled = false;
 
-  const proc = spawn(mimoNodePath, [mimoEntryPath, ...args], {
-    shell: false,
-    stdio: ["pipe", "pipe", "pipe"],
-    env: { ...process.env },
-    windowsHide: true,
+  const ptyProcess = pty.spawn(mimoNodePath, [mimoEntryPath, ...args], {
+    name: "xterm-256color",
+    cols: 80,
+    rows: 30,
+    cwd: process.cwd(),
+    env: process.env as Record<string, string>,
   });
 
+  process.stderr.write(`[mimo-runner] PTY PID: ${ptyProcess.pid}\n`);
+
   const handle: RunnerHandle = {
-    process: proc,
+    process: ptyProcess,
     cancel: () => {
       cancelled = true;
       if (timeoutId) {
         clearTimeout(timeoutId);
         timeoutId = null;
       }
-      killProcessTree(proc);
+      ptyProcess.kill();
     },
   };
 
   let stdoutData = "";
-  let stderrData = "";
 
-  proc.stdout?.on("data", (data: Buffer) => {
-    const chunk = data.toString();
-    stdoutData += chunk;
+  let checkInterval: ReturnType<typeof setInterval> | null = null;
+  let lastDataTime = Date.now();
+  let noDataCount = 0;
+
+  checkInterval = setInterval(() => {
+    const now = Date.now();
+    if (now - lastDataTime > 3000) {
+      noDataCount++;
+      if (noDataCount >= 2) {
+        if (checkInterval) {
+          clearInterval(checkInterval);
+          checkInterval = null;
+        }
+        if (cancelled) return;
+        cancelled = true;
+        if (timeoutId) {
+          clearTimeout(timeoutId);
+          timeoutId = null;
+        }
+        const parsed = parser.flush();
+        const summary = parser.getSummary(parsed);
+        const questions = parser.extractQuestions(parsed);
+        const issues = parser.extractIssues(parsed);
+        if (!parsed.sessionId) {
+          onError("MiMo 未返回 sessionID，任务失败");
+          return;
+        }
+        const result: TaskResult = {
+          task_id: task.task_id,
+          agent: "mimo",
+          session_id: parsed.sessionId,
+          status: "review",
+          summary,
+          modified_files: [],
+          test_results: "",
+          questions,
+          issues,
+          raw_log_path: logPath,
+          stderr_log_path: stderrLogPath,
+          error: null,
+        };
+        onResult(result);
+      }
+    }
+  }, 1000);
+
+  ptyProcess.onData((data: string) => {
+    lastDataTime = Date.now();
+    noDataCount = 0;
+    stdoutData += data;
 
     try {
-      appendFileSync(logPath, chunk, "utf-8");
+      appendFileSync(logPath, data, "utf-8");
     } catch {
       // 日志写入失败不阻塞主流程
     }
 
-    parser.parse(chunk);
-  });
-
-  proc.stderr?.on("data", (data: Buffer) => {
-    const chunk = data.toString();
-    stderrData += chunk;
-
-    try {
-      appendFileSync(stderrLogPath, chunk, "utf-8");
-    } catch {
-      // 日志写入失败不阻塞主流程
-    }
+    parser.parse(data);
   });
 
   timeoutId = setTimeout(() => {
     if (!cancelled) {
       cancelled = true;
-      killProcessTree(proc);
+      ptyProcess.kill();
       onError(`任务超时（${timeoutMs}ms）`);
     }
   }, timeoutMs);
 
-  proc.on("close", (code) => {
+  ptyProcess.onExit(({ exitCode }) => {
+    if (checkInterval) {
+      clearInterval(checkInterval);
+      checkInterval = null;
+    }
     if (cancelled) return;
 
     if (timeoutId) {
@@ -110,7 +153,7 @@ export function runMimoTask(
       task_id: task.task_id,
       agent: "mimo",
       session_id: parsed.sessionId,
-      status: code === 0 ? "review" : "failed",
+      status: exitCode === 0 ? "review" : "failed",
       summary,
       modified_files: [],
       test_results: "",
@@ -121,31 +164,24 @@ export function runMimoTask(
       error: null,
     };
 
-    if (code !== 0) {
+    if (exitCode !== 0) {
       result.status = "failed";
-      result.error = `MiMo 退出码: ${code}`;
-      result.issues.push(`MiMo 退出码: ${code}`);
+      result.error = `MiMo 退出码: ${exitCode}`;
+      result.issues.push(`MiMo 退出码: ${exitCode}`);
     }
 
     onResult(result);
-  });
-
-  proc.on("error", (err) => {
-    if (cancelled) return;
-
-    if (timeoutId) {
-      clearTimeout(timeoutId);
-      timeoutId = null;
-    }
-
-    onError(`启动 MiMo 失败: ${err.message}`);
   });
 
   return handle;
 }
 
 function buildMimoArgs(task: TaskState, runtimeDir: string): string[] {
-  const args: string[] = ["run"];
+  const args: string[] = [
+    "run",
+    "--pure",
+    "--dangerously-skip-permissions",
+  ];
 
   const briefPath = `${runtimeDir}/briefs/${task.task_id}-round-${task.current_round}.md`;
 
@@ -153,53 +189,10 @@ function buildMimoArgs(task: TaskState, runtimeDir: string): string[] {
     args.push("--session", task.session_id);
   }
 
-  args.push("--file", briefPath);
   args.push("--dir", task.config.workspace_path);
   args.push("--format", "json");
   args.push("请读取附件中的任务说明并按要求执行。");
+  args.push("--file", briefPath);
 
   return args;
-}
-
-function killProcessTree(proc: ChildProcess): void {
-  const isWindows = platform() === "win32";
-
-  if (isWindows && proc.pid) {
-    try {
-      execSync(`taskkill /T /F /PID ${proc.pid}`, { stdio: "ignore" });
-      return;
-    } catch {
-      // taskkill 失败，尝试其他方式
-    }
-  }
-
-  try {
-    if (proc.pid) {
-      process.kill(-proc.pid, "SIGTERM");
-    }
-  } catch {
-    try {
-      proc.kill("SIGTERM");
-    } catch {
-      // 进程可能已经退出
-    }
-  }
-
-  setTimeout(() => {
-    try {
-      if (proc.exitCode === null) {
-        if (isWindows && proc.pid) {
-          try {
-            execSync(`taskkill /T /F /PID ${proc.pid}`, { stdio: "ignore" });
-          } catch {
-            proc.kill("SIGKILL");
-          }
-        } else {
-          proc.kill("SIGKILL");
-        }
-      }
-    } catch {
-      // 忽略
-    }
-  }, 5000);
 }

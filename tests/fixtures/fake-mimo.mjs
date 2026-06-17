@@ -68,40 +68,30 @@ if (isContinue && !sessionIdArg) {
   process.exit(1);
 }
 
+const sessionId = isContinue && sessionIdArg ? sessionIdArg : "ses_fake_" + Math.random().toString(36).slice(2, 10);
+
 if (scenario === "no_session") {
   process.stdout.write(JSON.stringify({ type: "text", timestamp: Date.now(), part: { text: "No session" } }) + "\n");
   process.exit(0);
-}
-
-if (scenario === "exit_error") {
+} else if (scenario === "exit_error") {
   process.stderr.write("错误: 模拟退出错误\n");
   process.exit(1);
-}
-
-if (scenario === "timeout") {
+} else if (scenario === "timeout") {
   setInterval(() => {}, 1000);
-}
-
-if (scenario === "cancel") {
+} else if (scenario === "cancel") {
   const child = spawn(process.execPath, ["-e", "setInterval(() => {}, 1000)"], {
     shell: false,
     stdio: "ignore",
   });
   child.unref();
   setInterval(() => {}, 1000);
-}
-
-if (scenario === "stderr") {
+} else if (scenario === "stderr") {
   process.stderr.write("警告: 这是一个警告\n");
-}
-
-if (scenario === "malformed") {
+  outputEvents(sessionId);
+} else if (scenario === "malformed") {
   process.stdout.write("这不是JSON\n");
-}
-
-if (scenario === "fragmented") {
-  const sessionId = isContinue && sessionIdArg ? sessionIdArg : "ses_fake_" + Math.random().toString(36).slice(2, 10);
-
+  process.exit(0);
+} else if (scenario === "fragmented") {
   const event = JSON.stringify({
     type: "text",
     timestamp: Date.now(),
@@ -120,68 +110,70 @@ if (scenario === "fragmented") {
   }
   process.stdout.write("\n");
   process.exit(0);
+} else {
+  outputEvents(sessionId);
 }
 
-const sessionId = isContinue && sessionIdArg ? sessionIdArg : "ses_fake_" + Math.random().toString(36).slice(2, 10);
+function outputEvents(sid) {
+  const events = [];
 
-const events = [];
+  events.push({
+    type: "step_start",
+    timestamp: Date.now(),
+    sessionID: sid,
+    part: {
+      id: "prt_step_start",
+      messageID: "msg_001",
+      sessionID: sid,
+      type: "step-start",
+    },
+  });
 
-events.push({
-  type: "step_start",
-  timestamp: Date.now(),
-  sessionID: sessionId,
-  part: {
-    id: "prt_step_start",
-    messageID: "msg_001",
-    sessionID: sessionId,
-    type: "step-start",
-  },
-});
+  const responseText = isContinue
+    ? `收到回复，正在处理。\n\n会话 ID: ${sid}`
+    : `收到任务说明，开始执行。\n\n任务内容摘要: ${fileContent.slice(0, 100)}...\n\n会话 ID: ${sid}`;
 
-const responseText = isContinue
-  ? `收到回复，正在处理。\n\n会话 ID: ${sessionId}`
-  : `收到任务说明，开始执行。\n\n任务内容摘要: ${fileContent.slice(0, 100)}...\n\n会话 ID: ${sessionId}`;
-
-events.push({
-  type: "text",
-  timestamp: Date.now(),
-  sessionID: sessionId,
-  part: {
-    id: "prt_text_001",
-    messageID: "msg_001",
-    sessionID: sessionId,
+  events.push({
     type: "text",
-    text: responseText,
-    time: {
-      start: Date.now(),
-      end: Date.now() + 100,
+    timestamp: Date.now(),
+    sessionID: sid,
+    part: {
+      id: "prt_text_001",
+      messageID: "msg_001",
+      sessionID: sid,
+      type: "text",
+      text: responseText,
+      time: {
+        start: Date.now(),
+        end: Date.now() + 100,
+      },
     },
-  },
-});
+  });
 
-events.push({
-  type: "step_finish",
-  timestamp: Date.now(),
-  sessionID: sessionId,
-  part: {
-    id: "prt_step_finish",
-    reason: "stop",
-    messageID: "msg_001",
-    sessionID: sessionId,
-    type: "step-finish",
-    tokens: {
-      total: 100,
-      input: 50,
-      output: 50,
-      reasoning: 0,
-      cache: { write: 0, read: 0 },
+  events.push({
+    type: "step_finish",
+    timestamp: Date.now(),
+    sessionID: sid,
+    part: {
+      id: "prt_step_finish",
+      reason: "stop",
+      messageID: "msg_001",
+      sessionID: sid,
+      type: "step-finish",
+      tokens: {
+        total: 100,
+        input: 50,
+        output: 50,
+        reasoning: 0,
+        cache: { write: 0, read: 0 },
+      },
+      cost: 0.001,
     },
-    cost: 0.001,
-  },
-});
+  });
 
-for (const event of events) {
-  process.stdout.write(JSON.stringify(event) + "\n");
+  for (const event of events) {
+    process.stdout.write(JSON.stringify(event) + "\n");
+  }
+
+  process.exit(0);
 }
-
-process.exit(0);
