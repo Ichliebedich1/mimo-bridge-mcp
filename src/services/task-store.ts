@@ -1,7 +1,7 @@
 import { readFileSync, writeFileSync, mkdirSync, existsSync, readdirSync, renameSync, unlinkSync } from "node:fs";
 import { join, resolve, normalize } from "node:path";
 import { randomUUID } from "node:crypto";
-import type { TaskState, TaskConfig, TaskStatus } from "../types.js";
+import type { TaskState, TaskConfig, TaskStatus, WorktreeState } from "../types.js";
 
 const TASK_ID_PATTERN = /^task_[a-f0-9]{12}$/;
 
@@ -63,6 +63,7 @@ export class TaskStore {
       raw_log_path: "",
       stderr_log_path: "",
       error: null,
+      worktree: null,
     };
 
     this.saveTask(task);
@@ -150,6 +151,24 @@ export class TaskStore {
     if (result.stderr_log_path !== undefined) task.stderr_log_path = result.stderr_log_path;
     if (result.error !== undefined) task.error = result.error;
 
+    this.saveTask(task);
+    return task;
+  }
+
+  updateTaskWorktree(taskId: string, worktree: WorktreeState): TaskState | null {
+    const task = this.getTask(taskId);
+    if (!task) return null;
+
+    task.worktree = worktree;
+    this.saveTask(task);
+    return task;
+  }
+
+  clearTaskWorktree(taskId: string): TaskState | null {
+    const task = this.getTask(taskId);
+    if (!task) return null;
+
+    task.worktree = null;
     this.saveTask(task);
     return task;
   }

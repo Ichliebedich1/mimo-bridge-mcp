@@ -18,6 +18,15 @@ export interface TaskConfig {
   runtime_timeout_seconds: number;
 }
 
+export interface WorktreeState {
+  worktree_path: string;
+  branch_name: string;
+  base_commit: string;
+  diff_summary: string | null;
+  out_of_bounds_files: string[];
+  has_out_of_bounds_changes: boolean;
+}
+
 export interface TaskState {
   task_id: string;
   status: TaskStatus;
@@ -35,6 +44,7 @@ export interface TaskState {
   raw_log_path: string;
   stderr_log_path: string;
   error: string | null;
+  worktree: WorktreeState | null;
 }
 
 export interface MimoEvent {

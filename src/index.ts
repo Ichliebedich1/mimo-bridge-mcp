@@ -8,6 +8,7 @@ import { createReplyTaskHandler } from "./tools/reply-task.js";
 import { createCancelTaskHandler } from "./tools/cancel-task.js";
 import { createFinishTaskHandler } from "./tools/finish-task.js";
 import { createListTasksHandler } from "./tools/list-tasks.js";
+import { createMergeTaskHandler } from "./tools/merge-task.js";
 
 async function main() {
   const config = loadConfig();
@@ -24,6 +25,7 @@ async function main() {
   const cancelTask = createCancelTaskHandler(taskStore);
   const finishTask = createFinishTaskHandler(taskStore);
   const listTasks = createListTasksHandler(taskStore);
+  const mergeTask = createMergeTaskHandler(taskStore, config.allowedRoots[0] || process.cwd());
 
   server.tool(
     "mimo_start_task",
@@ -91,6 +93,18 @@ async function main() {
     listTasks.schema.shape,
     async (params) => {
       const result = await listTasks.handler(params);
+      return {
+        content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+      };
+    }
+  );
+
+  server.tool(
+    "mimo_merge_task",
+    "合并或丢弃任务的 Worktree 修改",
+    mergeTask.schema.shape,
+    async (params) => {
+      const result = await mergeTask.handler(params);
       return {
         content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
       };
