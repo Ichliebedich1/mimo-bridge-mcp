@@ -247,3 +247,38 @@ mimo-bridge-mcp/runtime/
 如有问题，请查阅：
 - 设计文档：`C:\Users\86172\Desktop\MiMo Code project\Agent 协作项目\Codex与Mimo多Agent协作方案.md`
 - 代码仓库：`C:\Users\86172\Desktop\MiMo Code project\Agent 协作项目\mimo-bridge-mcp`
+
+---
+
+## 十、Codex 处理结果
+
+**处理方：Codex（OpenAI）**
+**处理日期：2026年6月18日**
+**状态：P1 sessionID 提取和 P2 完成检测已修复，真实 MiMo 两轮冒烟通过**
+
+### 10.1 根因
+
+1. PTY 使用 80 列宽时会把 JSON 事件硬换行，导致字段名和字符串中出现真实换行，原解析器无法执行 `JSON.parse`。
+2. 原 runner 把“连续数秒没有输出”误判为进程退出。真实 MiMo 首个事件可能在约 6 秒后才出现，任务已经被提前标记失败。
+3. MiMo 在 PTY 下不一定及时触发 `onExit`，但会输出明确的 `step_finish` JSON 事件。
+4. 假 MiMo 的 `malformed` 场景输出无效行后立即退出，没有继续输出有效事件。
+5. 两个假 MiMo 测试文件共用同一临时目录，并行执行时存在互相删除目录的竞态。
+
+### 10.2 修复
+
+- `event-parser.ts` 改为从连续数据流中提取完整、括号平衡的 JSON 对象，不再依赖换行。
+- 支持 ANSI 前后缀、多个 JSON 对象同块输出、分片输出以及 PTY 软换行恢复。
+- PTY 列宽从 80 调整为 10000，降低终端硬换行概率。
+- 删除“无输出即完成”的启发式判断，只使用正式超时、`onExit` 和 `step_finish`。
+- 收到 `step_finish` 后立即形成任务结果，并使用参数化 `taskkill /T /F /PID` 清理 Windows 进程树。
+- 修复假 MiMo `malformed` 场景，并隔离场景测试的临时目录。
+
+### 10.3 验证结果
+
+- `npm.cmd run build`：通过。
+- `npm.cmd test`：63/63 通过。
+- 假 MiMo MCP 两轮：通过，首轮和续接复用同一 `session_id`。
+- 真实 MiMo 首轮：进入 `review`，成功保存真实 `session_id` 和日志路径。
+- 真实 MiMo 两轮：通过，两轮均为 `review`，复用会话 `ses_12954d124ffeDULhcwfGA8NCu5`，第二轮返回 `CONTINUED`。
+
+当前修复尚未提交，工作区中的代码和本节文档为 Codex 本次修改。

@@ -68,6 +68,55 @@ describe("event-parser", () => {
     assert.strictEqual(result.textChunks[0], "Fragmented");
   });
 
+  it("should extract PTY JSON events with ANSI control text and no newlines", () => {
+    const parser = createEventParser();
+
+    const event1 = JSON.stringify({
+      type: "step_start",
+      timestamp: Date.now(),
+      sessionID: "ses_pty",
+      part: { id: "prt1", messageID: "msg1", sessionID: "ses_pty", type: "step-start" },
+    });
+    const event2 = JSON.stringify({
+      type: "text",
+      timestamp: Date.now(),
+      sessionID: "ses_pty",
+      part: { id: "prt2", messageID: "msg1", sessionID: "ses_pty", type: "text", text: "PTY text" },
+    });
+
+    const esc = String.fromCharCode(27);
+    const result = parser.parse(`${esc}[2J${esc}[m${esc}[H${event1}${esc}[K${event2}${esc}[?25h`);
+
+    assert.strictEqual(result.sessionId, "ses_pty");
+    assert.strictEqual(result.textChunks[0], "PTY text");
+    assert.strictEqual(result.events.length, 2);
+  });
+
+  it("should recover JSON events soft-wrapped by a PTY", () => {
+    const parser = createEventParser();
+
+    const event = JSON.stringify({
+      type: "text",
+      timestamp: Date.now(),
+      sessionID: "ses_wrapped",
+      part: {
+        id: "prt_wrapped",
+        messageID: "msg_wrapped",
+        sessionID: "ses_wrapped",
+        type: "text",
+        text: "Wrapped PTY text",
+      },
+    });
+    const esc = String.fromCharCode(27);
+    const wrapped = `${esc}[2J${event.slice(0, 80)}\r\n${event.slice(80, 160)}\r\n${event.slice(160)}${esc}[K`;
+
+    const result = parser.parse(wrapped);
+
+    assert.strictEqual(result.sessionId, "ses_wrapped");
+    assert.strictEqual(result.textChunks[0], "Wrapped PTY text");
+    assert.strictEqual(result.events.length, 1);
+  });
+
   it("should handle malformed JSON gracefully", () => {
     const parser = createEventParser();
 

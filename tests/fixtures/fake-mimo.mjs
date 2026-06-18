@@ -90,7 +90,7 @@ if (scenario === "no_session") {
   outputEvents(sessionId);
 } else if (scenario === "malformed") {
   process.stdout.write("这不是JSON\n");
-  process.exit(0);
+  outputEvents(sessionId);
 } else if (scenario === "fragmented") {
   const event = JSON.stringify({
     type: "text",

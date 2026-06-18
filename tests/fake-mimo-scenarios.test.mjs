@@ -8,7 +8,7 @@ import { mkdirSync, rmSync, existsSync, writeFileSync } from "node:fs";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-const testDir = join(__dirname, "test-fake-mimo");
+const testDir = join(__dirname, "test-fake-mimo-scenarios");
 
 describe("fake-mimo scenarios", () => {
   before(() => {

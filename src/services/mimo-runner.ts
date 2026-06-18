@@ -1,4 +1,6 @@
 import { appendFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { platform } from "node:os";
 import * as pty from "node-pty";
 import type { TaskState, TaskResult } from "../types.js";
 import { createEventParser } from "./event-parser.js";
@@ -37,7 +39,7 @@ export function runMimoTask(
 
   const ptyProcess = pty.spawn(mimoNodePath, [mimoEntryPath, ...args], {
     name: "xterm-256color",
-    cols: 80,
+    cols: 10000,
     rows: 30,
     cwd: process.cwd(),
     env: process.env as Record<string, string>,
@@ -45,94 +47,11 @@ export function runMimoTask(
 
   process.stderr.write(`[mimo-runner] PTY PID: ${ptyProcess.pid}\n`);
 
-  const handle: RunnerHandle = {
-    process: ptyProcess,
-    cancel: () => {
-      cancelled = true;
-      if (timeoutId) {
-        clearTimeout(timeoutId);
-        timeoutId = null;
-      }
-      ptyProcess.kill();
-    },
-  };
+  let settled = false;
 
-  let stdoutData = "";
-
-  let checkInterval: ReturnType<typeof setInterval> | null = null;
-  let lastDataTime = Date.now();
-  let noDataCount = 0;
-
-  checkInterval = setInterval(() => {
-    const now = Date.now();
-    if (now - lastDataTime > 3000) {
-      noDataCount++;
-      if (noDataCount >= 2) {
-        if (checkInterval) {
-          clearInterval(checkInterval);
-          checkInterval = null;
-        }
-        if (cancelled) return;
-        cancelled = true;
-        if (timeoutId) {
-          clearTimeout(timeoutId);
-          timeoutId = null;
-        }
-        const parsed = parser.flush();
-        const summary = parser.getSummary(parsed);
-        const questions = parser.extractQuestions(parsed);
-        const issues = parser.extractIssues(parsed);
-        if (!parsed.sessionId) {
-          onError("MiMo 未返回 sessionID，任务失败");
-          return;
-        }
-        const result: TaskResult = {
-          task_id: task.task_id,
-          agent: "mimo",
-          session_id: parsed.sessionId,
-          status: "review",
-          summary,
-          modified_files: [],
-          test_results: "",
-          questions,
-          issues,
-          raw_log_path: logPath,
-          stderr_log_path: stderrLogPath,
-          error: null,
-        };
-        onResult(result);
-      }
-    }
-  }, 1000);
-
-  ptyProcess.onData((data: string) => {
-    lastDataTime = Date.now();
-    noDataCount = 0;
-    stdoutData += data;
-
-    try {
-      appendFileSync(logPath, data, "utf-8");
-    } catch {
-      // 日志写入失败不阻塞主流程
-    }
-
-    parser.parse(data);
-  });
-
-  timeoutId = setTimeout(() => {
-    if (!cancelled) {
-      cancelled = true;
-      ptyProcess.kill();
-      onError(`任务超时（${timeoutMs}ms）`);
-    }
-  }, timeoutMs);
-
-  ptyProcess.onExit(({ exitCode }) => {
-    if (checkInterval) {
-      clearInterval(checkInterval);
-      checkInterval = null;
-    }
-    if (cancelled) return;
+  const complete = (exitCode: number): void => {
+    if (settled || cancelled) return;
+    settled = true;
 
     if (timeoutId) {
       clearTimeout(timeoutId);
@@ -165,12 +84,54 @@ export function runMimoTask(
     };
 
     if (exitCode !== 0) {
-      result.status = "failed";
       result.error = `MiMo 退出码: ${exitCode}`;
       result.issues.push(`MiMo 退出码: ${exitCode}`);
     }
 
     onResult(result);
+  };
+
+  const handle: RunnerHandle = {
+    process: ptyProcess,
+    cancel: () => {
+      if (settled || cancelled) return;
+      cancelled = true;
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+        timeoutId = null;
+      }
+      stopPtyProcessTree(ptyProcess);
+    },
+  };
+
+  ptyProcess.onData((data: string) => {
+    try {
+      appendFileSync(logPath, data, "utf-8");
+    } catch {
+      // 日志写入失败不阻塞主流程
+    }
+
+    const parsed = parser.parse(data);
+    const finished = parsed.events.some(
+      (event) => event.type === "step_finish" || event.type === "step-finish" || event.part?.type === "step-finish"
+    );
+    if (finished && !settled && !cancelled) {
+      complete(0);
+      stopPtyProcessTree(ptyProcess);
+    }
+  });
+
+  timeoutId = setTimeout(() => {
+    if (!cancelled && !settled) {
+      settled = true;
+      cancelled = true;
+      stopPtyProcessTree(ptyProcess);
+      onError(`任务超时（${timeoutMs}ms）`);
+    }
+  }, timeoutMs);
+
+  ptyProcess.onExit(({ exitCode }) => {
+    complete(exitCode);
   });
 
   return handle;
@@ -195,4 +156,24 @@ function buildMimoArgs(task: TaskState, runtimeDir: string): string[] {
   args.push("--file", briefPath);
 
   return args;
+}
+
+function stopPtyProcessTree(ptyProcess: pty.IPty): void {
+  if (platform() === "win32" && ptyProcess.pid) {
+    try {
+      execFileSync("taskkill", ["/T", "/F", "/PID", String(ptyProcess.pid)], {
+        stdio: "ignore",
+        windowsHide: true,
+      });
+      return;
+    } catch {
+      // Fall back to node-pty's own termination path.
+    }
+  }
+
+  try {
+    ptyProcess.kill();
+  } catch {
+    // The process may already have exited.
+  }
 }
