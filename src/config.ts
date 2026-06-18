@@ -9,6 +9,41 @@ export interface Config {
   runtimeDir: string;
 }
 
+export interface MimoVersion {
+  nodeVersion: string;
+  cliVersion: string;
+}
+
+export function checkNodeVersion(nodePath: string): string {
+  try {
+    const version = execFileSync(nodePath, ["--version"], {
+      encoding: "utf-8",
+      timeout: 5000,
+    }).trim();
+    return version;
+  } catch (err) {
+    throw new Error(`无法获取 Node.js 版本: ${err}`);
+  }
+}
+
+export function checkMimoCliVersion(nodePath: string, entryPath: string): string {
+  try {
+    const version = execFileSync(nodePath, [entryPath, "--version"], {
+      encoding: "utf-8",
+      timeout: 10000,
+    }).trim();
+    return version;
+  } catch (err) {
+    throw new Error(`无法获取 MiMo CLI 版本: ${err}`);
+  }
+}
+
+export function checkMimoVersion(nodePath: string, entryPath: string): MimoVersion {
+  const nodeVersion = checkNodeVersion(nodePath);
+  const cliVersion = checkMimoCliVersion(nodePath, entryPath);
+  return { nodeVersion, cliVersion };
+}
+
 export function loadConfig(): Config {
   const mimoNodePath = process.env.MIMO_NODE_PATH;
   const mimoEntryPath = process.env.MIMO_ENTRY_PATH;
@@ -33,13 +68,11 @@ export function loadConfig(): Config {
   }
 
   try {
-    const nodeVersion = execFileSync(mimoNodePath, ["--version"], {
-      encoding: "utf-8",
-      timeout: 5000,
-    }).trim();
-    process.stderr.write(`MiMo Node.js 版本: ${nodeVersion}\n`);
+    const version = checkMimoVersion(mimoNodePath, mimoEntryPath);
+    process.stderr.write(`MiMo Node.js 版本: ${version.nodeVersion}\n`);
+    process.stderr.write(`MiMo CLI 版本: ${version.cliVersion}\n`);
   } catch (err) {
-    throw new Error(`无法获取 MiMo Node.js 版本: ${err}`);
+    throw new Error(`版本检查失败: ${err}`);
   }
 
   return {

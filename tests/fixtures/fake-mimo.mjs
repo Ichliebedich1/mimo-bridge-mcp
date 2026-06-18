@@ -5,6 +5,11 @@ const args = process.argv.slice(2);
 
 const scenario = process.env.FAKE_MIMO_SCENARIO || "success";
 
+if (args.includes("--version")) {
+  process.stdout.write("0.1.1-fake\n");
+  process.exit(0);
+}
+
 let isContinue = false;
 let sessionIdArg = null;
 let fileArg = null;
