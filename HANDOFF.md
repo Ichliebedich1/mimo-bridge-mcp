@@ -1,6 +1,118 @@
 # mimo-bridge-mcp 交接文档
 
 **更新日期：2026年6月19日**  
+**当前状态：P0 已完成，P1 已完成，P2 已完成，P3 已完成**
+
+---
+
+## 一、当前 Git 状态
+
+- 分支：`master`
+- 工作区：干净
+- 最新提交：`6ae45c9 feat: P3 Git Worktree 隔离与差异审计`
+
+| 提交 | 内容 |
+|------|------|
+| `d771af8` | P0 固化版本 |
+| `7d76caa` | P1 任务生命周期 |
+| `915c2bd` | P2 可靠性与协议测试 |
+| `833db96` | P2 交接文档 |
+| `6ae45c9` | P3 Git Worktree 隔离与差异审计 |
+
+---
+
+## 二、测试验证状态
+
+- `npm.cmd run build`：通过
+- `npm.cmd test`：96/96 单元测试通过
+- 12 个集成测试全部通过（runner-integration 8 个，stdio-protocol 4 个）
+- 总计 108 个测试全部通过
+
+---
+
+## 三、P3 完成内容
+
+### 3.1 Git Worktree 服务
+
+文件：`src/services/git-worktree.ts`
+
+| 方法 | 说明 |
+|------|------|
+| `isGitRepo()` | 检查是否为 Git 仓库 |
+| `getCurrentCommit()` | 获取当前 commit hash |
+| `createWorktree(taskId)` | 创建独立 Worktree |
+| `removeWorktree(taskId)` | 删除 Worktree |
+| `getDiff(taskId)` | 获取 diff 内容 |
+| `getDiffStat(taskId)` | 获取 diff 统计 |
+| `getChangedFiles(taskId)` | 获取变更文件列表 |
+| `getDiffSummary(taskId, editablePaths)` | 获取 diff 摘要 |
+| `checkOutOfBounds(...)` | 检测超出 editable_paths 的修改 |
+| `mergeWorktree(taskId)` | 合并 Worktree 到主分支 |
+| `discardWorktree(taskId)` | 丢弃 Worktree 和分支 |
+
+### 3.2 Merge Task 工具
+
+文件：`src/tools/merge-task.ts`
+
+- 支持 `merge` 操作：合并 Worktree 到主分支
+- 支持 `discard` 操作：丢弃 Worktree 和分支
+- 合并前检查超出路径的修改
+
+### 3.3 Start Task 修改
+
+文件：`src/tools/start-task.ts`
+
+- 新增 `use_worktree` 参数（默认 true）
+- 自动创建 Worktree（如果 workspace 是 Git 仓库）
+- 任务完成后自动获取 diff 摘要
+
+### 3.4 测试覆盖
+
+文件：`tests/git-worktree.test.mjs`
+
+| 测试 | 说明 |
+|------|------|
+| isGitRepo | 检查 Git 仓库 |
+| isGitRepo non-git | 非 Git 目录 |
+| getCurrentCommit | 获取 commit hash |
+| createWorktree | 创建 Worktree |
+| createWorktree duplicate | 重复创建抛错 |
+| getChangedFiles | 检测变更文件 |
+| getDiffStat | 获取 diff 统计 |
+| checkOutOfBounds | 检测超出路径 |
+| checkOutOfBounds empty | 空 editablePaths |
+| getDiffSummary | 获取 diff 摘要 |
+| removeWorktree | 删除 Worktree |
+| discardWorktree | 丢弃 Worktree 和分支 |
+
+---
+
+## 四、MCP 工具列表
+
+| 工具 | 说明 | P3 新增 |
+|------|------|---------|
+| `mimo_start_task` | 创建并启动任务 | 修改 |
+| `mimo_get_task` | 查询任务状态 | |
+| `mimo_reply_task` | 继续会话 | |
+| `mimo_cancel_task` | 终止任务 | |
+| `mimo_finish_task` | 标记验收/放弃 | |
+| `mimo_list_tasks` | 列出任务 | |
+| `mimo_merge_task` | 合并/丢弃 Worktree | ✅ |
+
+---
+
+## 五、下一步工作
+
+### P4：队列和只读并发
+
+- 写任务队列
+- 只读任务并发
+- 任务优先级和取消队列
+
+---
+
+**MiMo Code（Xiaomi MiMo）**  
+**更新日期：2026年6月19日**
 **当前状态：P0/P1 已完成，P2 功能已实现；带已登记技术债进入第一版落地**
 
 ---
