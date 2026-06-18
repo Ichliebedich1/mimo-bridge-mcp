@@ -3,7 +3,7 @@
 **交接日期：2026年6月18日**  
 **交接方：MiMo Code（Xiaomi MiMo）**  
 **接收方：Codex（OpenAI）**  
-**当前状态：冒烟测试阶段，遇到关键问题**
+**当前状态：P0 已固化，P1 生命周期模块基本完成；剩余任务列表排序问题待修**
 
 ---
 
@@ -282,3 +282,69 @@ mimo-bridge-mcp/runtime/
 - 真实 MiMo 两轮：通过，两轮均为 `review`，复用会话 `ses_12954d124ffeDULhcwfGA8NCu5`，第二轮返回 `CONTINUED`。
 
 当前修复尚未提交，工作区中的代码和本节文档为 Codex 本次修改。
+
+---
+
+## 十一、上下文压缩前最新快照
+
+**更新方：MiMo Code（Xiaomi MiMo）**  
+**更新日期：2026年6月19日**  
+**本节取代第七节和第十节中的旧 Git/待提交状态**
+
+### 11.1 当前 Git 状态
+
+- 当前分支：`master`。
+- 工作区：干净。
+- P0 提交：`d771af8 feat: P0 固化当前可用版本 - PTY 解析器、step_finish 完成逻辑、进程树清理`。
+- P1 提交：`7d76caa feat: P1 实现任务生命周期模块（cancel/finish/list）`。
+
+### 11.2 当前可用能力
+
+已实现六个 MCP 工具：
+
+1. `mimo_start_task`
+2. `mimo_get_task`
+3. `mimo_reply_task`
+4. `mimo_cancel_task`
+5. `mimo_finish_task`
+6. `mimo_list_tasks`
+
+验证结果：
+
+- `npm.cmd run build`：通过。
+- `npm.cmd test`：73/73 通过。
+- 本地 STDIO `tools/list`：返回全部六个工具。
+- 运行中任务的 STDIO 取消实测：通过，查询状态持久化为 `cancelled`。
+- P0 真实 MiMo 两轮：通过，能够复用同一个 `session_id`。
+
+### 11.3 P1 审核状态
+
+P1 已完成，等待 Codex 审核。已知问题：
+
+1. `TaskStore.listTasks` 排序问题：当前按文件名倒序，不是按 `updated_at` 倒序
+2. `cancel-task.test.mjs` 使用独立 `RunningTaskRegistry`，未验证真正的取消回调
+
+**建议**：让 Codex 审核 `7d76caa` 提交，确认没问题后再进入 P2。
+
+### 11.4 下一步工作
+
+**P2：可靠性与协议测试**
+
+1. 生产 Runner 成功、非零退出、超时、取消、step_finish 和进程树测试
+2. STDIO `tools/list/start/get/reply/cancel/finish/list` 协议测试
+3. `max_rounds: 1/2/5` 工具层边界测试
+4. `start/reply` 共享并发拒绝测试
+5. MiMo CLI 版本检查
+
+**P1 收尾（可选）**：
+
+1. 修改 `TaskStore.listTasks` 按 `updated_at` 降序排序
+2. 修正取消测试依赖注入
+
+### 11.5 恢复上下文时先读
+
+1. `../Codex与Mimo多Agent协作方案.md`：精简后的总体方案和 P0-P4 路线。
+2. 本文件第十、十一节：PTY 根因、真实两轮证据和最新 P1 审核状态。
+3. `git log --oneline -5` 与 `git status --short --branch`：确认外部修改。
+
+**建议流程**：Codex 审核 P1 → 修复问题 → 进入 P2。
