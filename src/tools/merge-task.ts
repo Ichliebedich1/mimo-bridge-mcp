@@ -9,7 +9,7 @@ export const MergeTaskSchema = z.object({
 
 export type MergeTaskInput = z.infer<typeof MergeTaskSchema>;
 
-export function createMergeTaskHandler(taskStore: TaskStore, repoPath: string) {
+export function createMergeTaskHandler(taskStore: TaskStore) {
   return {
     schema: MergeTaskSchema,
     handler: async (input: MergeTaskInput) => {
@@ -26,22 +26,43 @@ export function createMergeTaskHandler(taskStore: TaskStore, repoPath: string) {
         return { error: `任务状态不允许合并: ${task.status}` };
       }
 
-      const gitManager = new GitWorktreeManager(repoPath);
+      const originalWorkspacePath = task.config.workspace_path;
+      const gitManager = new GitWorktreeManager(originalWorkspacePath);
 
       if (!gitManager.isGitRepo()) {
-        return { error: `路径不是 Git 仓库: ${repoPath}` };
+        return { error: `路径不是 Git 仓库: ${originalWorkspacePath}` };
+      }
+
+      const worktreePath = task.worktree.worktree_path;
+      const expectedWorktreePath = `${originalWorkspacePath}\\.worktrees\\${input.task_id}`.replace(/\//g, "\\");
+      const expectedWorktreePathUnix = `${originalWorkspacePath}/.worktrees/${input.task_id}`.replace(/\\/g, "/");
+
+      if (!worktreePath.replace(/\\/g, "/").includes(".worktrees")) {
+        return { error: "Worktree 路径异常，安全检查失败" };
       }
 
       try {
         if (input.action === "merge") {
-          if (task.worktree.has_out_of_bounds_changes) {
+          const summary = gitManager.getDiffSummary(
+            input.task_id,
+            task.config.editable_paths,
+            originalWorkspacePath
+          );
+
+          if (summary.hasOutOfBoundsChanges) {
             return {
               error: "存在超出 editable_paths 的修改，请先审核",
-              out_of_bounds_files: task.worktree.out_of_bounds_files,
+              out_of_bounds_files: summary.outOfBoundsFiles,
             };
           }
 
-          gitManager.mergeWorktree(input.task_id);
+          const targetBranch = task.worktree.branch_name.replace("task/", "").startsWith("task/")
+            ? gitManager.getCurrentBranch()
+            : "master";
+
+          const currentBranch = gitManager.getCurrentBranch();
+
+          gitManager.mergeWorktree(input.task_id, currentBranch);
           gitManager.removeWorktree(input.task_id);
           taskStore.clearTaskWorktree(input.task_id);
 
@@ -49,6 +70,7 @@ export function createMergeTaskHandler(taskStore: TaskStore, repoPath: string) {
             task_id: input.task_id,
             action: "merge",
             status: "merged",
+            target_branch: currentBranch,
           };
         } else {
           gitManager.discardWorktree(input.task_id);

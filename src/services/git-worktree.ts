@@ -1,6 +1,6 @@
 import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync } from "node:fs";
-import { resolve, relative, isAbsolute } from "node:path";
+import { resolve, relative, isAbsolute, sep } from "node:path";
 
 export interface WorktreeInfo {
   taskId: string;
@@ -24,9 +24,14 @@ export class GitWorktreeManager {
   private repoPath: string;
   private worktreesDir: string;
 
-  constructor(repoPath: string) {
+  constructor(repoPath: string, worktreesBaseDir?: string) {
     this.repoPath = repoPath;
-    this.worktreesDir = resolve(repoPath, ".worktrees");
+    if (worktreesBaseDir) {
+      const repoId = Buffer.from(repoPath).toString("base64url").slice(0, 12);
+      this.worktreesDir = resolve(worktreesBaseDir, "worktrees", repoId);
+    } else {
+      this.worktreesDir = resolve(repoPath, ".worktrees");
+    }
   }
 
   isGitRepo(): boolean {
@@ -44,6 +49,14 @@ export class GitWorktreeManager {
 
   getCurrentCommit(): string {
     return execFileSync("git", ["rev-parse", "HEAD"], {
+      cwd: this.repoPath,
+      encoding: "utf-8",
+      timeout: 5000,
+    }).trim();
+  }
+
+  getCurrentBranch(): string {
+    return execFileSync("git", ["rev-parse", "--abbrev-ref", "HEAD"], {
       cwd: this.repoPath,
       encoding: "utf-8",
       timeout: 5000,
@@ -115,53 +128,22 @@ export class GitWorktreeManager {
     }
   }
 
-  getDiff(taskId: string): string {
+  getChangedFiles(taskId: string): { modified: string[]; added: string[]; deleted: string[]; untracked: string[] } {
     const worktreePath = resolve(this.worktreesDir, taskId);
 
     if (!existsSync(worktreePath)) {
       throw new Error(`Worktree 不存在: ${worktreePath}`);
     }
 
-    try {
-      return execFileSync("git", ["diff", "--no-color"], {
-        cwd: worktreePath,
-        encoding: "utf-8",
-        timeout: 30000,
-      });
-    } catch (err) {
-      throw new Error(`获取 diff 失败: ${err}`);
-    }
-  }
-
-  getDiffStat(taskId: string): string {
-    const worktreePath = resolve(this.worktreesDir, taskId);
-
-    if (!existsSync(worktreePath)) {
-      throw new Error(`Worktree 不存在: ${worktreePath}`);
-    }
+    const modified: string[] = [];
+    const added: string[] = [];
+    const deleted: string[] = [];
+    const untracked: string[] = [];
 
     try {
-      return execFileSync("git", ["diff", "--stat", "--no-color"], {
-        cwd: worktreePath,
-        encoding: "utf-8",
-        timeout: 30000,
-      });
-    } catch (err) {
-      throw new Error(`获取 diff stat 失败: ${err}`);
-    }
-  }
-
-  getChangedFiles(taskId: string): { modified: string[]; added: string[]; deleted: string[] } {
-    const worktreePath = resolve(this.worktreesDir, taskId);
-
-    if (!existsSync(worktreePath)) {
-      throw new Error(`Worktree 不存在: ${worktreePath}`);
-    }
-
-    try {
-      const output = execFileSync(
+      const statusOutput = execFileSync(
         "git",
-        ["diff", "--name-status", "--no-color"],
+        ["status", "--porcelain=v1", "-z"],
         {
           cwd: worktreePath,
           encoding: "utf-8",
@@ -169,50 +151,131 @@ export class GitWorktreeManager {
         }
       );
 
-      const modified: string[] = [];
-      const added: string[] = [];
-      const deleted: string[] = [];
+      const entries = statusOutput.split("\0").filter((e) => e.length > 0);
 
-      for (const line of output.split("\n")) {
-        if (!line.trim()) continue;
-        const [status, file] = line.split("\t");
-        if (!file) continue;
+      for (const entry of entries) {
+        if (entry.length < 3) continue;
 
-        switch (status) {
-          case "M":
+        const indexStatus = entry[0];
+        const workTreeStatus = entry[1];
+        const file = entry.substring(3);
+
+        if (indexStatus === "?" && workTreeStatus === "?") {
+          untracked.push(file);
+        } else if (indexStatus === "R") {
+          const parts = file.split(" -> ");
+          if (parts.length === 2) {
+            deleted.push(parts[0]);
+            added.push(parts[1]);
+          } else {
             modified.push(file);
-            break;
-          case "A":
-            added.push(file);
-            break;
-          case "D":
-            deleted.push(file);
-            break;
-          case "R100":
-          case "R":
-            modified.push(file);
-            break;
+          }
+        } else if (indexStatus === "D" || workTreeStatus === "D") {
+          deleted.push(file);
+        } else if (indexStatus === "A" || workTreeStatus === "A") {
+          added.push(file);
+        } else if (indexStatus === "M" || workTreeStatus === "M" || indexStatus === "C") {
+          modified.push(file);
         }
       }
-
-      return { modified, added, deleted };
     } catch (err) {
       throw new Error(`获取变更文件列表失败: ${err}`);
     }
+
+    return { modified, added, deleted, untracked };
   }
 
-  getDiffSummary(taskId: string, editablePaths: string[]): DiffSummary {
+  getDiff(taskId: string, baseCommit: string): string {
+    const worktreePath = resolve(this.worktreesDir, taskId);
+
+    if (!existsSync(worktreePath)) {
+      throw new Error(`Worktree 不存在: ${worktreePath}`);
+    }
+
+    try {
+      let diff = "";
+
+      try {
+        diff += execFileSync("git", ["diff", "--no-color", `${baseCommit}..HEAD`], {
+          cwd: worktreePath,
+          encoding: "utf-8",
+          timeout: 30000,
+        });
+      } catch {
+        // No commits after base
+      }
+
+      diff += execFileSync("git", ["diff", "--no-color", "--cached"], {
+        cwd: worktreePath,
+        encoding: "utf-8",
+        timeout: 30000,
+      });
+
+      diff += execFileSync("git", ["diff", "--no-color"], {
+        cwd: worktreePath,
+        encoding: "utf-8",
+        timeout: 30000,
+      });
+
+      return diff;
+    } catch (err) {
+      throw new Error(`获取 diff 失败: ${err}`);
+    }
+  }
+
+  getDiffStat(taskId: string, baseCommit: string): string {
+    const worktreePath = resolve(this.worktreesDir, taskId);
+
+    if (!existsSync(worktreePath)) {
+      throw new Error(`Worktree 不存在: ${worktreePath}`);
+    }
+
+    try {
+      let stat = "";
+
+      try {
+        stat += execFileSync("git", ["diff", "--stat", "--no-color", `${baseCommit}..HEAD`], {
+          cwd: worktreePath,
+          encoding: "utf-8",
+          timeout: 30000,
+        });
+      } catch {
+        // No commits after base
+      }
+
+      stat += execFileSync("git", ["diff", "--stat", "--no-color", "--cached"], {
+        cwd: worktreePath,
+        encoding: "utf-8",
+        timeout: 30000,
+      });
+
+      stat += execFileSync("git", ["diff", "--stat", "--no-color"], {
+        cwd: worktreePath,
+        encoding: "utf-8",
+        timeout: 30000,
+      });
+
+      return stat;
+    } catch (err) {
+      throw new Error(`获取 diff stat 失败: ${err}`);
+    }
+  }
+
+  getDiffSummary(taskId: string, editablePaths: string[], originalWorkspacePath?: string): DiffSummary {
     const worktreePath = resolve(this.worktreesDir, taskId);
     const changedFiles = this.getChangedFiles(taskId);
-    const diffStat = this.getDiffStat(taskId);
 
     const allChanged = [
       ...changedFiles.modified,
       ...changedFiles.added,
       ...changedFiles.deleted,
+      ...changedFiles.untracked,
     ];
 
-    const outOfBoundsFiles = this.checkOutOfBounds(worktreePath, allChanged, editablePaths);
+    const baseCommit = this.getBaseCommit(taskId);
+    const diffStat = this.getDiffStat(taskId, baseCommit);
+
+    const outOfBoundsFiles = this.checkOutOfBounds(worktreePath, allChanged, editablePaths, originalWorkspacePath);
 
     return {
       taskId,
@@ -226,10 +289,25 @@ export class GitWorktreeManager {
     };
   }
 
+  private getBaseCommit(taskId: string): string {
+    try {
+      const branchName = `task/${taskId}`;
+      const output = execFileSync("git", ["log", "--format=%H", "--max-parents=0", branchName], {
+        cwd: this.repoPath,
+        encoding: "utf-8",
+        timeout: 5000,
+      }).trim();
+      return output.split("\n")[0] || this.getCurrentCommit();
+    } catch {
+      return this.getCurrentCommit();
+    }
+  }
+
   checkOutOfBounds(
     worktreePath: string,
     changedFiles: string[],
-    editablePaths: string[]
+    editablePaths: string[],
+    originalWorkspacePath?: string
   ): string[] {
     if (editablePaths.length === 0) {
       return [];
@@ -237,11 +315,24 @@ export class GitWorktreeManager {
 
     const outOfBounds: string[] = [];
 
+    const relativeEditablePaths = editablePaths.map((p) => {
+      if (isAbsolute(p) && originalWorkspacePath) {
+        return relative(originalWorkspacePath, p).replace(/\\/g, "/");
+      }
+      return p.replace(/\\/g, "/");
+    });
+
     for (const file of changedFiles) {
-      const absoluteFile = resolve(worktreePath, file);
-      const isEditable = editablePaths.some((editablePath) => {
-        const absoluteEditable = resolve(worktreePath, editablePath);
-        return absoluteFile === absoluteEditable || absoluteFile.startsWith(absoluteEditable + "\\") || absoluteFile.startsWith(absoluteEditable + "/");
+      const normalizedFile = file.replace(/\\/g, "/");
+
+      const isEditable = relativeEditablePaths.some((editablePath) => {
+        if (normalizedFile === editablePath) {
+          return true;
+        }
+        if (normalizedFile.startsWith(editablePath + "/")) {
+          return true;
+        }
+        return false;
       });
 
       if (!isEditable) {
@@ -252,7 +343,31 @@ export class GitWorktreeManager {
     return outOfBounds;
   }
 
-  mergeWorktree(taskId: string, targetBranch: string = "master"): void {
+  commitWorktreeChanges(taskId: string, message: string): void {
+    const worktreePath = resolve(this.worktreesDir, taskId);
+
+    if (!existsSync(worktreePath)) {
+      throw new Error(`Worktree 不存在: ${worktreePath}`);
+    }
+
+    try {
+      execFileSync("git", ["add", "-A"], {
+        cwd: worktreePath,
+        encoding: "utf-8",
+        timeout: 30000,
+      });
+
+      execFileSync("git", ["commit", "-m", message, "--allow-empty"], {
+        cwd: worktreePath,
+        encoding: "utf-8",
+        timeout: 30000,
+      });
+    } catch (err) {
+      throw new Error(`提交 Worktree 修改失败: ${err}`);
+    }
+  }
+
+  mergeWorktree(taskId: string, targetBranch: string): void {
     const worktreePath = resolve(this.worktreesDir, taskId);
     const branchName = `task/${taskId}`;
 
@@ -261,19 +376,46 @@ export class GitWorktreeManager {
     }
 
     try {
+      const hasChanges = this.hasUncommittedChanges(worktreePath);
+      if (hasChanges) {
+        this.commitWorktreeChanges(taskId, `mimo(${taskId}): apply task changes`);
+      }
+
       execFileSync("git", ["checkout", targetBranch], {
         cwd: this.repoPath,
         encoding: "utf-8",
         timeout: 30000,
       });
 
-      execFileSync("git", ["merge", "--no-ff", branchName], {
-        cwd: this.repoPath,
-        encoding: "utf-8",
-        timeout: 30000,
-      });
+      try {
+        execFileSync("git", ["merge", "--no-ff", branchName], {
+          cwd: this.repoPath,
+          encoding: "utf-8",
+          timeout: 30000,
+        });
+      } catch (err) {
+        execFileSync("git", ["merge", "--abort"], {
+          cwd: this.repoPath,
+          encoding: "utf-8",
+          timeout: 10000,
+        });
+        throw new Error(`合并冲突，已中止合并: ${err}`);
+      }
     } catch (err) {
       throw new Error(`合并 Worktree 失败: ${err}`);
+    }
+  }
+
+  private hasUncommittedChanges(worktreePath: string): boolean {
+    try {
+      const output = execFileSync("git", ["status", "--porcelain"], {
+        cwd: worktreePath,
+        encoding: "utf-8",
+        timeout: 5000,
+      }).trim();
+      return output.length > 0;
+    } catch {
+      return false;
     }
   }
 

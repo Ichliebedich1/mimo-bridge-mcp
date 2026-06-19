@@ -1,7 +1,7 @@
 import { z } from "zod";
 import type { Config } from "../config.js";
 import type { TaskStore } from "../services/task-store.js";
-import type { TaskResult } from "../types.js";
+import type { TaskResult, WorktreeState } from "../types.js";
 import { validateWorkspacePath, validateEditablePaths, validateMaxRounds, validateTimeout } from "../services/path-guard.js";
 import { writeTaskBrief } from "../services/prompt-builder.js";
 import { runMimoTask } from "../services/mimo-runner.js";
@@ -16,7 +16,7 @@ export const StartTaskSchema = z.object({
   acceptance_criteria: z.array(z.string()).default([]),
   max_rounds: z.number().int().min(1).max(10).default(5),
   runtime_timeout_seconds: z.number().int().min(60).max(3600).default(900),
-  use_worktree: z.boolean().default(true),
+  use_worktree: z.boolean().default(false),
 });
 
 export type StartTaskInput = z.infer<typeof StartTaskSchema>;
@@ -60,23 +60,32 @@ export function createStartTaskHandler(config: Config, taskStore: TaskStore) {
       });
 
       let worktreePath = input.workspace_path;
-      const gitManager = new GitWorktreeManager(input.workspace_path);
+      let worktreeState: WorktreeState | null = null;
+      const gitManager = new GitWorktreeManager(input.workspace_path, config.runtimeDir);
 
-      if (input.use_worktree && gitManager.isGitRepo()) {
+      if (input.use_worktree) {
+        if (!gitManager.isGitRepo()) {
+          taskStore.updateTaskStatus(task.task_id, "failed", "use_worktree=true 但工作区不是 Git 仓库");
+          return { error: "use_worktree=true 但工作区不是 Git 仓库" };
+        }
+
         try {
           const worktreeInfo = gitManager.createWorktree(task.task_id);
           worktreePath = worktreeInfo.worktreePath;
 
-          taskStore.updateTaskWorktree(task.task_id, {
+          worktreeState = {
             worktree_path: worktreeInfo.worktreePath,
             branch_name: worktreeInfo.branchName,
             base_commit: worktreeInfo.baseCommit,
             diff_summary: null,
             out_of_bounds_files: [],
             has_out_of_bounds_changes: false,
-          });
+          };
+
+          taskStore.updateTaskWorktree(task.task_id, worktreeState);
         } catch (err) {
-          process.stderr.write(`[start-task] 创建 Worktree 失败，使用原始工作区: ${err}\n`);
+          taskStore.updateTaskStatus(task.task_id, "failed", `创建 Worktree 失败: ${err}`);
+          return { error: `创建 Worktree 失败: ${err}` };
         }
       }
 
@@ -84,6 +93,10 @@ export function createStartTaskHandler(config: Config, taskStore: TaskStore) {
       writeTaskBrief(taskConfig, task.task_id, task.current_round, `${config.runtimeDir}/briefs`);
 
       taskStore.updateTaskStatus(task.task_id, "running");
+
+      const taskId = task.task_id;
+      const editablePaths = input.editable_paths;
+      const originalWorkspacePath = input.workspace_path;
 
       const handle = runMimoTask(
         {
@@ -95,36 +108,38 @@ export function createStartTaskHandler(config: Config, taskStore: TaskStore) {
         },
         (result: TaskResult) => {
           if (result.session_id) {
-            taskStore.updateTaskSession(task.task_id, result.session_id);
+            taskStore.updateTaskSession(taskId, result.session_id);
           }
-          taskStore.updateTaskResult(task.task_id, result);
-          taskStore.updateTaskStatus(task.task_id, result.status);
-          globalRunningTasks.unregister(task.task_id);
+          taskStore.updateTaskResult(taskId, result);
+          taskStore.updateTaskStatus(taskId, result.status);
+          globalRunningTasks.unregister(taskId);
 
-          if (task.worktree) {
+          if (worktreeState) {
             try {
-              const summary = gitManager.getDiffSummary(task.task_id, input.editable_paths);
-              taskStore.updateTaskWorktree(task.task_id, {
-                ...task.worktree,
+              const manager = new GitWorktreeManager(originalWorkspacePath);
+              const summary = manager.getDiffSummary(taskId, editablePaths);
+              worktreeState = {
+                ...worktreeState,
                 diff_summary: summary.diffStat,
                 out_of_bounds_files: summary.outOfBoundsFiles,
                 has_out_of_bounds_changes: summary.hasOutOfBoundsChanges,
-              });
+              };
+              taskStore.updateTaskWorktree(taskId, worktreeState);
             } catch (err) {
               process.stderr.write(`[start-task] 获取 diff 摘要失败: ${err}\n`);
             }
           }
         },
         (error: string) => {
-          taskStore.updateTaskStatus(task.task_id, "failed", error);
-          globalRunningTasks.unregister(task.task_id);
+          taskStore.updateTaskStatus(taskId, "failed", error);
+          globalRunningTasks.unregister(taskId);
         }
       );
 
-      globalRunningTasks.register(task.task_id, handle.cancel);
+      globalRunningTasks.register(taskId, handle.cancel);
 
       return {
-        task_id: task.task_id,
+        task_id: taskId,
         status: "running",
         worktree_path: worktreePath,
       };

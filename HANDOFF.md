@@ -1,15 +1,15 @@
 # mimo-bridge-mcp 交接文档
 
 **更新日期：2026年6月19日**  
-**当前状态：P0 已完成，P1 已完成，P2 已完成，P3 已完成**
+**当前状态：P0/P1 已完成，P2 带已登记技术债；P3 第一次审核未通过，等待修复**
 
 ---
 
 ## 一、当前 Git 状态
 
 - 分支：`master`
-- 工作区：干净
-- 最新提交：`6ae45c9 feat: P3 Git Worktree 隔离与差异审计`
+- 工作区：`HANDOFF.md` 有本次未提交审核记录；源码无未提交修改
+- 最新提交：`5e62d57 更新交接文档：P3 完成状态`
 
 | 提交 | 内容 |
 |------|------|
@@ -18,19 +18,21 @@
 | `915c2bd` | P2 可靠性与协议测试 |
 | `833db96` | P2 交接文档 |
 | `6ae45c9` | P3 Git Worktree 隔离与差异审计 |
+| `5e62d57` | P3 交接文档更新 |
 
 ---
 
 ## 二、测试验证状态
 
 - `npm.cmd run build`：通过
-- `npm.cmd test`：96/96 单元测试通过
-- 12 个集成测试全部通过（runner-integration 8 个，stdio-protocol 4 个）
-- 总计 108 个测试全部通过
+- `tests/git-worktree.test.mjs`：11/12 通过；1 项因硬编码写入 `C:\Windows\Temp` 触发 `EPERM`
+- 完整 `npm.cmd test` 未作为本轮通过依据：P2 已登记的 `runner-integration.test.mjs` 仍会挂起
+- Codex 最小复现：未跟踪新增文件未进入 diff/越界清单
+- Codex 最小复现：未提交的 Worktree 修改执行 merge 后主分支内容未变化，随后删除脏 Worktree 失败
 
 ---
 
-## 三、P3 完成内容
+## 三、P3 已实现内容（待修复）
 
 ### 3.1 Git Worktree 服务
 
@@ -87,7 +89,110 @@
 
 ---
 
-## 四、MCP 工具列表
+## 四、Codex P3 修复申请（阻塞 P3 通过）
+
+### 4.1 修复目标
+
+P3 必须保证：任务只在独立 Worktree 中修改；所有变更都能被审计；超出 `editable_paths` 的修改不能合并；允许的修改能够真实进入任务原仓库。任何隔离失败都必须停止任务，不能静默回退主工作区。
+
+### 4.2 必修问题与实现要求
+
+#### P3-01：任务完成后越界审计没有执行
+
+- 位置：`src/tools/start-task.ts` 的完成回调。
+- 原因：`taskStore.updateTaskWorktree(...)` 只更新磁盘状态，局部变量 `task.worktree` 仍为 `null`；后续 `if (task.worktree)` 永远为假。
+- 修改：创建 Worktree 后保存 `worktreeInfo` 局部变量，或在完成回调中重新 `taskStore.getTask(task_id)`；不得依赖创建任务时的旧对象。
+- 修改：任务完成后必须持久化最新 `diff_summary`、`out_of_bounds_files` 和 `has_out_of_bounds_changes`。
+
+#### P3-02：变更收集漏掉未跟踪、已暂存和已提交文件
+
+- 位置：`src/services/git-worktree.ts` 的 `getDiff`、`getDiffStat`、`getChangedFiles`。
+- 原因：普通 `git diff` 只覆盖部分未暂存修改。
+- 修改：以任务保存的 `base_commit` 为基线，同时收集以下状态并去重：
+  - `base_commit..HEAD` 中的已提交修改；
+  - index 中的已暂存修改；
+  - working tree 中的未暂存修改；
+  - `git status --porcelain=v1 -z` 中的未跟踪文件和重命名。
+- 修改：状态解析必须正确处理空格、中文文件名、重命名和删除。
+- 修改：越界审计至少必须覆盖所有变更文件名；不能因为文件还未被 Git 跟踪就忽略。
+
+#### P3-03：`editable_paths` 映射到 Worktree 的方式不完整
+
+- 位置：`GitWorktreeManager.checkOutOfBounds(...)`。
+- 原因：`editable_paths` 可以是相对路径或原工作区内的绝对路径；绝对路径直接 `resolve(worktreePath, absolutePath)` 会继续指向原工作区。
+- 修改：先以原始 `workspace_path` 为基准把每个可编辑路径转换成仓库相对路径，再与 Worktree 内的变更路径比较。
+- 修改：继续使用目录边界比较，不能用不带分隔符的字符串前缀判断。
+
+#### P3-04：未提交修改不能真正合并
+
+- 位置：`GitWorktreeManager.mergeWorktree(...)` 和 `src/tools/merge-task.ts`。
+- 原因：任务分支仍指向 `base_commit` 时，`git merge` 不会包含 Worktree 中的未提交修改；随后普通 `worktree remove` 会因脏目录失败。
+- 修改建议：
+  1. 合并前重新执行完整 diff 和越界审计，不能只信任任务完成时保存的旧结果。
+  2. 若存在允许范围内的未提交修改，在任务 Worktree 中执行 `git add -A` 并创建任务提交；提交信息使用可审计格式，例如 `mimo(<task_id>): apply task changes`。
+  3. 若 MiMo 已产生提交，则保留这些提交并基于 `base_commit` 检查完整变更。
+  4. 合并冲突时执行 `git merge --abort`，保留 Worktree、分支和任务元数据，返回明确错误。
+  5. 只有合并成功后才能删除 Worktree、删除任务分支并清除 `task.worktree`。
+- 禁止：使用 `--force` 删除尚未成功合并的修改。
+
+#### P3-05：合并工具可能操作错误仓库和错误目标分支
+
+- 位置：`src/index.ts` 和 `src/tools/merge-task.ts`。
+- 原因：当前固定使用 `config.allowedRoots[0]`，不是任务自己的仓库；目标分支还硬编码为 `master`。
+- 修改：合并时从任务状态读取原始 `task.config.workspace_path`，并验证它与保存的 Worktree 属于同一个 Git common dir。
+- 修改：创建任务时保存 `base_branch`，合并回该分支；兼容 `main`、`master` 和用户当前分支。
+- 修改：合并前检查目标工作区是否有未提交修改；若不干净则拒绝，不得自动覆盖或切换。
+
+#### P3-06：隔离失败时静默回退主工作区
+
+- 位置：`src/tools/start-task.ts` 创建 Worktree 的 `catch`。
+- 原因：创建失败后仍调用 Runner，并把 `workspace_path` 保持为原仓库。
+- 修改：当 `use_worktree=true` 时，非 Git 仓库或 Worktree 创建失败必须返回错误并标记任务失败，不能启动 MiMo。
+- 修改：只有调用方明确传入 `use_worktree=false` 时，才允许使用原工作区。
+- 临时措施：修复和验收完成前，将 `use_worktree` 默认值设为 `false`，避免第一版默认进入未验证路径；P3 通过后再改回 `true`。
+
+#### P3-07：Worktree 目录污染目标仓库
+
+- 位置：`GitWorktreeManager` 的 `.worktrees` 路径策略。
+- 现象：创建 Worktree 后，目标仓库 `git status --porcelain` 出现 `?? .worktrees/`。
+- 修改：优先把 Worktree 放到 MCP `runtimeDir/worktrees/<repo-id>/<task-id>`，并把实际路径完整保存到任务状态；不要依赖根据 task ID 重新拼接路径。
+- 验收：创建 Worktree 后，原仓库状态必须与创建前一致。
+
+#### P3-08：测试路径和覆盖不足
+
+- 位置：`tests/git-worktree.test.mjs`。
+- 修改：不要写死 `C:\Windows\Temp`；使用 `node:os.tmpdir()` 或测试目录。
+- 修改：测试清理必须放在可靠的 `after`/`finally` 中，失败时也不能残留 Worktree 和分支。
+- 修改：补齐下面的端到端测试，不要只测试服务方法。
+
+### 4.3 必须新增的回归测试
+
+1. `start_task` 成功创建 Worktree，并确认 Runner 收到的是 Worktree 路径。
+2. Worktree 创建失败时任务失败，Runner 没有启动，原工作区没有改动。
+3. 未暂存、已暂存、未跟踪、已提交和重命名文件均进入变更清单。
+4. 相对和绝对 `editable_paths` 均能正确映射，越界文件被准确识别。
+5. 任务结束后，越界结果真实写回 TaskStore。
+6. 任务结束后再新增越界文件，merge 时重新审计并拒绝。
+7. 未提交的允许范围修改执行 merge 后，目标分支文件内容真实变化。
+8. 合并冲突时保留 Worktree 和任务分支，不清除任务元数据。
+9. discard 能删除 Worktree 和任务分支，但不影响原仓库其他分支和未提交修改。
+10. 多个 `allowedRoots` 时，merge 操作任务自己的仓库，不操作第一个根目录。
+11. 默认分支为 `main` 和 `master` 时均能正确合并。
+12. 创建 Worktree 前后，原仓库 `git status --porcelain` 保持一致。
+
+### 4.4 P3 验收条件
+
+- `npm.cmd run build` 通过。
+- P3 新增测试全部通过，不依赖管理员权限。
+- 排除已登记的 P2 Runner 挂起测试后，其余测试全部通过。
+- 真实执行一次 `start_task -> 生成修改 -> 越界审计 -> merge`，确认修改进入正确仓库和正确分支。
+- 真实执行一次越界修改，确认 merge 被拒绝。
+- 测试结束后 `git worktree list`、任务分支和临时目录无残留。
+- Codex 二次审核通过前，不得把 P3 标记为完成，也不要开始 P4。
+
+---
+
+## 五、MCP 工具列表
 
 | 工具 | 说明 | P3 新增 |
 |------|------|---------|
@@ -97,19 +202,29 @@
 | `mimo_cancel_task` | 终止任务 | |
 | `mimo_finish_task` | 标记验收/放弃 | |
 | `mimo_list_tasks` | 列出任务 | |
-| `mimo_merge_task` | 合并/丢弃 Worktree | ✅ |
+| `mimo_merge_task` | 合并/丢弃 Worktree | 新增，待修复验收 |
 
 ---
 
-## 五、下一步工作
+## 六、下一步工作
 
-### P4：队列和只读并发
+### 当前唯一优先事项：修复 P3
+
+- 按第四节逐项修改并补回归测试。
+- 提交修复代码和更新后的测试证据。
+- 等待 Codex 二次审核。
+
+### P4：队列和只读并发（暂缓）
 
 - 写任务队列
 - 只读任务并发
 - 任务优先级和取消队列
 
 ---
+
+## 附录：P2 历史交接快照（仅供追溯）
+
+以下内容保留此前 P2 交接记录，不代表当前执行状态。MiMo 本轮只执行第四节 P3 修复申请，不要按附录中的“下一步工作”启动 P3 或 P4。
 
 **MiMo Code（Xiaomi MiMo）**  
 **更新日期：2026年6月19日**
