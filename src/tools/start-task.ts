@@ -6,11 +6,13 @@ import { validateWorkspacePath, validateEditablePaths, validateMaxRounds, valida
 import { writeTaskBrief } from "../services/prompt-builder.js";
 import { runMimoTask } from "../services/mimo-runner.js";
 import { globalRunningTasks, type RunningTaskRegistry } from "../services/running-tasks.js";
+import { globalTaskQueue, type TaskQueue } from "../services/task-queue.js";
 import { GitWorktreeManager } from "../services/git-worktree.js";
 
 export interface StartTaskDependencies {
   runTask?: typeof runMimoTask;
   runningTasks?: RunningTaskRegistry;
+  taskQueue?: TaskQueue;
 }
 
 export const StartTaskSchema = z.object({
@@ -22,6 +24,7 @@ export const StartTaskSchema = z.object({
   max_rounds: z.number().int().min(1).max(10).default(5),
   runtime_timeout_seconds: z.number().int().min(60).max(3600).default(900),
   use_worktree: z.boolean().default(false),
+  priority: z.number().int().min(0).max(10).default(5),
 });
 
 export type StartTaskInput = z.infer<typeof StartTaskSchema>;
@@ -33,14 +36,56 @@ export function createStartTaskHandler(
 ) {
   const runTask = dependencies.runTask ?? runMimoTask;
   const runningTasks = dependencies.runningTasks ?? globalRunningTasks;
+  const taskQueue = dependencies.taskQueue ?? globalTaskQueue;
+
+  function executeTask(taskId: string, taskConfig: any, worktreeState: WorktreeState | null, editablePaths: string[]) {
+    const task = taskStore.getTask(taskId);
+    if (!task) return;
+
+    const handle = runTask(
+      {
+        mimoNodePath: config.mimoNodePath,
+        mimoEntryPath: config.mimoEntryPath,
+        task: { ...task, config: taskConfig },
+        runtimeDir: config.runtimeDir,
+        timeoutMs: task.config.runtime_timeout_seconds * 1000,
+      },
+      (result: TaskResult) => {
+        if (result.session_id) {
+          taskStore.updateTaskSession(taskId, result.session_id);
+        }
+        taskStore.updateTaskResult(taskId, result);
+        taskStore.updateTaskStatus(taskId, result.status);
+        runningTasks.unregister(taskId);
+
+        if (worktreeState) {
+          try {
+            const gitManager = new GitWorktreeManager(task.config.workspace_path, config.runtimeDir);
+            const summary = gitManager.getDiffSummaryForState(taskId, worktreeState, editablePaths);
+            worktreeState = {
+              ...worktreeState,
+              diff_summary: summary.diffStat,
+              out_of_bounds_files: summary.outOfBoundsFiles,
+              has_out_of_bounds_changes: summary.hasOutOfBoundsChanges,
+            };
+            taskStore.updateTaskWorktree(taskId, worktreeState);
+          } catch (err) {
+            process.stderr.write(`[start-task] 获取 diff 摘要失败: ${err}\n`);
+          }
+        }
+      },
+      (error: string) => {
+        taskStore.updateTaskStatus(taskId, "failed", error);
+        runningTasks.unregister(taskId);
+      }
+    );
+
+    runningTasks.register(taskId, handle.cancel);
+  }
 
   return {
     schema: StartTaskSchema,
     handler: async (input: StartTaskInput) => {
-      if (runningTasks.hasAny()) {
-        return { error: "已有任务在运行中，第一版只支持同时运行一个写任务" };
-      }
-
       const workspaceValidation = validateWorkspacePath(input.workspace_path, config.allowedRoots);
       if (!workspaceValidation.allowed) {
         return { error: workspaceValidation.reason };
@@ -107,49 +152,34 @@ export function createStartTaskHandler(
       const taskConfig = { ...task.config, workspace_path: worktreePath };
       writeTaskBrief(taskConfig, task.task_id, task.current_round, `${config.runtimeDir}/briefs`);
 
-      taskStore.updateTaskStatus(task.task_id, "running");
-
       const taskId = task.task_id;
       const editablePaths = input.editable_paths;
 
-      const handle = runTask(
-        {
-          mimoNodePath: config.mimoNodePath,
-          mimoEntryPath: config.mimoEntryPath,
-          task: { ...task, config: taskConfig },
-          runtimeDir: config.runtimeDir,
-          timeoutMs: input.runtime_timeout_seconds * 1000,
-        },
-        (result: TaskResult) => {
-          if (result.session_id) {
-            taskStore.updateTaskSession(taskId, result.session_id);
-          }
-          taskStore.updateTaskResult(taskId, result);
-          taskStore.updateTaskStatus(taskId, result.status);
-          runningTasks.unregister(taskId);
+      if (runningTasks.hasAny()) {
+        taskStore.updateTaskStatus(taskId, "queued");
 
-          if (worktreeState) {
-            try {
-              const summary = gitManager.getDiffSummaryForState(taskId, worktreeState, editablePaths);
-              worktreeState = {
-                ...worktreeState,
-                diff_summary: summary.diffStat,
-                out_of_bounds_files: summary.outOfBoundsFiles,
-                has_out_of_bounds_changes: summary.hasOutOfBoundsChanges,
-              };
-              taskStore.updateTaskWorktree(taskId, worktreeState);
-            } catch (err) {
-              process.stderr.write(`[start-task] 获取 diff 摘要失败: ${err}\n`);
-            }
-          }
-        },
-        (error: string) => {
-          taskStore.updateTaskStatus(taskId, "failed", error);
-          runningTasks.unregister(taskId);
-        }
-      );
+        taskQueue.enqueue({
+          taskId,
+          priority: input.priority,
+          enqueuedAt: Date.now(),
+          execute: async () => {
+            taskStore.updateTaskStatus(taskId, "running");
+            executeTask(taskId, taskConfig, worktreeState, editablePaths);
+          },
+          cancel: () => {
+            taskStore.updateTaskStatus(taskId, "cancelled");
+          },
+        });
 
-      runningTasks.register(taskId, handle.cancel);
+        return {
+          task_id: taskId,
+          status: "queued",
+          queue_position: taskQueue.size,
+        };
+      }
+
+      taskStore.updateTaskStatus(taskId, "running");
+      executeTask(taskId, taskConfig, worktreeState, editablePaths);
 
       return {
         task_id: taskId,
@@ -158,7 +188,17 @@ export function createStartTaskHandler(
       };
     },
     cancelTask: (taskId: string) => {
+      if (taskQueue.cancel(taskId)) {
+        return true;
+      }
       return runningTasks.cancel(taskId);
+    },
+    getQueueStatus: () => {
+      return {
+        running: runningTasks.size,
+        queued: taskQueue.size,
+        queue: taskQueue.getQueuedTasks(),
+      };
     },
   };
 }

@@ -5,29 +5,70 @@ import type { TaskResult } from "../types.js";
 import { validateSessionId } from "../services/path-guard.js";
 import { writeReplyBrief } from "../services/prompt-builder.js";
 import { runMimoTask } from "../services/mimo-runner.js";
-import { globalRunningTasks } from "../services/running-tasks.js";
+import { globalRunningTasks, type RunningTaskRegistry } from "../services/running-tasks.js";
+import { globalTaskQueue, type TaskQueue } from "../services/task-queue.js";
+
+export interface ReplyTaskDependencies {
+  runTask?: typeof runMimoTask;
+  runningTasks?: RunningTaskRegistry;
+  taskQueue?: TaskQueue;
+}
 
 export const ReplyTaskSchema = z.object({
   task_id: z.string().min(1, "任务 ID 不能为空"),
   message: z.string().min(1, "回复消息不能为空"),
+  priority: z.number().int().min(0).max(10).default(5),
 });
 
 export type ReplyTaskInput = z.infer<typeof ReplyTaskSchema>;
 
-export function createReplyTaskHandler(config: Config, taskStore: TaskStore) {
+export function createReplyTaskHandler(
+  config: Config,
+  taskStore: TaskStore,
+  dependencies: ReplyTaskDependencies = {}
+) {
+  const runTask = dependencies.runTask ?? runMimoTask;
+  const runningTasks = dependencies.runningTasks ?? globalRunningTasks;
+  const taskQueue = dependencies.taskQueue ?? globalTaskQueue;
+
+  function executeReply(taskId: string) {
+    const task = taskStore.getTask(taskId);
+    if (!task) return;
+
+    const handle = runTask(
+      {
+        mimoNodePath: config.mimoNodePath,
+        mimoEntryPath: config.mimoEntryPath,
+        task,
+        runtimeDir: config.runtimeDir,
+        timeoutMs: task.config.runtime_timeout_seconds * 1000,
+      },
+      (result: TaskResult) => {
+        if (result.session_id) {
+          taskStore.updateTaskSession(taskId, result.session_id);
+        }
+        taskStore.updateTaskResult(taskId, result);
+        taskStore.updateTaskStatus(taskId, result.status);
+        runningTasks.unregister(taskId);
+      },
+      (error: string) => {
+        taskStore.updateTaskStatus(taskId, "failed", error);
+        runningTasks.unregister(taskId);
+      }
+    );
+
+    runningTasks.register(taskId, handle.cancel);
+  }
+
   return {
     schema: ReplyTaskSchema,
     handler: async (input: ReplyTaskInput) => {
-      if (globalRunningTasks.hasAny()) {
-        return { error: "已有任务在运行中，第一版只支持同时运行一个写任务" };
-      }
-
       const task = taskStore.getTask(input.task_id);
       if (!task) {
         return { error: `任务不存在: ${input.task_id}` };
       }
 
-      if (task.status !== "waiting" && task.status !== "review") {
+      if (task.status !== "waiting" && task.status !== "review" && task.status !== "queued") {
         return { error: `任务状态不允许回复: ${task.status}` };
       }
 
@@ -46,39 +87,44 @@ export function createReplyTaskHandler(config: Config, taskStore: TaskStore) {
 
       writeReplyBrief(input.message, task.task_id, task.current_round, `${config.runtimeDir}/briefs`);
 
-      taskStore.updateTaskStatus(task.task_id, "running");
+      const taskId = task.task_id;
 
-      const handle = runMimoTask(
-        {
-          mimoNodePath: config.mimoNodePath,
-          mimoEntryPath: config.mimoEntryPath,
-          task,
-          runtimeDir: config.runtimeDir,
-          timeoutMs: task.config.runtime_timeout_seconds * 1000,
-        },
-        (result: TaskResult) => {
-          if (result.session_id) {
-            taskStore.updateTaskSession(task.task_id, result.session_id);
-          }
-          taskStore.updateTaskResult(task.task_id, result);
-          taskStore.updateTaskStatus(task.task_id, result.status);
-          globalRunningTasks.unregister(task.task_id);
-        },
-        (error: string) => {
-          taskStore.updateTaskStatus(task.task_id, "failed", error);
-          globalRunningTasks.unregister(task.task_id);
-        }
-      );
+      if (runningTasks.hasAny()) {
+        taskStore.updateTaskStatus(taskId, "queued");
 
-      globalRunningTasks.register(task.task_id, handle.cancel);
+        taskQueue.enqueue({
+          taskId,
+          priority: input.priority,
+          enqueuedAt: Date.now(),
+          execute: async () => {
+            taskStore.updateTaskStatus(taskId, "running");
+            executeReply(taskId);
+          },
+          cancel: () => {
+            taskStore.updateTaskStatus(taskId, "cancelled");
+          },
+        });
+
+        return {
+          task_id: taskId,
+          status: "queued",
+          queue_position: taskQueue.size,
+        };
+      }
+
+      taskStore.updateTaskStatus(taskId, "running");
+      executeReply(taskId);
 
       return {
-        task_id: task.task_id,
+        task_id: taskId,
         status: "running",
       };
     },
     cancelTask: (taskId: string) => {
-      return globalRunningTasks.cancel(taskId);
+      if (taskQueue.cancel(taskId)) {
+        return true;
+      }
+      return runningTasks.cancel(taskId);
     },
   };
 }

@@ -1,5 +1,6 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { z } from "zod";
 import { loadConfig } from "./config.js";
 import { TaskStore } from "./services/task-store.js";
 import { createStartTaskHandler } from "./tools/start-task.js";
@@ -65,7 +66,7 @@ async function main() {
 
   server.tool(
     "mimo_cancel_task",
-    "终止运行中的 MiMo 任务",
+    "终止运行中的 MiMo 任务或取消队列中的任务",
     cancelTask.schema.shape,
     async (params) => {
       const result = await cancelTask.handler(params);
@@ -105,6 +106,18 @@ async function main() {
     mergeTask.schema.shape,
     async (params) => {
       const result = await mergeTask.handler(params);
+      return {
+        content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+      };
+    }
+  );
+
+  server.tool(
+    "mimo_queue_status",
+    "查询任务队列状态",
+    {},
+    async () => {
+      const result = startTask.getQueueStatus();
       return {
         content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
       };

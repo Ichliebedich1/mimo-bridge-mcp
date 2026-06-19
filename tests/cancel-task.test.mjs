@@ -87,6 +87,8 @@ describe("cancel-task", () => {
       runtime_timeout_seconds: 900,
     });
 
+    store.updateTaskStatus(task.task_id, "accepted");
+
     const { createCancelTaskHandler } = await import("../dist/tools/cancel-task.js");
     const handler = createCancelTaskHandler(store);
 
