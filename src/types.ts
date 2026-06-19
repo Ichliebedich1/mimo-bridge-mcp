@@ -19,9 +19,12 @@ export interface TaskConfig {
 }
 
 export interface WorktreeState {
+  repo_path: string;
+  worktrees_root: string;
   worktree_path: string;
   branch_name: string;
   base_commit: string;
+  base_branch: string;
   diff_summary: string | null;
   out_of_bounds_files: string[];
   has_out_of_bounds_changes: boolean;

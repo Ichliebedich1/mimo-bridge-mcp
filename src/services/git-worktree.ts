@@ -1,12 +1,17 @@
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync } from "node:fs";
-import { resolve, relative, isAbsolute, sep } from "node:path";
+import { createHash } from "node:crypto";
+import { existsSync, mkdirSync, realpathSync } from "node:fs";
+import { resolve, relative, isAbsolute } from "node:path";
+import type { WorktreeState } from "../types.js";
 
 export interface WorktreeInfo {
   taskId: string;
+  repoPath: string;
+  worktreesRoot: string;
   worktreePath: string;
   branchName: string;
   baseCommit: string;
+  baseBranch: string;
 }
 
 export interface DiffSummary {
@@ -25,13 +30,18 @@ export class GitWorktreeManager {
   private worktreesDir: string;
 
   constructor(repoPath: string, worktreesBaseDir?: string) {
-    this.repoPath = repoPath;
+    this.repoPath = resolve(repoPath);
     if (worktreesBaseDir) {
-      const repoId = Buffer.from(repoPath).toString("base64url").slice(0, 12);
+      const repoIdentity = process.platform === "win32" ? this.repoPath.toLowerCase() : this.repoPath;
+      const repoId = createHash("sha256").update(repoIdentity).digest("hex").slice(0, 16);
       this.worktreesDir = resolve(worktreesBaseDir, "worktrees", repoId);
     } else {
       this.worktreesDir = resolve(repoPath, ".worktrees");
     }
+  }
+
+  getWorktreesRoot(): string {
+    return this.worktreesDir;
   }
 
   isGitRepo(): boolean {
@@ -71,6 +81,7 @@ export class GitWorktreeManager {
     const branchName = `task/${taskId}`;
     const worktreePath = resolve(this.worktreesDir, taskId);
     const baseCommit = this.getCurrentCommit();
+    const baseBranch = this.getCurrentBranch();
 
     if (!existsSync(this.worktreesDir)) {
       mkdirSync(this.worktreesDir, { recursive: true });
@@ -96,10 +107,123 @@ export class GitWorktreeManager {
 
     return {
       taskId,
+      repoPath: this.repoPath,
+      worktreesRoot: this.worktreesDir,
       worktreePath,
       branchName,
       baseCommit,
+      baseBranch,
     };
+  }
+
+  assertWorktreeState(taskId: string, state: WorktreeState): void {
+    if (!state.repo_path || !state.worktrees_root || !state.base_branch) {
+      throw new Error("Worktree 状态缺少 repo_path、worktrees_root 或 base_branch");
+    }
+
+    const repoPath = this.realPath(state.repo_path, "原仓库");
+    const managerRepoPath = this.realPath(this.repoPath, "Manager 原仓库");
+    if (!this.samePath(repoPath, managerRepoPath)) {
+      throw new Error("Worktree 状态中的原仓库与 Manager 不一致");
+    }
+
+    if (state.branch_name !== `task/${taskId}`) {
+      throw new Error("Worktree 分支名与任务 ID 不匹配");
+    }
+
+    const worktreesRoot = this.realPath(state.worktrees_root, "Worktree 根目录");
+    const managerRoot = this.realPath(this.worktreesDir, "Manager Worktree 根目录");
+    if (!this.samePath(worktreesRoot, managerRoot)) {
+      throw new Error("Worktree 状态中的根目录与 Manager 不一致");
+    }
+
+    const worktreePath = this.realPath(state.worktree_path, "Worktree");
+    const rel = relative(worktreesRoot, worktreePath);
+    if (!rel || rel.startsWith("..") || isAbsolute(rel)) {
+      throw new Error("Worktree 路径不在保存的根目录内");
+    }
+
+    const expectedPath = this.realPath(resolve(worktreesRoot, taskId), "任务 Worktree");
+    if (!this.samePath(worktreePath, expectedPath)) {
+      throw new Error("Worktree 路径与任务 ID 不匹配");
+    }
+
+    const repoCommonDir = this.getGitCommonDir(repoPath);
+    const worktreeCommonDir = this.getGitCommonDir(worktreePath);
+    if (!this.samePath(repoCommonDir, worktreeCommonDir)) {
+      throw new Error("Worktree 不属于任务原仓库");
+    }
+
+    const actualBranch = execFileSync("git", ["rev-parse", "--abbrev-ref", "HEAD"], {
+      cwd: worktreePath,
+      encoding: "utf-8",
+      timeout: 5000,
+    }).trim();
+    if (actualBranch !== state.branch_name) {
+      throw new Error(`Worktree 分支不匹配: ${actualBranch}`);
+    }
+
+    try {
+      execFileSync("git", ["check-ref-format", "--branch", state.base_branch], {
+        cwd: repoPath,
+        encoding: "utf-8",
+        timeout: 5000,
+      });
+      execFileSync("git", ["show-ref", "--verify", `refs/heads/${state.base_branch}`], {
+        cwd: repoPath,
+        encoding: "utf-8",
+        timeout: 5000,
+      });
+      execFileSync("git", ["merge-base", "--is-ancestor", state.base_commit, state.branch_name], {
+        cwd: repoPath,
+        encoding: "utf-8",
+        timeout: 5000,
+      });
+      execFileSync("git", ["merge-base", "--is-ancestor", state.base_commit, state.base_branch], {
+        cwd: repoPath,
+        encoding: "utf-8",
+        timeout: 5000,
+      });
+    } catch {
+      throw new Error("保存的基线提交或基线分支无效");
+    }
+  }
+
+  getDiffSummaryForState(
+    taskId: string,
+    state: WorktreeState,
+    editablePaths: string[]
+  ): DiffSummary {
+    this.assertWorktreeState(taskId, state);
+    return this.getDiffSummary(taskId, editablePaths, state.repo_path, state.base_commit);
+  }
+
+  private realPath(path: string, label: string): string {
+    try {
+      return realpathSync(path);
+    } catch {
+      throw new Error(`${label}不存在或无法解析: ${path}`);
+    }
+  }
+
+  private samePath(left: string, right: string): boolean {
+    if (process.platform === "win32") {
+      return left.toLowerCase() === right.toLowerCase();
+    }
+    return left === right;
+  }
+
+  private getGitCommonDir(cwd: string): string {
+    try {
+      const commonDir = execFileSync("git", ["rev-parse", "--git-common-dir"], {
+        cwd,
+        encoding: "utf-8",
+        timeout: 5000,
+      }).trim();
+      return realpathSync(resolve(cwd, commonDir));
+    } catch (err) {
+      throw new Error(`无法验证 Git 仓库归属: ${err}`);
+    }
   }
 
   removeWorktree(taskId: string, force: boolean = false): void {
@@ -128,22 +252,25 @@ export class GitWorktreeManager {
     }
   }
 
-  getChangedFiles(taskId: string): { modified: string[]; added: string[]; deleted: string[]; untracked: string[] } {
+  getChangedFiles(
+    taskId: string,
+    baseCommit: string = "HEAD"
+  ): { modified: string[]; added: string[]; deleted: string[]; untracked: string[] } {
     const worktreePath = resolve(this.worktreesDir, taskId);
 
     if (!existsSync(worktreePath)) {
       throw new Error(`Worktree 不存在: ${worktreePath}`);
     }
 
-    const modified: string[] = [];
-    const added: string[] = [];
-    const deleted: string[] = [];
-    const untracked: string[] = [];
+    const modified = new Set<string>();
+    const added = new Set<string>();
+    const deleted = new Set<string>();
+    const untracked = new Set<string>();
 
     try {
-      const statusOutput = execFileSync(
+      const diffOutput = execFileSync(
         "git",
-        ["status", "--porcelain=v1", "-z"],
+        ["diff", "--name-status", "--find-renames", "-z", baseCommit],
         {
           cwd: worktreePath,
           encoding: "utf-8",
@@ -151,38 +278,64 @@ export class GitWorktreeManager {
         }
       );
 
-      const entries = statusOutput.split("\0").filter((e) => e.length > 0);
+      const tokens = diffOutput.split("\0");
+      let index = 0;
+      while (index < tokens.length) {
+        const status = tokens[index++];
+        if (!status) continue;
 
-      for (const entry of entries) {
-        if (entry.length < 3) continue;
-
-        const indexStatus = entry[0];
-        const workTreeStatus = entry[1];
-        const file = entry.substring(3);
-
-        if (indexStatus === "?" && workTreeStatus === "?") {
-          untracked.push(file);
-        } else if (indexStatus === "R") {
-          const parts = file.split(" -> ");
-          if (parts.length === 2) {
-            deleted.push(parts[0]);
-            added.push(parts[1]);
-          } else {
-            modified.push(file);
-          }
-        } else if (indexStatus === "D" || workTreeStatus === "D") {
-          deleted.push(file);
-        } else if (indexStatus === "A" || workTreeStatus === "A") {
-          added.push(file);
-        } else if (indexStatus === "M" || workTreeStatus === "M" || indexStatus === "C") {
-          modified.push(file);
+        if (status.startsWith("R")) {
+          const oldPath = tokens[index++];
+          const newPath = tokens[index++];
+          if (oldPath) deleted.add(oldPath);
+          if (newPath) added.add(newPath);
+          continue;
         }
+
+        if (status.startsWith("C")) {
+          index += 1;
+          const newPath = tokens[index++];
+          if (newPath) added.add(newPath);
+          continue;
+        }
+
+        const file = tokens[index++];
+        if (!file) continue;
+
+        switch (status[0]) {
+          case "A":
+            added.add(file);
+            break;
+          case "D":
+            deleted.add(file);
+            break;
+          default:
+            modified.add(file);
+        }
+      }
+
+      const untrackedOutput = execFileSync(
+        "git",
+        ["ls-files", "--others", "--exclude-standard", "-z"],
+        {
+          cwd: worktreePath,
+          encoding: "utf-8",
+          timeout: 30000,
+        }
+      );
+      for (const file of untrackedOutput.split("\0")) {
+        if (file) untracked.add(file);
       }
     } catch (err) {
       throw new Error(`获取变更文件列表失败: ${err}`);
     }
 
-    return { modified, added, deleted, untracked };
+    return {
+      modified: [...modified],
+      added: [...added],
+      deleted: [...deleted],
+      untracked: [...untracked],
+    };
   }
 
   getDiff(taskId: string, baseCommit: string): string {
@@ -261,9 +414,14 @@ export class GitWorktreeManager {
     }
   }
 
-  getDiffSummary(taskId: string, editablePaths: string[], originalWorkspacePath?: string): DiffSummary {
+  getDiffSummary(
+    taskId: string,
+    editablePaths: string[],
+    originalWorkspacePath?: string,
+    baseCommit: string = "HEAD"
+  ): DiffSummary {
     const worktreePath = resolve(this.worktreesDir, taskId);
-    const changedFiles = this.getChangedFiles(taskId);
+    const changedFiles = this.getChangedFiles(taskId, baseCommit);
 
     const allChanged = [
       ...changedFiles.modified,
@@ -272,7 +430,6 @@ export class GitWorktreeManager {
       ...changedFiles.untracked,
     ];
 
-    const baseCommit = this.getBaseCommit(taskId);
     const diffStat = this.getDiffStat(taskId, baseCommit);
 
     const outOfBoundsFiles = this.checkOutOfBounds(worktreePath, allChanged, editablePaths, originalWorkspacePath);
@@ -281,26 +438,12 @@ export class GitWorktreeManager {
       taskId,
       worktreePath,
       modifiedFiles: changedFiles.modified,
-      addedFiles: changedFiles.added,
+      addedFiles: [...new Set([...changedFiles.added, ...changedFiles.untracked])],
       deletedFiles: changedFiles.deleted,
       diffStat,
       outOfBoundsFiles,
       hasOutOfBoundsChanges: outOfBoundsFiles.length > 0,
     };
-  }
-
-  private getBaseCommit(taskId: string): string {
-    try {
-      const branchName = `task/${taskId}`;
-      const output = execFileSync("git", ["log", "--format=%H", "--max-parents=0", branchName], {
-        cwd: this.repoPath,
-        encoding: "utf-8",
-        timeout: 5000,
-      }).trim();
-      return output.split("\n")[0] || this.getCurrentCommit();
-    } catch {
-      return this.getCurrentCommit();
-    }
   }
 
   checkOutOfBounds(
@@ -367,12 +510,24 @@ export class GitWorktreeManager {
     }
   }
 
-  mergeWorktree(taskId: string, targetBranch: string): void {
+  isRepoClean(): boolean {
+    const output = execFileSync("git", ["status", "--porcelain"], {
+      cwd: this.repoPath,
+      encoding: "utf-8",
+      timeout: 5000,
+    }).trim();
+    return output.length === 0;
+  }
+
+  mergeWorktree(taskId: string, targetBranch: string, branchName: string = `task/${taskId}`): void {
     const worktreePath = resolve(this.worktreesDir, taskId);
-    const branchName = `task/${taskId}`;
 
     if (!existsSync(worktreePath)) {
       throw new Error(`Worktree 不存在: ${worktreePath}`);
+    }
+
+    if (!this.isRepoClean()) {
+      throw new Error("原仓库工作区存在未提交修改，不能自动合并");
     }
 
     try {
@@ -394,12 +549,17 @@ export class GitWorktreeManager {
           timeout: 30000,
         });
       } catch (err) {
-        execFileSync("git", ["merge", "--abort"], {
-          cwd: this.repoPath,
-          encoding: "utf-8",
-          timeout: 10000,
-        });
-        throw new Error(`合并冲突，已中止合并: ${err}`);
+        let abortError = "";
+        try {
+          execFileSync("git", ["merge", "--abort"], {
+            cwd: this.repoPath,
+            encoding: "utf-8",
+            timeout: 10000,
+          });
+        } catch (abortErr) {
+          abortError = `；中止合并也失败: ${abortErr}`;
+        }
+        throw new Error(`合并冲突，已中止合并: ${err}${abortError}`);
       }
     } catch (err) {
       throw new Error(`合并 Worktree 失败: ${err}`);
@@ -419,11 +579,13 @@ export class GitWorktreeManager {
     }
   }
 
-  discardWorktree(taskId: string): void {
-    const branchName = `task/${taskId}`;
-
+  discardWorktree(taskId: string, branchName: string = `task/${taskId}`): void {
     this.removeWorktree(taskId, true);
 
+    this.deleteBranch(branchName);
+  }
+
+  deleteBranch(branchName: string): void {
     try {
       execFileSync("git", ["branch", "-D", branchName], {
         cwd: this.repoPath,

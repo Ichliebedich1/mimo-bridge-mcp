@@ -1,4 +1,5 @@
 import { z } from "zod";
+import type { Config } from "../config.js";
 import type { TaskStore } from "../services/task-store.js";
 import { GitWorktreeManager } from "../services/git-worktree.js";
 
@@ -9,7 +10,7 @@ export const MergeTaskSchema = z.object({
 
 export type MergeTaskInput = z.infer<typeof MergeTaskSchema>;
 
-export function createMergeTaskHandler(taskStore: TaskStore) {
+export function createMergeTaskHandler(taskStore: TaskStore, config: Pick<Config, "runtimeDir">) {
   return {
     schema: MergeTaskSchema,
     handler: async (input: MergeTaskInput) => {
@@ -26,27 +27,16 @@ export function createMergeTaskHandler(taskStore: TaskStore) {
         return { error: `任务状态不允许合并: ${task.status}` };
       }
 
-      const originalWorkspacePath = task.config.workspace_path;
-      const gitManager = new GitWorktreeManager(originalWorkspacePath);
-
-      if (!gitManager.isGitRepo()) {
-        return { error: `路径不是 Git 仓库: ${originalWorkspacePath}` };
-      }
-
-      const worktreePath = task.worktree.worktree_path;
-      const expectedWorktreePath = `${originalWorkspacePath}\\.worktrees\\${input.task_id}`.replace(/\//g, "\\");
-      const expectedWorktreePathUnix = `${originalWorkspacePath}/.worktrees/${input.task_id}`.replace(/\\/g, "/");
-
-      if (!worktreePath.replace(/\\/g, "/").includes(".worktrees")) {
-        return { error: "Worktree 路径异常，安全检查失败" };
-      }
-
       try {
+        const worktreeState = task.worktree;
+        const gitManager = new GitWorktreeManager(worktreeState.repo_path, config.runtimeDir);
+        gitManager.assertWorktreeState(input.task_id, worktreeState);
+
         if (input.action === "merge") {
-          const summary = gitManager.getDiffSummary(
+          const summary = gitManager.getDiffSummaryForState(
             input.task_id,
-            task.config.editable_paths,
-            originalWorkspacePath
+            worktreeState,
+            task.config.editable_paths
           );
 
           if (summary.hasOutOfBoundsChanges) {
@@ -56,24 +46,27 @@ export function createMergeTaskHandler(taskStore: TaskStore) {
             };
           }
 
-          const targetBranch = task.worktree.branch_name.replace("task/", "").startsWith("task/")
-            ? gitManager.getCurrentBranch()
-            : "master";
+          if (!gitManager.isRepoClean()) {
+            return { error: "原仓库工作区存在未提交修改，不能自动合并" };
+          }
 
-          const currentBranch = gitManager.getCurrentBranch();
-
-          gitManager.mergeWorktree(input.task_id, currentBranch);
+          gitManager.mergeWorktree(
+            input.task_id,
+            worktreeState.base_branch,
+            worktreeState.branch_name
+          );
           gitManager.removeWorktree(input.task_id);
+          gitManager.deleteBranch(worktreeState.branch_name);
           taskStore.clearTaskWorktree(input.task_id);
 
           return {
             task_id: input.task_id,
             action: "merge",
             status: "merged",
-            target_branch: currentBranch,
+            target_branch: worktreeState.base_branch,
           };
         } else {
-          gitManager.discardWorktree(input.task_id);
+          gitManager.discardWorktree(input.task_id, worktreeState.branch_name);
           taskStore.clearTaskWorktree(input.task_id);
 
           return {
@@ -83,7 +76,8 @@ export function createMergeTaskHandler(taskStore: TaskStore) {
           };
         }
       } catch (err) {
-        return { error: `操作失败: ${err}` };
+        const message = err instanceof Error ? err.message : String(err);
+        return { error: `操作失败: ${message}` };
       }
     },
   };

@@ -5,8 +5,13 @@ import type { TaskResult, WorktreeState } from "../types.js";
 import { validateWorkspacePath, validateEditablePaths, validateMaxRounds, validateTimeout } from "../services/path-guard.js";
 import { writeTaskBrief } from "../services/prompt-builder.js";
 import { runMimoTask } from "../services/mimo-runner.js";
-import { globalRunningTasks } from "../services/running-tasks.js";
+import { globalRunningTasks, type RunningTaskRegistry } from "../services/running-tasks.js";
 import { GitWorktreeManager } from "../services/git-worktree.js";
+
+export interface StartTaskDependencies {
+  runTask?: typeof runMimoTask;
+  runningTasks?: RunningTaskRegistry;
+}
 
 export const StartTaskSchema = z.object({
   objective: z.string().min(1, "任务目标不能为空"),
@@ -21,11 +26,18 @@ export const StartTaskSchema = z.object({
 
 export type StartTaskInput = z.infer<typeof StartTaskSchema>;
 
-export function createStartTaskHandler(config: Config, taskStore: TaskStore) {
+export function createStartTaskHandler(
+  config: Config,
+  taskStore: TaskStore,
+  dependencies: StartTaskDependencies = {}
+) {
+  const runTask = dependencies.runTask ?? runMimoTask;
+  const runningTasks = dependencies.runningTasks ?? globalRunningTasks;
+
   return {
     schema: StartTaskSchema,
     handler: async (input: StartTaskInput) => {
-      if (globalRunningTasks.hasAny()) {
+      if (runningTasks.hasAny()) {
         return { error: "已有任务在运行中，第一版只支持同时运行一个写任务" };
       }
 
@@ -74,9 +86,12 @@ export function createStartTaskHandler(config: Config, taskStore: TaskStore) {
           worktreePath = worktreeInfo.worktreePath;
 
           worktreeState = {
+            repo_path: worktreeInfo.repoPath,
+            worktrees_root: worktreeInfo.worktreesRoot,
             worktree_path: worktreeInfo.worktreePath,
             branch_name: worktreeInfo.branchName,
             base_commit: worktreeInfo.baseCommit,
+            base_branch: worktreeInfo.baseBranch,
             diff_summary: null,
             out_of_bounds_files: [],
             has_out_of_bounds_changes: false,
@@ -96,9 +111,8 @@ export function createStartTaskHandler(config: Config, taskStore: TaskStore) {
 
       const taskId = task.task_id;
       const editablePaths = input.editable_paths;
-      const originalWorkspacePath = input.workspace_path;
 
-      const handle = runMimoTask(
+      const handle = runTask(
         {
           mimoNodePath: config.mimoNodePath,
           mimoEntryPath: config.mimoEntryPath,
@@ -112,12 +126,11 @@ export function createStartTaskHandler(config: Config, taskStore: TaskStore) {
           }
           taskStore.updateTaskResult(taskId, result);
           taskStore.updateTaskStatus(taskId, result.status);
-          globalRunningTasks.unregister(taskId);
+          runningTasks.unregister(taskId);
 
           if (worktreeState) {
             try {
-              const manager = new GitWorktreeManager(originalWorkspacePath);
-              const summary = manager.getDiffSummary(taskId, editablePaths);
+              const summary = gitManager.getDiffSummaryForState(taskId, worktreeState, editablePaths);
               worktreeState = {
                 ...worktreeState,
                 diff_summary: summary.diffStat,
@@ -132,11 +145,11 @@ export function createStartTaskHandler(config: Config, taskStore: TaskStore) {
         },
         (error: string) => {
           taskStore.updateTaskStatus(taskId, "failed", error);
-          globalRunningTasks.unregister(taskId);
+          runningTasks.unregister(taskId);
         }
       );
 
-      globalRunningTasks.register(taskId, handle.cancel);
+      runningTasks.register(taskId, handle.cancel);
 
       return {
         task_id: taskId,
@@ -145,7 +158,7 @@ export function createStartTaskHandler(config: Config, taskStore: TaskStore) {
       };
     },
     cancelTask: (taskId: string) => {
-      return globalRunningTasks.cancel(taskId);
+      return runningTasks.cancel(taskId);
     },
   };
 }

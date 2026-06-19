@@ -25,7 +25,7 @@ async function main() {
   const cancelTask = createCancelTaskHandler(taskStore);
   const finishTask = createFinishTaskHandler(taskStore);
   const listTasks = createListTasksHandler(taskStore);
-  const mergeTask = createMergeTaskHandler(taskStore);
+  const mergeTask = createMergeTaskHandler(taskStore, config);
 
   server.tool(
     "mimo_start_task",

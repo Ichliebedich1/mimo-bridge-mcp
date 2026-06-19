@@ -99,12 +99,12 @@ describe("STDIO MCP protocol", () => {
     }
   });
 
-  it("tools/list should return all 6 tools", async () => {
+  it("tools/list should return all 7 tools", async () => {
     const result = await sendRequest("tools/list");
 
     assert.ok(result.result);
     assert.ok(result.result.tools);
-    assert.strictEqual(result.result.tools.length, 6);
+    assert.strictEqual(result.result.tools.length, 7);
 
     const toolNames = result.result.tools.map((t) => t.name);
     assert.ok(toolNames.includes("mimo_start_task"));
@@ -113,6 +113,7 @@ describe("STDIO MCP protocol", () => {
     assert.ok(toolNames.includes("mimo_cancel_task"));
     assert.ok(toolNames.includes("mimo_finish_task"));
     assert.ok(toolNames.includes("mimo_list_tasks"));
+    assert.ok(toolNames.includes("mimo_merge_task"));
   });
 
   it("mimo_list_tasks should return empty list initially", async () => {
@@ -137,6 +138,18 @@ describe("STDIO MCP protocol", () => {
     const text = result.result.content[0].text;
     const parsed = JSON.parse(text);
     assert.ok(parsed.error);
+  });
+
+  it("mimo_merge_task should route calls to the merge handler", async () => {
+    const result = await sendRequest("tools/call", {
+      name: "mimo_merge_task",
+      arguments: { task_id: "task_000000000000", action: "merge" },
+    });
+
+    assert.ok(result.result);
+    const text = result.result.content[0].text;
+    const parsed = JSON.parse(text);
+    assert.match(parsed.error, /任务不存在/);
   });
 
   it("mimo_cancel_task should cancel a running task", async () => {

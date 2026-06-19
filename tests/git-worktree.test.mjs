@@ -72,6 +72,14 @@ describe("git-worktree", () => {
     assert.ok(branch.length > 0);
   });
 
+  it("different repositories should use different runtime worktree roots", () => {
+    const otherRepo = join(testDir, "repo-sibling");
+    const first = new GitWorktreeManager(repoDir, runtimeDir);
+    const second = new GitWorktreeManager(otherRepo, runtimeDir);
+
+    assert.notStrictEqual(first.getWorktreesRoot(), second.getWorktreesRoot());
+  });
+
   it("createWorktree should create worktree in runtime dir", () => {
     const manager = new GitWorktreeManager(repoDir, runtimeDir);
     const info = manager.createWorktree("task_test001");
@@ -122,7 +130,7 @@ describe("git-worktree", () => {
     assert.ok(changed.added.includes("staged.txt"));
   });
 
-  it("getChangedFiles should detect committed files via diff", () => {
+  it("getChangedFiles should audit committed files against the saved base commit", () => {
     const manager = new GitWorktreeManager(repoDir, runtimeDir);
     const info = manager.createWorktree("task_test004");
 
@@ -130,12 +138,17 @@ describe("git-worktree", () => {
     execFileSync("git", ["add", "committed.txt"], { cwd: info.worktreePath, timeout: 5000 });
     execFileSync("git", ["commit", "-m", "add committed.txt"], { cwd: info.worktreePath, timeout: 5000 });
 
-    const diff = execFileSync("git", ["diff", "--name-only", `${info.baseCommit}..HEAD`], {
-      cwd: info.worktreePath,
-      encoding: "utf-8",
-      timeout: 5000,
-    });
-    assert.ok(diff.includes("committed.txt"));
+    const changed = manager.getChangedFiles("task_test004", info.baseCommit);
+    assert.ok(changed.added.includes("committed.txt"));
+
+    const summary = manager.getDiffSummary(
+      "task_test004",
+      ["README.md"],
+      repoDir,
+      info.baseCommit
+    );
+    assert.ok(summary.outOfBoundsFiles.includes("committed.txt"));
+    assert.strictEqual(summary.hasOutOfBoundsChanges, true);
   });
 
   it("getChangedFiles should detect deleted files", () => {
@@ -146,6 +159,20 @@ describe("git-worktree", () => {
 
     const changed = manager.getChangedFiles("task_test005");
     assert.ok(changed.deleted.includes("README.md"));
+  });
+
+  it("getChangedFiles should preserve renamed paths with spaces and unicode", () => {
+    const manager = new GitWorktreeManager(repoDir, runtimeDir);
+    const info = manager.createWorktree("task_test005b");
+
+    execFileSync("git", ["mv", "src/main.ts", "src/中文 file.ts"], {
+      cwd: info.worktreePath,
+      timeout: 5000,
+    });
+
+    const changed = manager.getChangedFiles("task_test005b", info.baseCommit);
+    assert.ok(changed.deleted.includes("src/main.ts"));
+    assert.ok(changed.added.includes("src/中文 file.ts"));
   });
 
   it("getDiffStat should return diff stat", () => {
@@ -206,12 +233,18 @@ describe("git-worktree", () => {
     const info = manager.createWorktree("task_test007");
     writeFileSync(join(info.worktreePath, "summary-test.txt"), "test\n");
 
-    const summary = manager.getDiffSummary("task_test007", ["README.md"], repoDir);
+    const summary = manager.getDiffSummary(
+      "task_test007",
+      ["README.md"],
+      repoDir,
+      info.baseCommit
+    );
 
     assert.ok(summary.taskId === "task_test007");
     assert.ok(summary.worktreePath);
     assert.ok(Array.isArray(summary.modifiedFiles));
     assert.ok(Array.isArray(summary.addedFiles));
+    assert.ok(summary.addedFiles.includes("summary-test.txt"));
     assert.ok(Array.isArray(summary.deletedFiles));
     assert.ok(typeof summary.diffStat === "string");
     assert.ok(Array.isArray(summary.outOfBoundsFiles));
