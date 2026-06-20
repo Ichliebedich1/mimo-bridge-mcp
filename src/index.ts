@@ -10,6 +10,7 @@ import { createCancelTaskHandler } from "./tools/cancel-task.js";
 import { createFinishTaskHandler } from "./tools/finish-task.js";
 import { createListTasksHandler } from "./tools/list-tasks.js";
 import { createMergeTaskHandler } from "./tools/merge-task.js";
+import { createTokenStatusHandler } from "./tools/token-status.js";
 
 async function main() {
   const config = loadConfig();
@@ -27,6 +28,7 @@ async function main() {
   const finishTask = createFinishTaskHandler(taskStore);
   const listTasks = createListTasksHandler(taskStore);
   const mergeTask = createMergeTaskHandler(taskStore, config);
+  const tokenStatus = createTokenStatusHandler();
 
   server.tool(
     "mimo_start_task",
@@ -118,6 +120,18 @@ async function main() {
     {},
     async () => {
       const result = startTask.getQueueStatus();
+      return {
+        content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+      };
+    }
+  );
+
+  server.tool(
+    "mimo_token_status",
+    "查询 Token 预算使用情况",
+    tokenStatus.schema.shape,
+    async (params) => {
+      const result = await tokenStatus.handler(params);
       return {
         content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
       };
