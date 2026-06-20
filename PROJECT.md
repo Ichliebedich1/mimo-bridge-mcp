@@ -259,6 +259,7 @@ MiMo Bridge MCP 是一个 MCP（Model Context Protocol）服务器，用于让 C
 | `bfe26f0` | P3 修复：Codex 审核问题 | P3 |
 | `4a505e4` | 队列和只读并发 | P4 |
 | `c909016` | 共享管理界面和安全任务删除 | P5/P5.1 |
+| `8a58d84` | 修复写任务实际串行、取消释放和 Worktree 清理 | P4 |
 
 ---
 
