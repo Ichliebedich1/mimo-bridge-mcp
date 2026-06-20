@@ -8,6 +8,7 @@ import { runMimoTask } from "../services/mimo-runner.js";
 import { globalRunningTasks, type RunningTaskRegistry } from "../services/running-tasks.js";
 import { globalTaskQueue, type TaskQueue } from "../services/task-queue.js";
 import { GitWorktreeManager } from "../services/git-worktree.js";
+import { refreshReviewPackage } from "../services/review-package.js";
 
 export interface StartTaskDependencies {
   runTask?: typeof runMimoTask;
@@ -73,10 +74,12 @@ export function createStartTaskHandler(
             process.stderr.write(`[start-task] 获取 diff 摘要失败: ${err}\n`);
           }
         }
+        refreshReviewPackage(taskStore, taskId);
       },
       (error: string) => {
         taskStore.updateTaskStatus(taskId, "failed", error);
         runningTasks.unregister(taskId);
+        refreshReviewPackage(taskStore, taskId);
       }
     );
 

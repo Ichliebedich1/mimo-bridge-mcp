@@ -81,6 +81,7 @@ export function runMimoTask(
       raw_log_path: logPath,
       stderr_log_path: stderrLogPath,
       error: null,
+      exit_code: exitCode,
     };
 
     if (exitCode !== 0) {

@@ -42,7 +42,7 @@ async function main() {
 
   server.tool(
     "mimo_get_task",
-    "查询 MiMo 任务状态、回复和日志摘要",
+    "按 token 预算查询任务。默认 review 仅返回 Review Package；发现风险后再显式升级为 diff、focused、logs 或 full，禁止默认读取完整内容。",
     getTask.schema.shape,
     async (params) => {
       const result = await getTask.handler(params);

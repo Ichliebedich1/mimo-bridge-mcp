@@ -30,6 +30,40 @@ export interface WorktreeState {
   has_out_of_bounds_changes: boolean;
 }
 
+export interface ChangedLinesSummary {
+  path: string;
+  additions: number | null;
+  deletions: number | null;
+}
+
+export interface OutOfBoundsReport {
+  has_changes: boolean;
+  files: string[];
+}
+
+export type ReviewRecommendation = "approve" | "needs_attention" | "reject" | "wait";
+
+export interface ReviewPackage {
+  task_id: string;
+  status: TaskStatus;
+  objective: string;
+  editable_paths: string[];
+  changed_files: string[];
+  changed_files_count: number;
+  diff_stat: string;
+  changed_lines_summary: ChangedLinesSummary[];
+  out_of_bounds_report: OutOfBoundsReport;
+  test_commands: string[];
+  test_result: string;
+  exit_code: number | null;
+  log_tail: string;
+  mimo_summary: string;
+  risk_flags: string[];
+  generated_at: string;
+  review_recommendation: ReviewRecommendation;
+  truncated: boolean;
+}
+
 export interface TaskState {
   task_id: string;
   status: TaskStatus;
@@ -47,7 +81,9 @@ export interface TaskState {
   raw_log_path: string;
   stderr_log_path: string;
   error: string | null;
+  exit_code: number | null;
   worktree: WorktreeState | null;
+  review_package: ReviewPackage | null;
 }
 
 export interface MimoEvent {
@@ -88,6 +124,7 @@ export interface TaskResult {
   raw_log_path: string;
   stderr_log_path: string;
   error: string | null;
+  exit_code?: number | null;
 }
 
 export interface StartTaskInput {

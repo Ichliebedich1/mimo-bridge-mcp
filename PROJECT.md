@@ -1,7 +1,7 @@
 # MiMo Bridge MCP 项目文档
 
-> 更新日期：2026年6月19日  
-> 项目状态：P0-P4 已完成
+> 更新日期：2026年6月20日
+> 项目状态：P0-P3 可用，P4 队列待修复，P4.5 低成本审查协议已实现
 
 ---
 
@@ -126,6 +126,26 @@ MiMo Bridge MCP 是一个 MCP（Model Context Protocol）服务器，用于让 C
 
 **验收标准**：17 个 P4 测试全部通过
 
+**当前复核**：测试文件通过，但独立复现发现第二个写任务返回 `queued` 后仍立即启动；P4 尚未通过行为验收。
+
+---
+
+### P4.5：Token Budget Review / 低成本审查协议
+
+**目标**：让 Codex 默认只读取决策所需 Review Package，发现风险后才按路径升级证据。
+
+**核心功能**：
+- MiMo 完成后自动生成并持久化 Review Package
+- `mimo_get_task` 支持 `summary/review/diff/focused/logs/full`
+- 默认 `review`，禁止默认返回完整 diff、日志和文件内容
+- diff、日志、文件和 full 均有字符预算、行数限制和截断标记
+- Git 自动生成 changed files、diff stat、增删行和越界报告
+- 测试失败、越界修改、任务失败等进入 `risk_flags`
+
+**审查顺序**：Review Package → 风险检查 → 相关 diff/log/file → 显式 full 调试。
+
+**详细协议**：`docs/modules/token-budget-review.md`
+
 ---
 
 ## 后续计划
@@ -197,7 +217,7 @@ MiMo Bridge MCP 是一个 MCP（Model Context Protocol）服务器，用于让 C
 | 工具 | 说明 | 版本 |
 |------|------|------|
 | `mimo_start_task` | 创建并启动任务 | P1 |
-| `mimo_get_task` | 查询任务状态 | P1 |
+| `mimo_get_task` | 分级查询任务状态和审查证据 | P1/P4.5 |
 | `mimo_reply_task` | 继续会话 | P1 |
 | `mimo_cancel_task` | 终止任务或取消队列 | P1/P4 |
 | `mimo_finish_task` | 标记验收/放弃 | P1 |
@@ -215,8 +235,11 @@ MiMo Bridge MCP 是一个 MCP（Model Context Protocol）服务器，用于让 C
 | P1 | +10 | ✅ |
 | P2 | +23 | ✅ |
 | P3 | +30 | ✅ |
-| P4 | +17 | ✅ |
-| **总计** | **143+** | ✅ |
+| P4 | +17 | ⚠️ 自动化通过，行为验收未通过 |
+| P4.5 | +15 | ✅ |
+| **当前回归** | **145** | ✅（排除已知挂起的 `runner-integration.test.mjs`） |
+
+回归中仍会出现既有的 Windows `node-pty AttachConsole failed` 输出和 `TimeoutNaNWarning`，但测试进程退出码为 0。这些作为技术债保留，不属于 P4.5 阻塞项。
 
 ---
 
@@ -234,4 +257,4 @@ MiMo Bridge MCP 是一个 MCP（Model Context Protocol）服务器，用于让 C
 ---
 
 **文档版本**：1.0  
-**最后更新**：2026年6月19日
+**最后更新**：2026年6月20日

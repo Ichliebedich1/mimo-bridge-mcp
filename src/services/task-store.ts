@@ -1,7 +1,7 @@
 import { readFileSync, writeFileSync, mkdirSync, existsSync, readdirSync, renameSync, unlinkSync } from "node:fs";
 import { join, resolve, normalize } from "node:path";
 import { randomUUID } from "node:crypto";
-import type { TaskState, TaskConfig, TaskStatus, WorktreeState } from "../types.js";
+import type { TaskState, TaskConfig, TaskStatus, WorktreeState, ReviewPackage } from "../types.js";
 
 const TASK_ID_PATTERN = /^task_[a-f0-9]{12}$/;
 
@@ -63,7 +63,9 @@ export class TaskStore {
       raw_log_path: "",
       stderr_log_path: "",
       error: null,
+      exit_code: null,
       worktree: null,
+      review_package: null,
     };
 
     this.saveTask(task);
@@ -150,6 +152,7 @@ export class TaskStore {
     if (result.raw_log_path !== undefined) task.raw_log_path = result.raw_log_path;
     if (result.stderr_log_path !== undefined) task.stderr_log_path = result.stderr_log_path;
     if (result.error !== undefined) task.error = result.error;
+    if (result.exit_code !== undefined) task.exit_code = result.exit_code;
 
     this.saveTask(task);
     return task;
@@ -160,6 +163,15 @@ export class TaskStore {
     if (!task) return null;
 
     task.worktree = worktree;
+    this.saveTask(task);
+    return task;
+  }
+
+  updateReviewPackage(taskId: string, reviewPackage: ReviewPackage): TaskState | null {
+    const task = this.getTask(taskId);
+    if (!task) return null;
+
+    task.review_package = reviewPackage;
     this.saveTask(task);
     return task;
   }

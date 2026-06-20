@@ -99,12 +99,12 @@ describe("STDIO MCP protocol", () => {
     }
   });
 
-  it("tools/list should return all 7 tools", async () => {
+  it("tools/list should return all 8 tools", async () => {
     const result = await sendRequest("tools/list");
 
     assert.ok(result.result);
     assert.ok(result.result.tools);
-    assert.strictEqual(result.result.tools.length, 7);
+    assert.strictEqual(result.result.tools.length, 8);
 
     const toolNames = result.result.tools.map((t) => t.name);
     assert.ok(toolNames.includes("mimo_start_task"));
@@ -114,6 +114,7 @@ describe("STDIO MCP protocol", () => {
     assert.ok(toolNames.includes("mimo_finish_task"));
     assert.ok(toolNames.includes("mimo_list_tasks"));
     assert.ok(toolNames.includes("mimo_merge_task"));
+    assert.ok(toolNames.includes("mimo_queue_status"));
   });
 
   it("mimo_list_tasks should return empty list initially", async () => {
@@ -169,6 +170,18 @@ describe("STDIO MCP protocol", () => {
     assert.strictEqual(parsed1.status, "running");
 
     const taskId = parsed1.task_id;
+
+    const reviewResult = await sendRequest("tools/call", {
+      name: "mimo_get_task",
+      arguments: { task_id: taskId },
+    });
+    const reviewText = reviewResult.result.content[0].text;
+    const reviewParsed = JSON.parse(reviewText);
+    assert.strictEqual(reviewParsed.detail_level, "review");
+    assert.ok(reviewParsed.review_package);
+    assert.strictEqual("diff" in reviewParsed, false);
+    assert.strictEqual("raw_log_path" in reviewParsed, false);
+    assert.strictEqual("stderr_log_path" in reviewParsed, false);
 
     const result2 = await sendRequest("tools/call", {
       name: "mimo_cancel_task",

@@ -40,6 +40,12 @@ export class GitWorktreeManager {
     }
   }
 
+  static fromWorktreeState(state: WorktreeState): GitWorktreeManager {
+    const manager = new GitWorktreeManager(state.repo_path);
+    manager.worktreesDir = resolve(state.worktrees_root);
+    return manager;
+  }
+
   getWorktreesRoot(): string {
     return this.worktreesDir;
   }
@@ -411,6 +417,43 @@ export class GitWorktreeManager {
       return stat;
     } catch (err) {
       throw new Error(`获取 diff stat 失败: ${err}`);
+    }
+  }
+
+  getChangedLinesSummary(
+    taskId: string,
+    baseCommit: string
+  ): Array<{ path: string; additions: number | null; deletions: number | null }> {
+    const worktreePath = resolve(this.worktreesDir, taskId);
+    if (!existsSync(worktreePath)) {
+      throw new Error(`Worktree 不存在: ${worktreePath}`);
+    }
+
+    try {
+      const output = execFileSync("git", ["diff", "--numstat", "-z", baseCommit], {
+        cwd: worktreePath,
+        encoding: "utf-8",
+        timeout: 30000,
+      });
+      const results: Array<{ path: string; additions: number | null; deletions: number | null }> = [];
+      for (const record of output.split("\0")) {
+        if (!record) continue;
+        const firstTab = record.indexOf("\t");
+        const secondTab = firstTab >= 0 ? record.indexOf("\t", firstTab + 1) : -1;
+        if (firstTab < 0 || secondTab < 0) continue;
+        const additions = record.slice(0, firstTab);
+        const deletions = record.slice(firstTab + 1, secondTab);
+        const path = record.slice(secondTab + 1);
+        if (!path) continue;
+        results.push({
+          path,
+          additions: additions === "-" ? null : Number(additions),
+          deletions: deletions === "-" ? null : Number(deletions),
+        });
+      }
+      return results;
+    } catch (err) {
+      throw new Error(`获取变更行摘要失败: ${err}`);
     }
   }
 

@@ -7,6 +7,7 @@ import { writeReplyBrief } from "../services/prompt-builder.js";
 import { runMimoTask } from "../services/mimo-runner.js";
 import { globalRunningTasks, type RunningTaskRegistry } from "../services/running-tasks.js";
 import { globalTaskQueue, type TaskQueue } from "../services/task-queue.js";
+import { refreshReviewPackage } from "../services/review-package.js";
 
 export interface ReplyTaskDependencies {
   runTask?: typeof runMimoTask;
@@ -50,10 +51,12 @@ export function createReplyTaskHandler(
         taskStore.updateTaskResult(taskId, result);
         taskStore.updateTaskStatus(taskId, result.status);
         runningTasks.unregister(taskId);
+        refreshReviewPackage(taskStore, taskId);
       },
       (error: string) => {
         taskStore.updateTaskStatus(taskId, "failed", error);
         runningTasks.unregister(taskId);
+        refreshReviewPackage(taskStore, taskId);
       }
     );
 
