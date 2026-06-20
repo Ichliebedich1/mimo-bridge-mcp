@@ -11,6 +11,7 @@ import { createFinishTaskHandler } from "./tools/finish-task.js";
 import { createListTasksHandler } from "./tools/list-tasks.js";
 import { createMergeTaskHandler } from "./tools/merge-task.js";
 import { createTokenStatusHandler } from "./tools/token-status.js";
+import { createDeleteTaskHandler } from "./tools/delete-task.js";
 
 async function main() {
   const config = loadConfig();
@@ -29,6 +30,7 @@ async function main() {
   const listTasks = createListTasksHandler(taskStore);
   const mergeTask = createMergeTaskHandler(taskStore, config);
   const tokenStatus = createTokenStatusHandler();
+  const deleteTask = createDeleteTaskHandler(taskStore);
 
   server.tool(
     "mimo_start_task",
@@ -132,6 +134,18 @@ async function main() {
     tokenStatus.schema.shape,
     async (params) => {
       const result = await tokenStatus.handler(params);
+      return {
+        content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+      };
+    }
+  );
+
+  server.tool(
+    "mimo_delete_task",
+    "永久删除已结束且没有 Worktree 的任务及其运行时文件",
+    deleteTask.schema.shape,
+    async (params) => {
+      const result = await deleteTask.handler(params);
       return {
         content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
       };

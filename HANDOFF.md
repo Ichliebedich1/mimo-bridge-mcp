@@ -1,26 +1,26 @@
 # mimo-bridge-mcp 交接文档
 
 **更新日期：2026年6月20日**
-**当前状态：P0-P3 可用；P4 已实现但队列行为审核未通过；P4.5 低成本审查协议已实现并通过自动化测试**
+**当前状态：P0-P3 可用；P4 队列行为待修复；P4.5 低成本审查和 P5 本地管理界面已实现**
 
 ---
 
 ## 交接摘要
 
-- 当前范围：P4.5 Token Budget Review。
-- 目标：Codex 默认只读取小体积 Review Package，有风险时再按路径升级读取 diff、日志或文件。
-- 已完成：数据结构、自动生成与持久化、六级查询、字符与日志预算、路径防护、风险标记、测试和审查规范。
-- 协作依赖：P1 提供任务状态，P3 提供 Worktree 与 Git 差异；P4 队列问题独立处理。
+- 当前范围：P5 管理界面、共享 HTTP MCP 和 Codex 审查交接。
+- 目标：管理界面、Codex 和 MiMo 使用同一个守护进程，同时保留 Codex 直接执行复杂任务的能力。
+- 已完成：本地管理界面、共享守护进程、10 个 MCP 工具、Review-first 工作台、“交给 Codex 审查”入口和安全任务删除。
+- 协作方式：界面按钮复制带任务 ID 的低上下文审查指令并打开 Codex 新会话；Codex 重启后通过共享 HTTP MCP 查询和调度任务。
 - 当前阻塞：P4 第二个写任务虽然返回 `queued`，实际仍可能立即启动。
-- 建议下一步：先修复 P4 的真实串行调度并补 runner 调用次数回归，再做一次真实 MiMo Review Package 冒烟测试。
+- 建议下一步：重启 Codex 使 HTTP 配置生效，做一次“界面下发 -> Codex 审查 -> MiMo 修复/合并”的真实冒烟，再修复 P4。
 
 ---
 
 ## 一、当前 Git 状态
 
 - 分支：`master`
-- 本次提交范围：P4.5 源码、测试、规范及交接文档
-- 提交前基线：`cdd486f 添加项目文档：P0-P4 阶段说明`
+- 当前工作区：P5 管理界面、守护进程、测试、Codex 交接按钮和文档尚未提交
+- 最新提交：`694c14e P4.5 Token Budget Review / 低成本审查协议`
 
 | 提交 | 内容 |
 |------|------|
@@ -41,8 +41,8 @@
 ## 二、测试验证状态
 
 - `npm.cmd run build`：通过
-- P4.5 定向测试与 STDIO：20/20 通过
-- 排除已知挂起的 `runner-integration.test.mjs` 后，全量回归：145/145 通过
+- UI/daemon/MCP/交接定向测试：11/11 通过
+- 排除已知挂起的 `runner-integration.test.mjs` 后，全量回归：169/169 通过
 - 回归仍会输出既有的 Windows `node-pty AttachConsole failed` 和 `TimeoutNaNWarning`，测试进程退出码为 0
 - P4 队列单元测试虽通过，但独立行为复现仍显示第二个写任务会立即启动，因此 P4 不能标记验收通过
 
@@ -92,7 +92,7 @@
 
 ---
 
-## 四、MCP 工具列表（8 个）
+## 四、MCP 工具列表（10 个）
 
 | 工具 | 说明 | P4 新增 |
 |------|------|---------|
@@ -104,6 +104,8 @@
 | `mimo_list_tasks` | 列出任务 | |
 | `mimo_merge_task` | 合并/丢弃 Worktree | |
 | `mimo_queue_status` | 查询队列状态 | ✅ |
+| `mimo_token_status` | 查询或重置 Token 预算 | P4.5 |
+| `mimo_delete_task` | 永久删除已结束且没有 Worktree 的任务 | P5.1 |
 
 ---
 
@@ -120,9 +122,29 @@
 
 ## 六、下一步工作
 
-1. 修复 P4 队列实际并发启动的阻塞问题
-2. 用真实 MiMo 执行一次默认 Review Package 审查冒烟
-3. P4 修复后再评估队列并发数配置和其他 Agent 适配器
+1. 重启 Codex，使 `mimo_bridge = http://127.0.0.1:3210/mcp` 生效
+2. 通过管理界面创建真实 MiMo 任务，并使用“交给 Codex 审查”完成一次端到端冒烟
+3. 修复 P4 队列实际并发启动问题
+4. 接入真实 MiMo Token 事件统计
+
+---
+
+## 七、P5.1 任务删除（已完成）
+
+已完成但尚未提交 Git：
+
+- 新增 `mimo_delete_task` 和 `DELETE /api/tasks/:id`。
+- 只允许删除 `accepted/failed/cancelled/abandoned` 且没有 Worktree 的任务。
+- 删除时清理任务 JSON、brief、stdout/stderr 日志。
+- 任务列表和详情页已增加带二次确认的删除按钮。
+- 根项目、daemon、管理界面构建通过；定向测试 13/13 通过；正常回归 169/169 通过。
+- daemon 已用新构建恢复运行，health 为 `ok`。
+- 浏览器 smoke 已确认 3 个 cancelled 任务显示删除按钮，确认框会明确列出任务 ID 和清理范围，取消后不会删除。
+- 已通过固定 `DELETE /api/tasks/:id` 删除 `task_e6d86ca0d3d7`、`task_90714e416eee`、`task_8500dacfab07`。
+- 删除后 `/api/tasks` 和 `mimo_list_tasks` 均为空，`runtime/tasks`、`runtime/briefs`、`runtime/logs` 无对应残留。
+- 共享 HTTP MCP 实测返回 10 个工具并包含 `mimo_delete_task`。
+
+仍需注意：所有 P5/P5.1 代码和文档目前仍未提交 Git；P4 队列行为问题与本功能无关，仍需单独修复。
 
 ---
 

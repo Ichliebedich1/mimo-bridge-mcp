@@ -208,6 +208,32 @@ export class TaskStore {
     }
   }
 
+  deleteTask(taskId: string): boolean {
+    const taskFilePath = this.getTaskFilePath(taskId);
+    if (!taskFilePath || !existsSync(taskFilePath)) {
+      return false;
+    }
+
+    const roundPrefix = `${taskId}-round-`;
+    for (const file of readdirSync(this.briefsDir)) {
+      if (file.startsWith(roundPrefix) && file.endsWith(".md")) {
+        unlinkSync(join(this.briefsDir, file));
+      }
+    }
+    for (const file of readdirSync(this.logsDir)) {
+      if (file.startsWith(roundPrefix) && (file.endsWith(".jsonl") || file.endsWith(".stderr.log"))) {
+        unlinkSync(join(this.logsDir, file));
+      }
+    }
+
+    const tmpPath = `${taskFilePath}.tmp`;
+    if (existsSync(tmpPath)) {
+      unlinkSync(tmpPath);
+    }
+    unlinkSync(taskFilePath);
+    return true;
+  }
+
   getBriefPath(taskId: string, round: number): string {
     return join(this.briefsDir, `${taskId}-round-${round}.md`);
   }

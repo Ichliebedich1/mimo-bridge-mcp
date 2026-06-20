@@ -1,0 +1,12 @@
+{
+  "name": "mimo-bridge-local-daemon",
+  "version": "0.0.0-ui1",
+  "private": true,
+  "type": "module",
+  "description": "Localhost-only daemon that shares MiMo MCP tool state with the admin UI.",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/apps/local-daemon/src/index.js",
+    "dev": "npm.cmd run build && node dist/apps/local-daemon/src/index.js"
+  }
+}

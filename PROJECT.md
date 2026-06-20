@@ -1,7 +1,7 @@
 # MiMo Bridge MCP 项目文档
 
 > 更新日期：2026年6月20日
-> 项目状态：P0-P3 可用，P4 队列待修复，P4.5 低成本审查协议已实现
+> 项目状态：P0-P3 可用，P4 队列待修复，P4.5 低成本审查协议和 P5 本地管理界面已实现
 
 ---
 
@@ -150,15 +150,17 @@ MiMo Bridge MCP 是一个 MCP（Model Context Protocol）服务器，用于让 C
 
 ## 后续计划
 
-### P5：多 Agent 适配器（待规划）
+### P5：本地管理界面与共享协作入口（已实现）
 
-**目标**：支持更多 AI Agent 接入
+**目标**：让管理界面、Codex 和 MiMo 共用同一任务状态与执行进程。
 
-**可能内容**：
-- 通用 Agent 适配器接口
-- 支持 Cursor、VS Code Copilot 等
-- Agent 能力发现和协商
-- 统一的任务描述格式
+**当前内容**：
+- React 管理界面和 localhost-only 本地守护进程
+- MCP Streamable HTTP `/mcp` 与固定管理 API `/api/*`
+- Review-first 任务详情和“交给 Codex 审查”入口
+- Codex 配置切换到 `http://127.0.0.1:3210/mcp`
+- 交接指令复制失败时提供手动复制内容
+- 仅允许永久删除已结束且没有 Worktree 的任务，并同步清理任务记录、brief 和日志
 
 ### P6：Web 管理界面（待规划）
 
@@ -212,7 +214,7 @@ MiMo Bridge MCP 是一个 MCP（Model Context Protocol）服务器，用于让 C
 
 ---
 
-## MCP 工具列表（8 个）
+## MCP 工具列表（10 个）
 
 | 工具 | 说明 | 版本 |
 |------|------|------|
@@ -224,6 +226,8 @@ MiMo Bridge MCP 是一个 MCP（Model Context Protocol）服务器，用于让 C
 | `mimo_list_tasks` | 列出任务 | P1 |
 | `mimo_merge_task` | 合并/丢弃 Worktree | P3 |
 | `mimo_queue_status` | 查询队列状态 | P4 |
+| `mimo_token_status` | 查询或重置 Token 预算状态 | P4.5 |
+| `mimo_delete_task` | 永久删除已结束且没有 Worktree 的任务 | P5.1 |
 
 ---
 
@@ -236,8 +240,9 @@ MiMo Bridge MCP 是一个 MCP（Model Context Protocol）服务器，用于让 C
 | P2 | +23 | ✅ |
 | P3 | +30 | ✅ |
 | P4 | +17 | ⚠️ 自动化通过，行为验收未通过 |
-| P4.5 | +15 | ✅ |
-| **当前回归** | **145** | ✅（排除已知挂起的 `runner-integration.test.mjs`） |
+| P4.5 | +31 | ✅ |
+| P5/P5.1 | +8 | ✅ |
+| **当前回归** | **169** | ✅（排除已知挂起的 `runner-integration.test.mjs`） |
 
 回归中仍会出现既有的 Windows `node-pty AttachConsole failed` 输出和 `TimeoutNaNWarning`，但测试进程退出码为 0。这些作为技术债保留，不属于 P4.5 阻塞项。
 

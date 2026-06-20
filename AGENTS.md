@@ -2,10 +2,21 @@
 
 ## Stack And Commands
 
-- Runtime: Node.js + TypeScript + MCP SDK over STDIO.
+- Runtime: Node.js + TypeScript + MCP SDK. Production collaboration uses the shared local daemon over Streamable HTTP; STDIO remains a compatibility/test entry.
 - Build: `npm.cmd run build`
+- Admin UI build: `cd apps/admin-ui; npm.cmd run build`
+- Local daemon build: `cd apps/local-daemon; npm.cmd run build`
 - Normal regression: `node --test (rg --files tests -g '*.test.mjs' | Where-Object { $_ -notmatch 'runner-integration\.test\.mjs$' })`
 - Do not run `tests/runner-integration.test.mjs` in the normal suite; it is a tracked hanging P2 test debt.
+
+## Shared Collaboration Runtime
+
+- Start the daemon with `powershell -ExecutionPolicy Bypass -File apps/local-daemon/start-local.ps1`.
+- Codex `mimo_bridge` must point to `http://127.0.0.1:3210/mcp` so the UI and Codex share one queue, running-task registry, and token manager.
+- Do not run the production STDIO bridge beside the daemon for task execution.
+- Config transport changes take effect only after restarting Codex or opening a new Codex session.
+- The UI handoff control copies a bounded review prompt and opens `codex://threads/new`; it does not silently submit a message.
+- `mimo_delete_task` is permanent: only delete `accepted`, `failed`, `cancelled`, or `abandoned` tasks after confirming they have no Worktree. Browser actions require the UI confirmation dialog.
 
 ## Mandatory Low-Context Review
 
