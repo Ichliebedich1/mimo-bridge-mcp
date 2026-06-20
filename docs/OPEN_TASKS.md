@@ -2,8 +2,10 @@
 
 ## Pending
 
+- Make the shared local daemon remain available across Codex turns and verify the supported startup path.
 - Connect `TokenBudgetManager` to real MiMo token events.
 - Flag a coding task as risky when it reaches review with no changed files and no reported tests.
+- Audit cleanup and discard behavior when an active Worktree task is cancelled.
 
 ## Completed
 
@@ -19,9 +21,10 @@
 
 - The known P2 Runner integration test remains excluded because it hangs.
 - A no-change MiMo coding task can currently receive `review_recommendation=approve` when tests are not reported.
+- The daemon passed startup smoke after P4 but was offline at the later handoff check.
 
 ## Next Steps
 
-1. Restart the shared daemon and Codex connection so the repaired queue is loaded.
-2. Perform one supervised real MiMo coding task using the default Review Package flow.
+1. Start the shared daemon through `apps/local-daemon/start-local.ps1` and verify it remains online across turns.
+2. Restart the Codex MCP connection and perform one supervised real MiMo coding task.
 3. Add the no-change review risk flag, then connect real token usage events.

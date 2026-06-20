@@ -11,8 +11,9 @@
 - 目标：管理界面、Codex 和 MiMo 使用同一个守护进程，同时保留 Codex 直接执行复杂任务的能力。
 - 已完成：本地管理界面、共享守护进程、10 个 MCP 工具、Review-first 工作台、“交给 Codex 审查”入口和安全任务删除。
 - 协作方式：界面按钮复制带任务 ID 的低上下文审查指令并打开 Codex 新会话；Codex 重启后通过共享 HTTP MCP 查询和调度任务。
-- 当前阻塞：无；P4 已绑定真实 Runner 完成、失败或取消回调，写任务会实际串行。
-- 建议下一步：重启 daemon/Codex 加载新构建，做一次“界面下发 -> Codex 审查 -> MiMo 修复/合并”的真实冒烟。
+- 代码阻塞：无；P4 已绑定真实 Runner 完成、失败或取消回调，写任务会实际串行。
+- 运行阻塞：`127.0.0.1:3210` 当前离线。新 daemon 曾通过 health/MCP/UI smoke，但未持续驻留。
+- 建议下一步：用 `apps/local-daemon/start-local.ps1` 恢复 daemon，确认跨会话持续驻留后再做真实端到端冒烟。
 
 ---
 
@@ -21,6 +22,7 @@
 - 分支：`master`
 - 当前工作区：干净
 - 最新代码提交：`8a58d84 Fix P4 write task serialization`
+- 最新文档提交：`dc497cf Update P4 handoff status`
 
 | 提交 | 内容 |
 |------|------|
@@ -124,11 +126,11 @@
 
 ## 六、下一步工作
 
-1. 重启 Codex，使 `mimo_bridge = http://127.0.0.1:3210/mcp` 生效
-2. 通过管理界面创建真实 MiMo 任务，并使用“交给 Codex 审查”完成一次端到端冒烟
-3. 修复 P4 队列实际并发启动问题
-4. 接入真实 MiMo Token 事件统计
-5. 修复“编码任务零修改且未报告测试时 Review Package 仍建议 approve”的审查风险
+1. 使用 `powershell -ExecutionPolicy Bypass -File apps/local-daemon/start-local.ps1` 启动 daemon，并确认 3210 端口跨会话持续驻留
+2. 重启 Codex，使 `mimo_bridge = http://127.0.0.1:3210/mcp` 重新建立连接
+3. 通过管理界面创建真实 MiMo 任务，并使用“交给 Codex 审查”完成一次端到端冒烟
+4. 修复“编码任务零修改且未报告测试时 Review Package 仍建议 approve”的审查风险
+5. 接入真实 MiMo Token 事件统计
 
 ---
 
@@ -160,6 +162,40 @@ P5/P5.1 已形成可回退 Git 基线。
 - UI 已允许后续写任务进入队列，不再显示“queued 可能提前启动”的旧警告。
 - 新增 6 个行为回归；正常回归 175/175 通过。
 - 本次通过 MCP 下发给 MiMo 两轮，但 MiMo 只读取文件且未修改代码；任务已安全 discard 并标记 abandoned，最终修复由 Codex 完成。
+
+---
+
+## 九、压缩上下文前运行状态与技术债
+
+### 9.1 当前运行状态
+
+- Git：`master`，工作区干净；HEAD 为 `dc497cf`，P4 代码提交为 `8a58d84`。
+- 构建：根项目、`apps/local-daemon`、`apps/admin-ui` 均通过。
+- 回归：排除已知挂起的 `tests/runner-integration.test.mjs` 后，175/175 通过。
+- 最后一次在线 smoke：daemon health 正常、HTTP MCP 返回 10 个工具、队列为空、新 UI 不含旧 P4 警告。
+- 当前探测：`http://127.0.0.1:3210/api/health` 无法连接；需要重新启动并验证驻留方式。
+
+### 9.2 剩余技术债
+
+| 优先级 | 项目 | 影响 |
+|---|---|---|
+| 高 | daemon 启动后未持续驻留 | Codex/UI 无法通过共享 HTTP MCP 调度 MiMo |
+| 高 | 零修改、未报告测试的编码任务仍可能得到 `approve` | 自动建议可能误导审核，必须由 Codex 检查 `changed_files_count` 和 `test_result` |
+| 中 | 真实 Token 事件未接入 | Token 页面不能代表真实消耗 |
+| 中 | 运行中 Worktree 任务取消后的清理链路需单独复核 | queued Worktree 已修复；active Worktree 取消不在本轮验收范围 |
+| 低 | `runner-integration.test.mjs` 在 Windows 挂起 | 正常回归继续排除并明确记录 |
+| 低 | Windows `node-pty AttachConsole failed` / `TimeoutNaNWarning` | 测试噪声；当前退出码和回归结果不受影响 |
+
+### 9.3 验证命令
+
+```powershell
+npm.cmd run build
+cd apps/local-daemon; npm.cmd run build
+cd ../admin-ui; npm.cmd run build
+cd ../..
+$tests = rg --files tests -g '*.test.mjs' | Where-Object { $_ -notmatch 'runner-integration\.test\.mjs$' }
+node --test $tests
+```
 
 ---
 
