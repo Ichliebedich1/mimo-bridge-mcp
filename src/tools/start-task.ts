@@ -39,51 +39,87 @@ export function createStartTaskHandler(
   const runningTasks = dependencies.runningTasks ?? globalRunningTasks;
   const taskQueue = dependencies.taskQueue ?? globalTaskQueue;
 
-  function executeTask(taskId: string, taskConfig: any, worktreeState: WorktreeState | null, editablePaths: string[]) {
+  function executeTask(
+    taskId: string,
+    taskConfig: any,
+    worktreeState: WorktreeState | null,
+    editablePaths: string[]
+  ): Promise<void> {
     const task = taskStore.getTask(taskId);
-    if (!task) return;
+    if (!task) return Promise.resolve();
 
-    const handle = runTask(
-      {
-        mimoNodePath: config.mimoNodePath,
-        mimoEntryPath: config.mimoEntryPath,
-        task: { ...task, config: taskConfig },
-        runtimeDir: config.runtimeDir,
-        timeoutMs: task.config.runtime_timeout_seconds * 1000,
-      },
-      (result: TaskResult) => {
-        if (result.session_id) {
-          taskStore.updateTaskSession(taskId, result.session_id);
-        }
-        taskStore.updateTaskResult(taskId, result);
-        taskStore.updateTaskStatus(taskId, result.status);
+    return new Promise((resolve) => {
+      let settled = false;
+      const finish = () => {
+        if (settled) return;
+        settled = true;
         runningTasks.unregister(taskId);
+        resolve();
+      };
 
-        if (worktreeState) {
-          try {
-            const gitManager = new GitWorktreeManager(task.config.workspace_path, config.runtimeDir);
-            const summary = gitManager.getDiffSummaryForState(taskId, worktreeState, editablePaths);
-            worktreeState = {
-              ...worktreeState,
-              diff_summary: summary.diffStat,
-              out_of_bounds_files: summary.outOfBoundsFiles,
-              has_out_of_bounds_changes: summary.hasOutOfBoundsChanges,
-            };
-            taskStore.updateTaskWorktree(taskId, worktreeState);
-          } catch (err) {
-            process.stderr.write(`[start-task] 获取 diff 摘要失败: ${err}\n`);
+      const complete = (result: TaskResult) => {
+        if (settled) return;
+        try {
+          if (result.session_id) {
+            taskStore.updateTaskSession(taskId, result.session_id);
           }
-        }
-        refreshReviewPackage(taskStore, taskId);
-      },
-      (error: string) => {
-        taskStore.updateTaskStatus(taskId, "failed", error);
-        runningTasks.unregister(taskId);
-        refreshReviewPackage(taskStore, taskId);
-      }
-    );
+          taskStore.updateTaskResult(taskId, result);
+          taskStore.updateTaskStatus(taskId, result.status);
 
-    runningTasks.register(taskId, handle.cancel);
+          if (worktreeState) {
+            try {
+              const gitManager = new GitWorktreeManager(task.config.workspace_path, config.runtimeDir);
+              const summary = gitManager.getDiffSummaryForState(taskId, worktreeState, editablePaths);
+              worktreeState = {
+                ...worktreeState,
+                diff_summary: summary.diffStat,
+                out_of_bounds_files: summary.outOfBoundsFiles,
+                has_out_of_bounds_changes: summary.hasOutOfBoundsChanges,
+              };
+              taskStore.updateTaskWorktree(taskId, worktreeState);
+            } catch (err) {
+              process.stderr.write(`[start-task] 获取 diff 摘要失败: ${err}\n`);
+            }
+          }
+          refreshReviewPackage(taskStore, taskId);
+        } finally {
+          finish();
+        }
+      };
+
+      const fail = (error: string) => {
+        if (settled) return;
+        try {
+          taskStore.updateTaskStatus(taskId, "failed", error);
+          refreshReviewPackage(taskStore, taskId);
+        } finally {
+          finish();
+        }
+      };
+
+      try {
+        const handle = runTask(
+          {
+            mimoNodePath: config.mimoNodePath,
+            mimoEntryPath: config.mimoEntryPath,
+            task: { ...task, config: taskConfig },
+            runtimeDir: config.runtimeDir,
+            timeoutMs: task.config.runtime_timeout_seconds * 1000,
+          },
+          complete,
+          fail
+        );
+
+        if (!settled) {
+          runningTasks.register(taskId, () => {
+            handle.cancel();
+            finish();
+          });
+        }
+      } catch (err) {
+        fail(err instanceof Error ? err.message : String(err));
+      }
+    });
   }
 
   return {
@@ -158,31 +194,35 @@ export function createStartTaskHandler(
       const taskId = task.task_id;
       const editablePaths = input.editable_paths;
 
-      if (runningTasks.hasAny()) {
+      const startedImmediately = taskQueue.enqueue({
+        taskId,
+        priority: input.priority,
+        enqueuedAt: Date.now(),
+        execute: async () => {
+          taskStore.updateTaskStatus(taskId, "running");
+          await executeTask(taskId, taskConfig, worktreeState, editablePaths);
+        },
+        cancel: () => {
+          if (worktreeState) {
+            const queuedWorktree = worktreeState;
+            const queuedGitManager = GitWorktreeManager.fromWorktreeState(queuedWorktree);
+            queuedGitManager.assertWorktreeState(taskId, queuedWorktree);
+            queuedGitManager.discardWorktree(taskId, queuedWorktree.branch_name);
+            taskStore.clearTaskWorktree(taskId);
+            worktreeState = null;
+          }
+          taskStore.updateTaskStatus(taskId, "cancelled");
+        },
+      });
+
+      if (!startedImmediately) {
         taskStore.updateTaskStatus(taskId, "queued");
-
-        taskQueue.enqueue({
-          taskId,
-          priority: input.priority,
-          enqueuedAt: Date.now(),
-          execute: async () => {
-            taskStore.updateTaskStatus(taskId, "running");
-            executeTask(taskId, taskConfig, worktreeState, editablePaths);
-          },
-          cancel: () => {
-            taskStore.updateTaskStatus(taskId, "cancelled");
-          },
-        });
-
         return {
           task_id: taskId,
           status: "queued",
           queue_position: taskQueue.size,
         };
       }
-
-      taskStore.updateTaskStatus(taskId, "running");
-      executeTask(taskId, taskConfig, worktreeState, editablePaths);
 
       return {
         task_id: taskId,

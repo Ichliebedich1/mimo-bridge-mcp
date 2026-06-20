@@ -1,26 +1,26 @@
 # mimo-bridge-mcp 交接文档
 
 **更新日期：2026年6月20日**
-**当前状态：P0-P3 可用；P4 队列行为待修复；P4.5 低成本审查和 P5 本地管理界面已实现**
+**当前状态：P0-P5 核心功能可用；真实 Token 统计和审查空修改风险仍待完善**
 
 ---
 
 ## 交接摘要
 
-- 当前范围：P5 管理界面、共享 HTTP MCP 和 Codex 审查交接。
+- 当前范围：P4 写任务队列修复、共享 HTTP MCP 和 Codex 审查交接。
 - 目标：管理界面、Codex 和 MiMo 使用同一个守护进程，同时保留 Codex 直接执行复杂任务的能力。
 - 已完成：本地管理界面、共享守护进程、10 个 MCP 工具、Review-first 工作台、“交给 Codex 审查”入口和安全任务删除。
 - 协作方式：界面按钮复制带任务 ID 的低上下文审查指令并打开 Codex 新会话；Codex 重启后通过共享 HTTP MCP 查询和调度任务。
-- 当前阻塞：P4 第二个写任务虽然返回 `queued`，实际仍可能立即启动。
-- 建议下一步：重启 Codex 使 HTTP 配置生效，做一次“界面下发 -> Codex 审查 -> MiMo 修复/合并”的真实冒烟，再修复 P4。
+- 当前阻塞：无；P4 已绑定真实 Runner 完成、失败或取消回调，写任务会实际串行。
+- 建议下一步：重启 daemon/Codex 加载新构建，做一次“界面下发 -> Codex 审查 -> MiMo 修复/合并”的真实冒烟。
 
 ---
 
 ## 一、当前 Git 状态
 
 - 分支：`master`
-- 当前工作区：P5 管理界面、守护进程、测试、Codex 交接按钮和文档尚未提交
-- 最新提交：`694c14e P4.5 Token Budget Review / 低成本审查协议`
+- 当前工作区：P4 修复、测试、界面提示和文档尚未提交
+- 最新提交：`c909016 P5 shared admin UI and safe task deletion`
 
 | 提交 | 内容 |
 |------|------|
@@ -35,6 +35,7 @@
 | `4a505e4` | P4 队列和只读并发 |
 | `ab79b9d` | P4 交接文档 |
 | `cdd486f` | P0-P4 项目文档 |
+| `c909016` | P5 共享管理界面和安全任务删除 |
 
 ---
 
@@ -42,9 +43,9 @@
 
 - `npm.cmd run build`：通过
 - UI/daemon/MCP/交接定向测试：11/11 通过
-- 排除已知挂起的 `runner-integration.test.mjs` 后，全量回归：169/169 通过
+- 排除已知挂起的 `runner-integration.test.mjs` 后，全量回归：175/175 通过
 - 回归仍会输出既有的 Windows `node-pty AttachConsole failed` 和 `TimeoutNaNWarning`，测试进程退出码为 0
-- P4 队列单元测试虽通过，但独立行为复现仍显示第二个写任务会立即启动，因此 P4 不能标记验收通过
+- P4 新增 6 个可控 Runner 行为测试，验证完成、失败、取消、reply 和 Worktree 清理，P4 行为验收通过
 
 ---
 
@@ -126,25 +127,38 @@
 2. 通过管理界面创建真实 MiMo 任务，并使用“交给 Codex 审查”完成一次端到端冒烟
 3. 修复 P4 队列实际并发启动问题
 4. 接入真实 MiMo Token 事件统计
+5. 修复“编码任务零修改且未报告测试时 Review Package 仍建议 approve”的审查风险
 
 ---
 
 ## 七、P5.1 任务删除（已完成）
 
-已完成但尚未提交 Git：
+已完成并提交到 `c909016`：
 
 - 新增 `mimo_delete_task` 和 `DELETE /api/tasks/:id`。
 - 只允许删除 `accepted/failed/cancelled/abandoned` 且没有 Worktree 的任务。
 - 删除时清理任务 JSON、brief、stdout/stderr 日志。
 - 任务列表和详情页已增加带二次确认的删除按钮。
-- 根项目、daemon、管理界面构建通过；定向测试 13/13 通过；正常回归 169/169 通过。
+- P5/P5.1 完成时正常回归 169/169 通过；当前包含 P4 修复后的正常回归为 175/175。
 - daemon 已用新构建恢复运行，health 为 `ok`。
 - 浏览器 smoke 已确认 3 个 cancelled 任务显示删除按钮，确认框会明确列出任务 ID 和清理范围，取消后不会删除。
 - 已通过固定 `DELETE /api/tasks/:id` 删除 `task_e6d86ca0d3d7`、`task_90714e416eee`、`task_8500dacfab07`。
 - 删除后 `/api/tasks` 和 `mimo_list_tasks` 均为空，`runtime/tasks`、`runtime/briefs`、`runtime/logs` 无对应残留。
 - 共享 HTTP MCP 实测返回 10 个工具并包含 `mimo_delete_task`。
 
-仍需注意：所有 P5/P5.1 代码和文档目前仍未提交 Git；P4 队列行为问题与本功能无关，仍需单独修复。
+P5/P5.1 已形成可回退 Git 基线。
+
+---
+
+## 八、P4 队列修复（2026-06-20）
+
+- 所有 start/reply 写任务统一进入 `TaskQueue`，首个任务不再绕过队列。
+- 队列 Promise 绑定真实 Runner 完成、失败或取消，Runner 运行期间不会提前释放。
+- 同一任务已有 queued reply 时拒绝重复入队，并且不会覆盖原 brief。
+- 取消 queued Worktree 任务会删除 Worktree、任务分支并清空 `task.worktree`。
+- UI 已允许后续写任务进入队列，不再显示“queued 可能提前启动”的旧警告。
+- 新增 6 个行为回归；正常回归 175/175 通过。
+- 本次通过 MCP 下发给 MiMo 两轮，但 MiMo 只读取文件且未修改代码；任务已安全 discard 并标记 abandoned，最终修复由 Codex 完成。
 
 ---
 

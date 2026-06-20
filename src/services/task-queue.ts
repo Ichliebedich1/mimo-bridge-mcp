@@ -27,18 +27,24 @@ export class TaskQueue {
     return this.runningCount === 0 && this.queue.length === 0;
   }
 
-  enqueue(task: QueuedTask): void {
+  enqueue(task: QueuedTask): boolean {
+    const startsImmediately = this.runningCount < this.maxConcurrent && this.queue.length === 0;
     this.queue.push(task);
     this.queue.sort((a, b) => b.priority - a.priority);
     this.processNext();
+    return startsImmediately;
+  }
+
+  hasQueued(taskId: string): boolean {
+    return this.queue.some((task) => task.taskId === taskId);
   }
 
   cancel(taskId: string): boolean {
     const index = this.queue.findIndex((t) => t.taskId === taskId);
     if (index >= 0) {
       const task = this.queue[index];
-      this.queue.splice(index, 1);
       task.cancel();
+      this.queue.splice(index, 1);
       return true;
     }
     return false;
@@ -76,9 +82,19 @@ export class TaskQueue {
     const task = this.queue.shift()!;
     this.runningCount++;
 
-    task.execute().finally(() => {
+    let execution: Promise<void>;
+    try {
+      execution = task.execute();
+    } catch {
       this.onTaskComplete(task.taskId);
-    });
+      return;
+    }
+
+    void execution
+      .catch(() => undefined)
+      .finally(() => {
+        this.onTaskComplete(task.taskId);
+      });
   }
 }
 

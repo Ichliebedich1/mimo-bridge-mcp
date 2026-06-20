@@ -32,35 +32,64 @@ export function createReplyTaskHandler(
   const runningTasks = dependencies.runningTasks ?? globalRunningTasks;
   const taskQueue = dependencies.taskQueue ?? globalTaskQueue;
 
-  function executeReply(taskId: string) {
+  function executeReply(taskId: string): Promise<void> {
     const task = taskStore.getTask(taskId);
-    if (!task) return;
+    if (!task) return Promise.resolve();
 
-    const handle = runTask(
-      {
-        mimoNodePath: config.mimoNodePath,
-        mimoEntryPath: config.mimoEntryPath,
-        task,
-        runtimeDir: config.runtimeDir,
-        timeoutMs: task.config.runtime_timeout_seconds * 1000,
-      },
-      (result: TaskResult) => {
-        if (result.session_id) {
-          taskStore.updateTaskSession(taskId, result.session_id);
+    return new Promise((resolve) => {
+      let settled = false;
+      const finish = () => {
+        if (settled) return;
+        settled = true;
+        runningTasks.unregister(taskId);
+        resolve();
+      };
+      const complete = (result: TaskResult) => {
+        if (settled) return;
+        try {
+          if (result.session_id) {
+            taskStore.updateTaskSession(taskId, result.session_id);
+          }
+          taskStore.updateTaskResult(taskId, result);
+          taskStore.updateTaskStatus(taskId, result.status);
+          refreshReviewPackage(taskStore, taskId);
+        } finally {
+          finish();
         }
-        taskStore.updateTaskResult(taskId, result);
-        taskStore.updateTaskStatus(taskId, result.status);
-        runningTasks.unregister(taskId);
-        refreshReviewPackage(taskStore, taskId);
-      },
-      (error: string) => {
-        taskStore.updateTaskStatus(taskId, "failed", error);
-        runningTasks.unregister(taskId);
-        refreshReviewPackage(taskStore, taskId);
-      }
-    );
+      };
+      const fail = (error: string) => {
+        if (settled) return;
+        try {
+          taskStore.updateTaskStatus(taskId, "failed", error);
+          refreshReviewPackage(taskStore, taskId);
+        } finally {
+          finish();
+        }
+      };
 
-    runningTasks.register(taskId, handle.cancel);
+      try {
+        const handle = runTask(
+          {
+            mimoNodePath: config.mimoNodePath,
+            mimoEntryPath: config.mimoEntryPath,
+            task,
+            runtimeDir: config.runtimeDir,
+            timeoutMs: task.config.runtime_timeout_seconds * 1000,
+          },
+          complete,
+          fail
+        );
+
+        if (!settled) {
+          runningTasks.register(taskId, () => {
+            handle.cancel();
+            finish();
+          });
+        }
+      } catch (err) {
+        fail(err instanceof Error ? err.message : String(err));
+      }
+    });
   }
 
   return {
@@ -88,35 +117,35 @@ export function createReplyTaskHandler(
         return { error: `已达到最大沟通轮数: ${task.config.max_rounds}` };
       }
 
+      if (taskQueue.hasQueued(task.task_id)) {
+        return { error: `任务回复已在队列中: ${task.task_id}` };
+      }
+
       writeReplyBrief(input.message, task.task_id, task.current_round, `${config.runtimeDir}/briefs`);
 
       const taskId = task.task_id;
 
-      if (runningTasks.hasAny()) {
+      const startedImmediately = taskQueue.enqueue({
+        taskId,
+        priority: input.priority,
+        enqueuedAt: Date.now(),
+        execute: async () => {
+          taskStore.updateTaskStatus(taskId, "running");
+          await executeReply(taskId);
+        },
+        cancel: () => {
+          taskStore.updateTaskStatus(taskId, "cancelled");
+        },
+      });
+
+      if (!startedImmediately) {
         taskStore.updateTaskStatus(taskId, "queued");
-
-        taskQueue.enqueue({
-          taskId,
-          priority: input.priority,
-          enqueuedAt: Date.now(),
-          execute: async () => {
-            taskStore.updateTaskStatus(taskId, "running");
-            executeReply(taskId);
-          },
-          cancel: () => {
-            taskStore.updateTaskStatus(taskId, "cancelled");
-          },
-        });
-
         return {
           task_id: taskId,
           status: "queued",
           queue_position: taskQueue.size,
         };
       }
-
-      taskStore.updateTaskStatus(taskId, "running");
-      executeReply(taskId);
 
       return {
         task_id: taskId,

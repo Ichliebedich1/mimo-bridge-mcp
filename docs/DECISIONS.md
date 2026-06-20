@@ -19,3 +19,8 @@
 
 - Decision: keep the queue defect as an independent blocker and do not mix its repair into P4.5.
 - Reason: the review protocol can ship independently, while queue scheduling needs its own behavior fix and tests.
+
+## 2026-06-20: Queue Lifetime Follows Runner Lifetime
+
+- Decision: every start/reply enters `TaskQueue`, and its queue Promise resolves only after Runner completion, failure, or cancellation.
+- Reason: process spawn is not task completion; releasing at spawn allows concurrent writes despite a `queued` response.

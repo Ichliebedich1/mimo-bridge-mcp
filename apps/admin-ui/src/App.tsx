@@ -102,7 +102,6 @@ function App() {
 
   const selectedTask = tasks.find((task) => task.id === selectedTaskId) ?? null;
   const runningCount = Math.max(health?.queue.running ?? 0, tasks.filter((task) => task.status === 'running').length);
-  const writeTaskLocked = runningCount > 0;
   const apiReachable = health !== null;
   const apiReady = apiReachable && !health.daemon.degraded;
 
@@ -372,16 +371,6 @@ function App() {
           </section>
         )}
 
-        {writeTaskLocked && (
-          <section className="safety-banner" aria-label="并发写任务限制">
-            <div>
-              <strong>安全限制已启用</strong>
-              <p>P4 队列行为修复前，已有写任务运行时，“开始任务”和“发送回复”会被禁用。</p>
-            </div>
-            <span>最后刷新：{lastRefresh}</span>
-          </section>
-        )}
-
         <main>
           {page === 'overview' && <Overview tasks={tasks} queueItems={queueItems} onOpenTask={openTask} onDeleteTask={confirmDeleteTask} />}
           {page === 'tasks' && (
@@ -394,7 +383,7 @@ function App() {
               onCreate={() => setPage('create')}
             />
           )}
-          {page === 'create' && <CreateTaskPage writeTaskLocked={writeTaskLocked || Boolean(actionBusy)} onCreate={handleCreateTask} />}
+          {page === 'create' && <CreateTaskPage actionBusy={Boolean(actionBusy)} onCreate={handleCreateTask} />}
           {page === 'queue' && <QueuePage queueItems={queueItems} onOpenTask={openTask} />}
           {page === 'token' && <TokenPage tokenStatus={tokenStatus} onReset={confirmTokenReset} actionBusy={Boolean(actionBusy)} />}
           {page === 'system' && <SystemPage health={health} apiError={apiError} />}
@@ -403,7 +392,6 @@ function App() {
               <TaskDetailPage
                 actionBusy={actionBusy}
                 task={selectedTask}
-                writeTaskLocked={writeTaskLocked}
                 onCancel={confirmCancel}
                 onDiscardAndAbandon={confirmDiscardAndAbandon}
                 onDeleteTask={confirmDeleteTask}
@@ -478,15 +466,15 @@ function Overview({
               暂无任务
             </button>
           )}
-          <span className="muted-text">P4 队列风险已在 UI 层保守限制。</span>
+          <span className="muted-text">P4 写任务队列已启用实际串行保护。</span>
         </div>
       </section>
 
       <section className="panel">
         <PanelHeader title="任务概况" helper="来自 /api/tasks，断线时显示降级演示数据。" />
         <div className="metric-grid">
-          <MetricCard label="运行中" value={counts.running} tone="blue" helper="写任务锁定依据" />
-          <MetricCard label="排队中" value={counts.queued} tone="neutral" helper="仅供参考，P4 前保守处理" />
+          <MetricCard label="运行中" value={counts.running} tone="blue" helper="当前执行中的写任务" />
+          <MetricCard label="排队中" value={counts.queued} tone="neutral" helper="等待当前 Runner 完成" />
           <MetricCard label="待审查" value={counts.review} tone="purple" helper="优先进入 Review 工作台" />
           <MetricCard label="失败" value={counts.failed} tone="red" helper="建议查看日志尾部" />
         </div>
@@ -552,7 +540,7 @@ function TasksPage({
   );
 }
 
-function CreateTaskPage({ writeTaskLocked, onCreate }: { writeTaskLocked: boolean; onCreate: (input: CreateTaskInput) => Promise<void> }) {
+function CreateTaskPage({ actionBusy, onCreate }: { actionBusy: boolean; onCreate: (input: CreateTaskInput) => Promise<void> }) {
   const [objective, setObjective] = useState('');
   const [workspacePath, setWorkspacePath] = useState('');
   const [editablePaths, setEditablePaths] = useState('');
@@ -609,7 +597,7 @@ function CreateTaskPage({ writeTaskLocked, onCreate }: { writeTaskLocked: boolea
   return (
     <div className="create-layout">
       <section className="panel">
-        <PanelHeader title="新建 MiMo 任务" helper="字段与 mimo_start_task 对齐；写任务运行时会被保守禁用。" />
+        <PanelHeader title="新建 MiMo 任务" helper="字段与 mimo_start_task 对齐；已有写任务时新任务会安全排队。" />
         <form className="task-form" onSubmit={handleSubmit}>
           {formError && <div className="form-error">{formError}</div>}
           <label>
@@ -653,8 +641,8 @@ function CreateTaskPage({ writeTaskLocked, onCreate }: { writeTaskLocked: boolea
             <input checked={useWorktree} onChange={(event) => setUseWorktree(event.target.checked)} type="checkbox" />
             <span>使用 Git Worktree（Git 项目建议开启）</span>
           </label>
-          <button className="button primary large" disabled={writeTaskLocked || submitting} type="submit">
-            {writeTaskLocked ? '已有写任务运行，暂不可开始' : submitting ? '提交中…' : '开始任务'}
+          <button className="button primary large" disabled={actionBusy || submitting} type="submit">
+            {submitting ? '提交中…' : '开始任务'}
           </button>
         </form>
       </section>
@@ -671,7 +659,6 @@ function CreateTaskPage({ writeTaskLocked, onCreate }: { writeTaskLocked: boolea
 
 function TaskDetailPage({
   task,
-  writeTaskLocked,
   actionBusy,
   onReply,
   onCancel,
@@ -686,7 +673,6 @@ function TaskDetailPage({
   onRefresh,
 }: {
   task: Task;
-  writeTaskLocked: boolean;
   actionBusy: string | null;
   onReply: (taskId: string, message: string, priority: number) => Promise<void>;
   onCancel: (taskId: string) => void;
@@ -948,14 +934,14 @@ function TaskDetailPage({
           <div className="reply-box">
             <h3>回复 MiMo</h3>
             <textarea
-              disabled={!canReply || writeTaskLocked || replying}
+              disabled={!canReply || Boolean(actionBusy) || replying}
               onChange={(event) => setReplyMessage(event.target.value)}
               placeholder="说明需要 MiMo 继续修复的问题，或给出下一步要求。"
               rows={5}
               value={replyMessage}
             />
-            <button className="button soft" disabled={!canReply || writeTaskLocked || replying} onClick={() => void submitReply()} type="button">
-              {writeTaskLocked ? '已有写任务运行，暂不可发送回复' : replying ? '发送中…' : '发送回复'}
+            <button className="button soft" disabled={!canReply || Boolean(actionBusy) || replying} onClick={() => void submitReply()} type="button">
+              {replying ? '发送中…' : '发送回复'}
             </button>
           </div>
 
@@ -1013,8 +999,8 @@ function QueuePage({ queueItems, onOpenTask }: { queueItems: QueueItem[]; onOpen
       <section className="panel wide">
         <PanelHeader title="队列状态" helper="显示 running、queued 和队列项。" />
         <div className="warning-card">
-          <strong>P4 队列风险提示</strong>
-          <p>返回 queued 不代表任务一定没有提前启动；修复前界面固定显示此警告，并限制并发写操作。</p>
+          <strong>P4 串行队列已启用</strong>
+          <p>返回 queued 表示任务尚未启动，会等待当前 Runner 完成、失败或取消后再执行。</p>
         </div>
         <div className="queue-lanes">
           <div>
@@ -1281,7 +1267,7 @@ function toQueueItems(queue: QueueStatusResponse, tasks: Task[]): QueueItem[] {
       title: task.title,
       status: 'running' as const,
       startedAt: task.updatedAt,
-      note: '来自 /api/tasks；P4 修复前仍保守限制并发写任务。',
+      note: '来自 /api/tasks；后续写任务由 P4 队列串行执行。',
     }));
 
   const queued = queue.queue.map((item, index) => {

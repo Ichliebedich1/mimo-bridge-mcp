@@ -1,7 +1,7 @@
 # MiMo Bridge MCP 项目文档
 
 > 更新日期：2026年6月20日
-> 项目状态：P0-P3 可用，P4 队列待修复，P4.5 低成本审查协议和 P5 本地管理界面已实现
+> 项目状态：P0-P5 核心功能可用；真实 Token 统计和审查空修改风险待完善
 
 ---
 
@@ -124,9 +124,9 @@ MiMo Bridge MCP 是一个 MCP（Model Context Protocol）服务器，用于让 C
 - `cancel()` - 取消队列中的任务
 - `getQueuedTasks()` - 获取队列任务信息
 
-**验收标准**：17 个 P4 测试全部通过
+**验收标准**：写任务实际串行，完成、失败或取消后才释放下一任务
 
-**当前复核**：测试文件通过，但独立复现发现第二个写任务返回 `queued` 后仍立即启动；P4 尚未通过行为验收。
+**当前复核**：已修复首任务绕过队列的问题；新增 6 个可控 Runner 行为测试，覆盖 start/reply 串行、重复回复拒绝、取消/失败释放以及 queued Worktree 清理，P4 行为验收通过。
 
 ---
 
@@ -239,10 +239,10 @@ MiMo Bridge MCP 是一个 MCP（Model Context Protocol）服务器，用于让 C
 | P1 | +10 | ✅ |
 | P2 | +23 | ✅ |
 | P3 | +30 | ✅ |
-| P4 | +17 | ⚠️ 自动化通过，行为验收未通过 |
+| P4 | +23 | ✅ |
 | P4.5 | +31 | ✅ |
 | P5/P5.1 | +8 | ✅ |
-| **当前回归** | **169** | ✅（排除已知挂起的 `runner-integration.test.mjs`） |
+| **当前回归** | **175** | ✅（排除已知挂起的 `runner-integration.test.mjs`） |
 
 回归中仍会出现既有的 Windows `node-pty AttachConsole failed` 输出和 `TimeoutNaNWarning`，但测试进程退出码为 0。这些作为技术债保留，不属于 P4.5 阻塞项。
 
@@ -258,6 +258,7 @@ MiMo Bridge MCP 是一个 MCP（Model Context Protocol）服务器，用于让 C
 | `6ae45c9` | Git Worktree 隔离与差异审计 | P3 |
 | `bfe26f0` | P3 修复：Codex 审核问题 | P3 |
 | `4a505e4` | 队列和只读并发 | P4 |
+| `c909016` | 共享管理界面和安全任务删除 | P5/P5.1 |
 
 ---
 

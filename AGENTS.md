@@ -33,4 +33,5 @@ Never read the whole repository, complete logs, complete diff, or unrelated file
 ## Current Boundary
 
 - P4.5 token-budget review is implemented and tested.
-- P4 queue code still has a known blocker: a task returned as `queued` can start immediately. Do not treat P4 as accepted until that behavior is repaired and independently reproduced as fixed.
+- P4 write tasks are serialized through `TaskQueue`; queue occupancy ends only on the real Runner completion, failure, or cancellation callback.
+- Keep regression coverage for duplicate queued replies and queued Worktree cleanup when changing task lifecycle code.
