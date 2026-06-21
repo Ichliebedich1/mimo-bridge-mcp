@@ -111,6 +111,21 @@ int wmain(int argc, wchar_t **argv) {
     cleanup_temp(temp_dir, install_script, payload_zip);
     return fail_message(L"Setup command is too long.");
   }
+  int has_mode_argument = 0;
+  for (int i = 1; i < argc; i++) {
+    if (_wcsicmp(argv[i], L"-Quiet") == 0 ||
+        _wcsicmp(argv[i], L"-Uninstall") == 0 ||
+        _wcsicmp(argv[i], L"-SelfTest") == 0) {
+      has_mode_argument = 1;
+      break;
+    }
+  }
+  if (!has_mode_argument) {
+    if (!append_text(command, COMMAND_CAPACITY, L" -Quiet")) {
+      cleanup_temp(temp_dir, install_script, payload_zip);
+      return fail_message(L"Setup command is too long.");
+    }
+  }
   for (int i = 1; i < argc; i++) {
     if (!append_text(command, COMMAND_CAPACITY, L" ") || !append_quoted_arg(command, COMMAND_CAPACITY, argv[i])) {
       cleanup_temp(temp_dir, install_script, payload_zip);

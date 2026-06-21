@@ -237,12 +237,14 @@ function Stop-DaemonIfInstalled {
 function Write-InstalledLaunchers {
   param([Parameter(Mandatory = $true)]$Paths)
   New-Item -ItemType Directory -Force -Path $Paths.DataRoot | Out-Null
+  $dataRoot = [string]$Paths.DataRoot
+  $configPath = [string]$Paths.ConfigPath
   $launcherLines = @(
     "@echo off",
     'set "ROOT=%~dp0"',
     'set "MIMO_BRIDGE_NODE_PATH=%ROOT%node\node.exe"',
-    'set "MIMO_BRIDGE_DATA_DIR=' + $Paths.DataRoot + '"',
-    'set "MIMO_BRIDGE_CONFIG=' + $Paths.ConfigPath + '"',
+    ('set "MIMO_BRIDGE_DATA_DIR={0}"' -f $dataRoot),
+    ('set "MIMO_BRIDGE_CONFIG={0}"' -f $configPath),
     'powershell -NoProfile -ExecutionPolicy Bypass -File "%ROOT%app\apps\local-daemon\launcher.ps1" %*'
   )
   Write-Utf8NoBom -Path $Paths.LauncherCmd -Content (($launcherLines -join [Environment]::NewLine) + [Environment]::NewLine)
@@ -333,7 +335,7 @@ function Install-App {
   $paths = Get-Paths
   $createDesktop = -not $NoDesktopShortcut
   $enableAutostart = $Autostart
-  if (-not $Quiet) {
+  if (-not $Quiet -and [Environment]::UserInteractive) {
     $createDesktop = Read-YesNo -Prompt "Create desktop shortcut?" -Default $true
     $enableAutostart = Read-YesNo -Prompt "Start MiMo Bridge when Windows logs in?" -Default $false
   }

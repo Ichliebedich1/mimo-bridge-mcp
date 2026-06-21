@@ -15,6 +15,7 @@ Let Codex split and review work while MiMo performs bounded coding tasks through
 - P0-P5.3 implementation is complete locally.
 - Shared daemon, HTTP MCP, admin UI, task queue, Worktree review, safe deletion, low-token review, and `mimo_wait_task` are implemented.
 - Windows launcher lifecycle controls, persisted config, desktop shortcut command, opt-in autostart command, portable ZIP build, EXE installer build, installer self-test, and release-validation script are implemented.
+- Local EXE install was repaired after a real double-click test exposed a broken installed launcher script. The installed app now starts from `%LOCALAPPDATA%\MiMoBridgeApp`, uses `%LOCALAPPDATA%\MiMoBridge` for data, and reports MCP ready at `http://127.0.0.1:3210/mcp`.
 - Current release target is Windows 10/11 x64.
 - Current generated release artifacts are ignored under `artifacts/`.
 
@@ -29,6 +30,8 @@ Let Codex split and review work while MiMo performs bounded coding tasks through
 - Release validation command: `npm.cmd run validate:release`.
 - Root README and third-party handoff were consolidated into current, short entry points.
 - Obsolete historical snapshot docs were removed from the active documentation set.
+- Installed launcher `.cmd` generation now writes `MIMO_BRIDGE_DATA_DIR` and `MIMO_BRIDGE_CONFIG` as single-line environment variables.
+- Plain double-click installer launch now defaults to quiet install; autostart remains opt-in/off by default.
 
 ## Collaboration Needed
 
@@ -49,6 +52,7 @@ Let Codex split and review work while MiMo performs bounded coding tasks through
 - Windows PTY tests can print `AttachConsole failed` and `TimeoutNaNWarning`; judge by exit code and regression result.
 - Codex shell capture can lose direct stdout when launcher commands spawn the daemon; verify daemon health with `launcher.ps1 status -Json`.
 - Clean Windows validation is still the main external blocker before calling the package ready for general use.
+- The local machine install path has been smoke-tested, but a separate clean Windows 10/11 validation pass is still required.
 
 ## Recommended Next Action
 

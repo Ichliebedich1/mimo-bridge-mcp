@@ -33,6 +33,8 @@ test("installer build wraps the portable payload in a Windows 10/11 x64 exe", as
   assert.match(stub, /IDR_INSTALL_PS1 101/);
   assert.match(stub, /IDR_PAYLOAD_ZIP 102/);
   assert.match(stub, /powershell\.exe -NoProfile -ExecutionPolicy Bypass -File/);
+  assert.match(stub, /has_mode_argument/);
+  assert.match(stub, /L" -Quiet"/);
 });
 
 test("installer preserves user data by default and leaves autostart opt-in", async () => {
@@ -46,6 +48,9 @@ test("installer preserves user data by default and leaves autostart opt-in", asy
   assert.match(installer, /MiMo Bridge installer self-test passed/);
   assert.match(installer, /MiMo credentials, task logs, active tasks, and Worktrees are not bundled/);
   assert.match(installer, /MIMO_BRIDGE_NODE_PATH/);
-  assert.match(installer, /MIMO_BRIDGE_DATA_DIR/);
-  assert.match(installer, /MIMO_BRIDGE_CONFIG/);
+  assert.ok(installer.includes("$dataRoot = [string]$Paths.DataRoot"));
+  assert.ok(installer.includes("$configPath = [string]$Paths.ConfigPath"));
+  assert.ok(installer.includes("'set \"MIMO_BRIDGE_DATA_DIR={0}\"' -f $dataRoot"));
+  assert.ok(installer.includes("'set \"MIMO_BRIDGE_CONFIG={0}\"' -f $configPath"));
+  assert.match(installer, /\[Environment\]::UserInteractive/);
 });
