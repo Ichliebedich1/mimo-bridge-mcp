@@ -22,7 +22,7 @@ Let Codex plan, constrain, review, and accept work while MiMo executes bounded c
 - Review guard: zero-change coding tasks without tests receive `needs_attention`.
 - P4.6 low-token waiting over STDIO and shared HTTP MCP.
 - P5.3 Windows 10/11 x64 portable ZIP and EXE installer generation with bundled Node.
-- Normal regression: 247/247 passing, excluding the tracked hanging Runner integration test.
+- Normal regression: 248/248 passing, excluding the tracked hanging Runner integration test.
 
 ## Current Runtime
 

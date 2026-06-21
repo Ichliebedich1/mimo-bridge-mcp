@@ -10,7 +10,8 @@
     "dev": "tsc --watch",
     "test": "node --test tests/**/*.test.mjs",
     "package:portable": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-portable.ps1",
-    "package:installer": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-installer.ps1"
+    "package:installer": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-installer.ps1",
+    "validate:release": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/validate-release.ps1"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.29.0",

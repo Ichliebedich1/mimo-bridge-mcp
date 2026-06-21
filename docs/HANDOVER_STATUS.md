@@ -18,10 +18,10 @@ Let Codex split and review work while MiMo performs bounded coding tasks through
 - Real API smoke returned 5 events from round 2 in 881 characters with no raw output/stdin fields.
 - Normal regression after the live viewer: `223/223` passed, excluding `tests/runner-integration.test.mjs`.
 - P4.6 `mimo_wait_task` is committed in `522e7a7` and loaded by the shared daemon.
-- Root, daemon, admin UI, portable, and installer builds pass. Normal regression: `247/247`, excluding `tests/runner-integration.test.mjs`.
-- Launcher plus installer focused regression: `16/16`. Local smoke verified launcher-owned health, duplicate start, safe stop/start, logs, desktop shortcut creation, and autostart disabled by default.
+- Root, daemon, admin UI, portable, and installer builds pass. Normal regression: `248/248`, excluding `tests/runner-integration.test.mjs`.
+- Launcher plus installer plus release-validation focused regression: `17/17`. Local smoke verified launcher-owned health, duplicate start, safe stop/start, logs, desktop shortcut creation, and autostart disabled by default.
 - P5.3 portable and EXE installer packaging are implemented through `npm.cmd run package:portable` and `npm.cmd run package:installer`; generated packages include bundled `node.exe`, built artifacts, production dependencies, launchers, and no MiMo credentials/tasks/Worktrees.
-- Latest generated artifacts: `artifacts/MiMoBridge-portable-win10-win11-x64.zip` and `artifacts/MiMoBridgeSetup-win10-win11-x64.exe`; installer `-SelfTest` passed locally without installing.
+- Latest generated artifacts: `artifacts/MiMoBridge-portable-win10-win11-x64.zip` and `artifacts/MiMoBridgeSetup-win10-win11-x64.exe`; installer `-SelfTest` and `npm.cmd run validate:release -- -SkipPackageBuild` passed locally without installing.
 - Portable smoke used package-local config on port 3211, verified `/api/health` ok/MCP ready/MiMo configured, then stopped the smoke daemon.
 - HTTP MCP lists 11 tools. Terminal tasks return immediately; a running smoke fixture returned the minimal timeout payload after 1,004 ms and was deleted.
 

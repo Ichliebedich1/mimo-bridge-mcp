@@ -20,8 +20,8 @@ P4.6 low-token waiting is committed and deployed. P5.2 launcher commands are com
 - Running MCP: `http://127.0.0.1:3210/mcp`.
 - Last verified health: daemon `ok`, MCP `ready`, MiMo `configured`, queue empty.
 - HTTP MCP exposes 11 tools, including `mimo_wait_task`.
-- Normal regression: `247/247` passed, excluding the known hanging `tests/runner-integration.test.mjs`.
-- Launcher plus installer focused regression: `16/16` passed.
+- Normal regression: `248/248` passed, excluding the known hanging `tests/runner-integration.test.mjs`.
+- Launcher plus installer plus release-validation focused regression: `17/17` passed.
 - Root and local-daemon TypeScript builds pass.
 - P5.2 launcher lifecycle commands, first-run wizard, shortcut command, and opt-in autostart command are implemented.
 - P5.3 portable ZIP and EXE installer generation are implemented; clean-machine validation is pending.
@@ -226,7 +226,7 @@ $tests = Get-ChildItem -LiteralPath 'tests' -Filter '*.test.mjs' |
 node --test $tests
 ```
 
-Expected current result: `247/247` pass. Windows may print `node-pty AttachConsole failed` and `TimeoutNaNWarning`; these are tracked test noise when the final process exits with code 0 and all tests pass. Launcher plus installer focused regression is `16/16`.
+Expected current result: `248/248` pass. Windows may print `node-pty AttachConsole failed` and `TimeoutNaNWarning`; these are tracked test noise when the final process exits with code 0 and all tests pass. Launcher plus installer plus release-validation focused regression is `17/17`.
 
 Portable package command:
 
@@ -236,7 +236,7 @@ npm.cmd run package:portable
 
 Generated outputs are ignored by Git under `artifacts/`.
 
-Latest generated artifacts: `artifacts/MiMoBridge-portable-win10-win11-x64.zip` and `artifacts/MiMoBridgeSetup-win10-win11-x64.exe`; installer `-SelfTest` passed locally without installing; generated artifacts are ignored by Git.
+Latest generated artifacts: `artifacts/MiMoBridge-portable-win10-win11-x64.zip` and `artifacts/MiMoBridgeSetup-win10-win11-x64.exe`; installer `-SelfTest` and `npm.cmd run validate:release -- -SkipPackageBuild` passed locally without installing; generated artifacts are ignored by Git.
 
 Do not silently add `tests/runner-integration.test.mjs` to the normal suite. It is known to hang and requires a separate repair task.
 

@@ -92,7 +92,7 @@ $tests = Get-ChildItem -LiteralPath 'tests' -Filter '*.test.mjs' | Where-Object 
 node --test $tests
 ```
 
-Expected current counts: launcher plus installer focused regression 16/16; normal regression 247/247.
+Expected current counts: launcher plus installer plus release-validation focused regression 17/17; normal regression 248/248.
 
 Portable package generation:
 
@@ -110,6 +110,12 @@ Installer payload self-test:
 
 ```powershell
 artifacts\MiMoBridgeSetup-win10-win11-x64.exe -SelfTest
+```
+
+Release validation:
+
+```powershell
+npm.cmd run validate:release
 ```
 
 Generated outputs:
