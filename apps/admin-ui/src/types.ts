@@ -110,3 +110,21 @@ export type FullTaskResult = {
   truncated?: boolean;
   raw: unknown;
 };
+
+export type LiveEvent = {
+  timestamp: string;
+  event_type: string;
+  tool?: string;
+  status?: string;
+  summary: string;
+};
+
+export type LiveTaskView = {
+  task_id: string;
+  status: TaskStatus;
+  current_round: number;
+  updated_at: string;
+  is_live: boolean;
+  events: LiveEvent[];
+  truncated: boolean;
+};

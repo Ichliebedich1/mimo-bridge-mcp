@@ -6,6 +6,7 @@ import {
   fetchFocusedTask,
   fetchFullTask,
   fetchHealth,
+  fetchLiveTask,
   fetchQueue,
   fetchTask,
   fetchTaskDiff,
@@ -13,6 +14,7 @@ import {
   fetchTasks,
   fetchTokenBudget,
   finishTask,
+  formatDateTime,
   replyTask,
   resetTokenBudget,
   worktreeTask,
@@ -26,6 +28,8 @@ import type {
   CreateTaskInput,
   FocusedTaskResult,
   FullTaskResult,
+  LiveEvent,
+  LiveTaskView,
   QueueItem,
   RiskFlag,
   Task,
@@ -696,6 +700,7 @@ function TaskDetailPage({
   const [replying, setReplying] = useState(false);
   const [handoffMessage, setHandoffMessage] = useState<string | null>(null);
   const [handoffPrompt, setHandoffPrompt] = useState<string | null>(null);
+  const [showLiveViewer, setShowLiveViewer] = useState(false);
 
   useEffect(() => {
     setSelectedFile(task.changedFiles[0] ?? null);
@@ -706,6 +711,7 @@ function TaskDetailPage({
     setReplyMessage('');
     setHandoffMessage(null);
     setHandoffPrompt(null);
+    setShowLiveViewer(false);
   }, [task.id]);
 
   const canReply = task.status === 'waiting' || task.status === 'review';
@@ -903,6 +909,10 @@ function TaskDetailPage({
               交给 Codex 审查
             </a>
             <span className="action-helper">复制低上下文审查指令，并打开 Codex 新会话。</span>
+            <button className="button soft live-viewer-btn" onClick={() => setShowLiveViewer(true)} type="button">
+              实时运行查看
+            </button>
+            <span className="action-helper">只读查看任务运行事件，不提供输入或控制。</span>
             <button className="button primary" disabled={!canReview || hasBlocker || !task.hasWorktree || Boolean(actionBusy)} onClick={() => onMergeAndAccept(task.id)} type="button">
               合并 Worktree 并验收
             </button>
@@ -975,6 +985,10 @@ function TaskDetailPage({
           {hasAttention && <div className="small-note">建议先按相关文件加载 focused diff，再决定是否回复或验收。</div>}
         </aside>
       </div>
+
+      {showLiveViewer && (
+        <LiveViewerPanel taskId={task.id} onClose={() => setShowLiveViewer(false)} />
+      )}
     </div>
   );
 }
@@ -1251,6 +1265,87 @@ function ConfirmDialog({ action, onClose }: { action: ConfirmAction; onClose: ()
   );
 }
 
+function LiveViewerPanel({ taskId, onClose }: { taskId: string; onClose: () => void }) {
+  const [data, setData] = useState<LiveTaskView | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    let timer: ReturnType<typeof setInterval> | null = null;
+
+    async function poll() {
+      try {
+        const result = await fetchLiveTask(taskId);
+        if (!cancelled) {
+          setData(result);
+          setError(null);
+          setLoading(false);
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setError(err instanceof Error ? err.message : String(err));
+          setLoading(false);
+        }
+      }
+    }
+
+    void poll();
+    timer = setInterval(() => void poll(), 1500);
+
+    return () => {
+      cancelled = true;
+      if (timer) clearInterval(timer);
+    };
+  }, [taskId]);
+
+  return (
+    <div className="modal-backdrop" role="presentation" onClick={onClose}>
+      <section className="live-viewer-dialog" aria-modal="true" role="dialog" aria-labelledby="live-viewer-title" onClick={(e) => e.stopPropagation()}>
+        <div className="live-viewer-header">
+          <div>
+            <span className="eyebrow">只读实时查看</span>
+            <h2 id="live-viewer-title">运行事件 · {taskId}</h2>
+          </div>
+          <button className="button ghost" onClick={onClose} type="button">
+            关闭
+          </button>
+        </div>
+
+        {data && (
+          <div className="live-viewer-meta">
+            <Pill tone={data.is_live ? 'blue' : 'neutral'}>{data.is_live ? '运行中' : data.status}</Pill>
+            <span>轮次 {data.current_round}</span>
+            <span>更新：{formatDateTime(data.updated_at) ?? data.updated_at}</span>
+            {data.truncated && <span className="muted-text">（事件已截断）</span>}
+          </div>
+        )}
+
+        <div className="live-viewer-events">
+          {loading && <div className="lane-empty">加载中…</div>}
+          {error && <div className="notice-banner error"><span>!</span><p>{error}</p></div>}
+          {!loading && !error && data && data.events.length === 0 && (
+            <div className="lane-empty">暂无运行事件。</div>
+          )}
+          {!loading && !error && data && data.events.map((event, index) => (
+            <div className="live-event-row" key={index}>
+              <span className="live-event-time">{formatEventTime(event.timestamp)}</span>
+              <span className={'live-event-type'}>{event.event_type}</span>
+              {event.tool && <span className="live-event-tool">{event.tool}</span>}
+              {event.status && <span className="live-event-status">{event.status}</span>}
+              <span className="live-event-summary">{event.summary}</span>
+            </div>
+          ))}
+        </div>
+
+        <div className="live-viewer-footer">
+          <span className="muted-text">每 1.5 秒自动刷新；关闭面板停止轮询。只读模式，不提供输入或控制。</span>
+        </div>
+      </section>
+    </div>
+  );
+}
+
 function filterLabel(status: 'all' | TaskStatus) {
   if (status === 'all') {
     return '全部';
@@ -1370,6 +1465,12 @@ function splitLines(value: string): string[] {
 
 function formatClock(): string {
   return new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
+}
+
+function formatEventTime(isoString: string): string {
+  const date = new Date(isoString);
+  if (Number.isNaN(date.getTime())) return isoString;
+  return date.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 }
 
 function errorMessage(error: unknown): string {
