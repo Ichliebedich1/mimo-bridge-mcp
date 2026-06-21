@@ -349,6 +349,37 @@ test("readLiveTaskView reads events from existing log file", () => {
   }
 });
 
+test("readLiveTaskView uses the latest completed log round after current_round advances", () => {
+  const dir = tmpDir();
+  try {
+    const taskStore = new TaskStore(dir);
+    const task = taskStore.createTask({
+      objective: "completed round",
+      workspace_path: "C:\\workspace",
+      editable_paths: [],
+      readonly_paths: [],
+      acceptance_criteria: [],
+      max_rounds: 5,
+      runtime_timeout_seconds: 900,
+    });
+    writeFileSync(
+      taskStore.getLogPath(task.task_id, 1),
+      JSON.stringify({ type: "text", timestamp: Date.now(), summary: "round one complete" }) + "\n",
+      "utf-8",
+    );
+    taskStore.updateTaskSession(task.task_id, "ses_completed");
+    taskStore.updateTaskStatus(task.task_id, "review");
+
+    const result = readLiveTaskView(taskStore, task.task_id, 40, 8000);
+    assert.ok(!("error" in result));
+    assert.strictEqual(result.current_round, 1);
+    assert.strictEqual(result.events.length, 1);
+    assert.strictEqual(result.events[0].summary, "round one complete");
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test("parseLiveParams returns defaults for missing or invalid values", () => {
   const empty = new URLSearchParams();
   assert.deepStrictEqual(parseLiveParams(empty), { max_events: 40, max_chars: 8000 });

@@ -61,14 +61,15 @@ export function readLiveTaskView(
     return { error: "任务不存在" };
   }
 
-  const logPath = taskStore.getLogPath(taskId, task.current_round);
   const isLive = task.status === "running";
+  const logRound = findLogRound(taskStore, taskId, task.current_round, isLive);
+  const logPath = taskStore.getLogPath(taskId, logRound);
 
   if (!existsSync(logPath)) {
     return {
       task_id: task.task_id,
       status: task.status,
-      current_round: task.current_round,
+      current_round: logRound,
       updated_at: task.updated_at,
       is_live: isLive,
       events: [],
@@ -81,12 +82,24 @@ export function readLiveTaskView(
   return {
     task_id: task.task_id,
     status: task.status,
-    current_round: task.current_round,
+    current_round: logRound,
     updated_at: task.updated_at,
     is_live: isLive,
     events: result.events,
     truncated: result.truncated,
   };
+}
+
+function findLogRound(taskStore: TaskStore, taskId: string, currentRound: number, isLive: boolean): number {
+  if (isLive) {
+    return currentRound;
+  }
+  for (let round = currentRound; round >= 1; round--) {
+    if (existsSync(taskStore.getLogPath(taskId, round))) {
+      return round;
+    }
+  }
+  return currentRound;
 }
 
 export function parseJsonlTail(
