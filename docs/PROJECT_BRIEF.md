@@ -21,6 +21,7 @@ Let Codex plan, constrain, review, and accept work while MiMo executes bounded c
 - Runner terminal-event fix: intermediate `tool-calls` no longer terminate MiMo.
 - Review guard: zero-change coding tasks without tests receive `needs_attention`.
 - P4.6 low-token waiting over STDIO and shared HTTP MCP.
+- P5.3 Windows 10 x64 portable ZIP generation with bundled Node and package-local data directory.
 - Normal regression: 242/242 passing, excluding the tracked hanging Runner integration test.
 
 ## Current Runtime
@@ -32,4 +33,4 @@ Let Codex plan, constrain, review, and accept work while MiMo executes bounded c
 
 ## Next Goal
 
-Validate the P5.2 launcher on a clean Windows 10 x64 machine, then build the P5.3 Windows 10 x64 portable/installable distribution.
+Validate the P5.2/P5.3 portable flow on a clean Windows 10 x64 machine, then build the Windows installer.

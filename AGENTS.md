@@ -6,6 +6,7 @@
 - Build: `npm.cmd run build`
 - Admin UI build: `cd apps/admin-ui; npm.cmd run build`
 - Local daemon build: `cd apps/local-daemon; npm.cmd run build`
+- Portable package: `npm.cmd run package:portable`
 - Normal regression: `node --test (rg --files tests -g '*.test.mjs' | Where-Object { $_ -notmatch 'runner-integration\.test\.mjs$' })`
 - Do not run `tests/runner-integration.test.mjs` in the normal suite; it is a tracked hanging P2 test debt.
 
@@ -46,7 +47,7 @@ Never read the whole repository, complete logs, complete diff, or unrelated file
 ## Planned Windows Launcher And Distribution
 
 - `apps/local-daemon/start-local.ps1` is the development build/start entry; `start-production.ps1` starts existing artifacts.
-- Persisted configuration defaults to `%LOCALAPPDATA%\MiMoBridge\config.json`; the first-run UI still needs implementation.
+- Persisted configuration defaults to `%LOCALAPPDATA%\MiMoBridge\config.json`; portable packages set `MIMO_BRIDGE_CONFIG` and `MIMO_BRIDGE_DATA_DIR` to the package `data` directory.
 - Production startup must use existing build artifacts and must not rebuild the UI or daemon on every launch.
 - The launcher must reuse the existing localhost daemon, guard against duplicate instances and port conflicts, wait for `/api/health`, and then open the existing admin UI.
-- P5.3 targets Windows 10 x64 first. Bundle the Node runtime and production artifacts, but do not migrate MiMo credentials, active tasks, or Worktrees between devices.
+- P5.3 targets Windows 10 x64 first. `scripts/build-portable.ps1` creates the portable ZIP with bundled `node.exe`, built artifacts, pruned dependencies, and `.cmd` launchers. Do not migrate MiMo credentials, active tasks, runtime logs, or Worktrees between devices.

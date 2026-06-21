@@ -2,12 +2,12 @@
 
 **Date:** 2026-06-21  
 **Repository:** `C:\Users\86172\Desktop\MiMo Code project\Agent 协作项目\mimo-bridge-mcp`  
-**Current module:** P5.2 launcher validation / P5.3 packaging prep
+**Current module:** P5.3 installer / clean-machine validation
 **Target:** Windows 10 x64 only
 
 ## 1. Read This First
 
-The MiMo Bridge core is already usable. Do not rebuild the project architecture or create another backend. P5.2 launcher code now exists; the next job is clean-machine validation, then P5.3 packaging.
+The MiMo Bridge core is already usable. Do not rebuild the project architecture or create another backend. P5.2 launcher code exists, and P5.3 portable ZIP generation now exists. The next job is clean-machine validation and Windows installer packaging.
 
 P4.6 low-token waiting was completed immediately before this handoff. Its code is committed and deployed. The current uncommitted changes are documentation updates only and must not be discarded.
 
@@ -15,7 +15,7 @@ P4.6 low-token waiting was completed immediately before this handoff. Its code i
 
 - Git branch: `master`.
 - Current code HEAD includes the Windows launcher lifecycle controls.
-- Current uncommitted changes are small launcher smoke fixes and documentation updates.
+- Current uncommitted changes are portable packaging code and documentation updates.
 - Running UI: `http://127.0.0.1:3210/`.
 - Running MCP: `http://127.0.0.1:3210/mcp`.
 - Last verified health: daemon `ok`, MCP `ready`, MiMo `configured`, queue empty.
@@ -24,14 +24,18 @@ P4.6 low-token waiting was completed immediately before this handoff. Its code i
 - Launcher focused regression: `11/11` passed.
 - Root and local-daemon TypeScript builds pass.
 - P5.2 launcher lifecycle commands, first-run wizard, shortcut command, and opt-in autostart command are implemented.
-- P5.3 portable ZIP and installer have not been implemented.
+- P5.3 portable ZIP generation is implemented; Windows installer is not implemented.
 
-Current uncommitted files include launcher smoke fixes and documentation updates:
+Current uncommitted files include portable packaging and documentation updates:
 
-- `apps/local-daemon/launcher.ps1`
 - `apps/local-daemon/src/launcher-controller.ts`
+- `.gitignore`
+- `package.json`
+- `scripts/build-portable.ps1`
 - `tests/launcher-controller.test.mjs`
+- `AGENTS.md`
 - `docs/HANDOVER_STATUS.md`
+- `docs/MODULE_MAP.md`
 - `docs/OPEN_TASKS.md`
 - `docs/PROJECT_BRIEF.md`
 - `docs/modules/windows-launcher-portability.md`
@@ -65,7 +69,7 @@ Do not reset, checkout, overwrite, or delete these changes. Review and preserve 
 | P5.1 | Safe permanent deletion of terminal tasks | Complete |
 | P5.2 stage 1 | Persisted daemon config and build-free production start | Complete |
 | P5.2 stage 2 | One-click launcher, setup wizard, shortcuts, optional autostart | Implemented; clean-machine validation pending |
-| P5.3 | Windows 10 x64 portable ZIP and installer | Pending after P5.2 |
+| P5.3 | Windows 10 x64 portable ZIP and installer | Portable ZIP implemented; installer pending |
 
 ## 5. Existing Architecture
 
@@ -138,7 +142,7 @@ Implementation order:
 5. Desktop shortcut and opt-in logon Scheduled Task.
 6. Automated tests and a real local smoke test.
 
-Do not begin P5.3 packaging until P5.2 lifecycle and first-run behavior pass on a clean Windows 10 x64 machine.
+Do not begin installer packaging until the generated portable ZIP passes on a clean Windows 10 x64 machine.
 
 ## 8. P5.2 Acceptance Criteria
 
@@ -239,6 +243,14 @@ node --test $tests
 
 Expected current result: `242/242` pass. Windows may print `node-pty AttachConsole failed` and `TimeoutNaNWarning`; these are tracked test noise when the final process exits with code 0 and all tests pass.
 
+Portable package command:
+
+```powershell
+npm.cmd run package:portable
+```
+
+Generated outputs are ignored by Git under `artifacts/`.
+
 Do not silently add `tests/runner-integration.test.mjs` to the normal suite. It is known to hang and requires a separate repair task.
 
 ## 12. Safe Daemon Operations During Development
@@ -314,7 +326,7 @@ Only the last case counts toward the user's consecutive-failure rule unless evid
 4. Confirm `/api/health` and verify the MCP exposes 11 tools.
 5. Validate the launcher by real double-click or interactive console on a clean Windows 10 x64 machine.
 6. Verify reboot/logon behavior, no-system-Node behavior, port conflict handling, first-run errors, shortcut, and opt-in autostart.
-7. Only then start P5.3 portable ZIP and installer packaging.
+7. Only then start Windows installer packaging.
 8. Report changed files, test counts, risks, and the exact next stage.
 
 ## 17. Required Handoff Report Format

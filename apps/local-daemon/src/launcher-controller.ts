@@ -522,6 +522,9 @@ export function getLauncherPaths(overrides: Partial<LauncherPaths> | undefined =
 }
 
 export function getLauncherDataDir(env: NodeJS.ProcessEnv = process.env): string {
+  if (env.MIMO_BRIDGE_DATA_DIR) {
+    return resolve(env.MIMO_BRIDGE_DATA_DIR);
+  }
   const base = env.LOCALAPPDATA || resolve(env.HOME || env.USERPROFILE || ".", "AppData", "Local");
   return join(base, "MiMoBridge");
 }

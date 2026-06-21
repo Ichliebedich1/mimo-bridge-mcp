@@ -3,7 +3,7 @@
 ## Pending
 
 - Run clean-machine/manual validation for the Windows 10 x64 launcher: reboot/logon, no system Node, port conflict, first-run errors, and real user double-click flow.
-- Build portable ZIP and installer; bundle Node, never MiMo credentials/tasks/Worktrees.
+- Build the Windows installer; portable ZIP generation is implemented.
 - Audit active Worktree cancellation cleanup.
 - Connect `TokenBudgetManager` to real MiMo token events.
 
@@ -12,6 +12,8 @@
 - Persistent config and build-free `start-production.ps1`.
 - Windows launcher lifecycle controller and CLI: start/stop/restart/open/log/status, duplicate-instance guard, port-conflict report, first-run config wizard, desktop shortcut command, and opt-in autostart command.
 - Local launcher smoke: status, duplicate start, safe stop, start to healthy daemon, shortcut creation, autostart disabled, and bounded logs.
+- Portable package script: `npm.cmd run package:portable` creates `artifacts/MiMoBridge-portable-win10-x64.zip` with bundled `node.exe`, built artifacts, pruned dependencies, package-local `data`, and no MiMo credentials/tasks/Worktrees.
+- Portable smoke: package-local config on port 3211 started successfully, `/api/health` returned ok/MCP ready/MiMo configured, then the smoke daemon was stopped.
 - Follow-up MiMo rounds stay inside their task Worktree and are re-audited.
 - Read-only live-run viewer with bounded JSONL tail parsing and no stdin/control surface.
 - Real Codex -> MCP -> MiMo -> review -> merge collaboration workflow.
@@ -30,4 +32,4 @@
 
 1. Use `mimo_wait_task` for all later MiMo work instead of repeated polling.
 2. Validate the launcher on a clean Windows 10 x64 machine and after reboot/logon.
-3. Package and test the Windows 10 x64 portable and installer artifacts.
+3. Build and test the Windows installer; keep portable ZIP validation in the release checklist.

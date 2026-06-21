@@ -4,6 +4,7 @@ import { existsSync, mkdirSync, rmSync, writeFileSync, readFileSync } from "node
 import { dirname, join } from "node:path";
 import {
   LauncherController,
+  getLauncherDataDir,
   readState,
   writeState,
   commandLineMatchesEntry,
@@ -255,6 +256,11 @@ describe("launcher-controller", () => {
     assert.strictEqual(result.ok, true);
     const saved = JSON.parse(readFileSync(paths.configPath, "utf-8"));
     assert.deepStrictEqual(saved.allowedRoots, [unicodeRoot]);
+  });
+
+  it("uses MIMO_BRIDGE_DATA_DIR for portable mode", () => {
+    const dataDir = join(testDir, "portable data");
+    assert.strictEqual(getLauncherDataDir({ MIMO_BRIDGE_DATA_DIR: dataDir }), dataDir);
   });
 
   it("matches command lines after quote and slash normalization", () => {

@@ -12,7 +12,9 @@ P5.2 delivers one-click lifecycle management. P5.3 delivers portable ZIP and ins
 
 Stage 1 is complete: persisted JSON configuration, environment overrides, and build-free `start-production.ps1`. The read-only live-run viewer is also complete.
 
-Stage 2 lifecycle code is implemented: a thin launcher controller/CLI starts, stops, restarts, opens the UI, reports status, reads bounded logs, detects duplicate daemons and port conflicts, creates a desktop shortcut, offers an explicit first-run config wizard, and can register/unregister an opt-in per-user logon Scheduled Task. Local smoke has verified launcher-owned daemon health, duplicate-start prevention, stop/start, shortcut creation, bounded logs, and autostart disabled by default. Portable ZIP and installer work remains P5.3.
+Stage 2 lifecycle code is implemented: a thin launcher controller/CLI starts, stops, restarts, opens the UI, reports status, reads bounded logs, detects duplicate daemons and port conflicts, creates a desktop shortcut, offers an explicit first-run config wizard, and can register/unregister an opt-in per-user logon Scheduled Task. Local smoke has verified launcher-owned daemon health, duplicate-start prevention, stop/start, shortcut creation, bounded logs, and autostart disabled by default.
+
+P5.3 portable ZIP generation is implemented. `npm.cmd run package:portable` creates `artifacts/MiMoBridge-portable-win10-x64.zip` and `artifacts/portable/MiMoBridge` with bundled `node.exe`, built daemon/UI artifacts, pruned dependencies, package-local `data`, and double-click `.cmd` launchers. The Windows installer remains pending.
 
 ## Entry Files
 
@@ -22,6 +24,7 @@ Stage 2 lifecycle code is implemented: a thin launcher controller/CLI starts, st
 - `apps/local-daemon/src/launcher-cli.ts`
 - `apps/local-daemon/src/daemon-config.ts`
 - `apps/local-daemon/src/index.ts`
+- `scripts/build-portable.ps1`
 - `apps/admin-ui/`
 
 ## Public Interfaces
@@ -58,8 +61,9 @@ Keep the existing React UI and Node daemon. Build a thin Windows launcher around
 
 ## Pending Work
 
-- Build the Windows 10 x64 portable ZIP and installer with bundled Node.
+- Build the Windows installer with bundled Node.
 - Validate clean-machine install, Chinese/space paths, no system Node, port conflict, reboot, Codex MCP, shortcut, opt-in autostart, and uninstall.
+- Re-run portable smoke from the generated ZIP on a clean machine.
 - Verify whether direct start/restart stdout behaves normally in an interactive Windows console; the Codex shell harness can lose stdout capture after daemon spawn, while `status -Json` verifies the daemon is healthy.
 
 ## Test Method
@@ -89,3 +93,16 @@ node --test $tests
 ```
 
 Expected current counts: launcher regression 11/11; normal regression 242/242.
+
+Portable package generation:
+
+```powershell
+npm.cmd run package:portable
+```
+
+Generated outputs:
+
+- `artifacts/portable/MiMoBridge`
+- `artifacts/MiMoBridge-portable-win10-x64.zip`
+
+The package root contains `MiMo Bridge Launcher.cmd`, `Start MiMo Bridge.cmd`, `Stop MiMo Bridge.cmd`, `Configure MiMo Bridge.cmd`, `README_PORTABLE.md`, `package-manifest.json`, `node/node.exe`, `app/`, and `data/`.

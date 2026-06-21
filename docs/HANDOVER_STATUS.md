@@ -20,6 +20,8 @@ Let Codex split and review work while MiMo performs bounded coding tasks through
 - P4.6 `mimo_wait_task` is committed in `522e7a7` and loaded by the shared daemon.
 - Root and daemon builds pass. Normal regression: `242/242`, excluding `tests/runner-integration.test.mjs`.
 - Launcher focused regression: `11/11`. Local smoke verified launcher-owned health, duplicate start, safe stop/start, logs, desktop shortcut creation, and autostart disabled by default.
+- P5.3 portable packaging is implemented through `npm.cmd run package:portable`; generated package includes bundled `node.exe`, built artifacts, pruned dependencies, local `data`, `.cmd` launchers, and no MiMo credentials/tasks/Worktrees.
+- Portable smoke used package-local config on port 3211, verified `/api/health` ok/MCP ready/MiMo configured, then stopped the smoke daemon.
 - HTTP MCP lists 11 tools. Terminal tasks return immediately; a running smoke fixture returned the minimal timeout payload after 1,004 ms and was deleted.
 
 ## Completed
@@ -27,7 +29,7 @@ Let Codex split and review work while MiMo performs bounded coding tasks through
 - Persistent config defaults to `%LOCALAPPDATA%\MiMoBridge\config.json`; per-field environment variables override it.
 - `start-local.ps1` is development build/start without machine-specific MiMo paths.
 - `start-production.ps1` starts existing artifacts without compiling through the launcher CLI.
-- Windows 10 x64 is the first release target; logon startup is opt-in; packages bundle Node but not MiMo credentials.
+- Windows 10 x64 is the first release target; logon startup is opt-in; portable packages bundle Node but not MiMo credentials.
 - A supervised MiMo task changed code in a Worktree, received focused Codex review/fixes, passed tests, and merged through MCP.
 - Obsolete cancelled/review tasks were safely accepted/deleted; one accepted live-view task remains as a UI example.
 - Daemon is currently healthy at `http://127.0.0.1:3210/`; MCP is ready, MiMo configured, queue empty.
@@ -43,7 +45,7 @@ Let Codex split and review work while MiMo performs bounded coding tasks through
 
 1. Use one `mimo_wait_task` call after each future start/reply instead of repeated `mimo_get_task` polling.
 2. Validate the launcher on a clean Windows 10 x64 machine, including reboot/logon, no system Node, port conflict, first-run errors, and real double-click behavior.
-3. Build Windows 10 x64 portable ZIP and installer with bundled Node and no MiMo credentials.
+3. Build the Windows installer with bundled Node and no MiMo credentials.
 4. Audit active Worktree cancellation cleanup and connect real MiMo token events.
 
 ## Risks / Blockers
@@ -56,4 +58,4 @@ Let Codex split and review work while MiMo performs bounded coding tasks through
 
 ## Recommended Next Action
 
-Validate the P5.2 launcher on a clean Windows 10 x64 environment, then proceed to P5.3 portable ZIP and installer packaging.
+Validate the launcher and portable ZIP on a clean Windows 10 x64 environment, then build the Windows installer.
