@@ -10,7 +10,7 @@ P5.2 delivers one-click lifecycle management. P5.3 delivers portable ZIP and ins
 
 ## Current Status
 
-Planned only. The existing daemon/UI are working, but `apps/local-daemon/start-local.ps1` is machine-specific and rebuilds on every start.
+Stage 1 is complete: persisted JSON configuration, environment overrides, and build-free `start-production.ps1`. The read-only live-run viewer is also complete. The launcher UI, first-run wizard, shortcut, opt-in logon startup, portable ZIP, and installer are pending.
 
 ## Entry Files
 
@@ -45,17 +45,18 @@ Existing P5 daemon/UI, MiMo CLI, Node runtime, production dependencies, and Wind
 6. Produce Windows x64 portable ZIP and installer.
 7. Add a read-only live-run viewer from the admin task page. It may display status, bounded recent events, and log tails, but must not attach to MiMo stdin, reuse an interactive CLI window, or provide stop/input controls.
 
+Items 1, 2, and 7 are complete.
+
 ## Implementation Approach
 
 Keep the existing React UI and Node daemon. Build a thin Windows launcher around them. Store installed-mode data under `%LOCALAPPDATA%\MiMoBridge`; use a local `data` directory for portable mode. Bundle Node and built application artifacts, but require MiMo installation/authentication on the destination device.
 
 ## Pending Work
 
-- Target Windows 10 x64 only for the first release.
-- Keep logon startup disabled by default and enable it only when the user checks the option.
-- Bundle Node in portable/installable artifacts, but never bundle or migrate MiMo login information.
-- Implement the read-only live-run viewer after the configuration/startup layer is merged.
-- Decide the final launcher shell after the configuration/startup layer is tested.
+- Implement the launcher shell and first-run wizard.
+- Create desktop shortcut and opt-in Scheduled Task logon trigger.
+- Build the Windows 10 x64 portable ZIP and installer with bundled Node.
+- Validate clean-machine install, Chinese/space paths, no system Node, port conflict, reboot, Codex MCP, and uninstall.
 
 ## Test Method
 

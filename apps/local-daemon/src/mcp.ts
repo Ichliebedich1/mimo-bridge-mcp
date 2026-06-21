@@ -86,6 +86,7 @@ function createMcpServer(context: ToolContext): McpServer {
 
   registerJsonTool(server, "mimo_start_task", "创建并后台启动 MiMo 任务", context.tools.startTask);
   registerJsonTool(server, "mimo_get_task", "按 token 预算查询任务", context.tools.getTask);
+  registerJsonTool(server, "mimo_wait_task", "低 Token 等待任务状态变化，完成后返回受限审查摘要", context.tools.waitTask);
   registerJsonTool(server, "mimo_reply_task", "继续已有 MiMo 会话，发送回复消息", context.tools.replyTask);
   registerJsonTool(server, "mimo_cancel_task", "终止运行中的 MiMo 任务或取消队列中的任务", context.tools.cancelTask);
   registerJsonTool(server, "mimo_finish_task", "标记任务为验收通过或放弃", context.tools.finishTask);

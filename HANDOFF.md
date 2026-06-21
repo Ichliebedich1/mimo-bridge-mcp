@@ -98,7 +98,7 @@
 
 ---
 
-## 四、MCP 工具列表（10 个）
+## 四、MCP 工具列表（当前部署 10 个，P4.6 待部署后 11 个）
 
 | 工具 | 说明 | P4 新增 |
 |------|------|---------|
@@ -112,6 +112,7 @@
 | `mimo_queue_status` | 查询队列状态 | ✅ |
 | `mimo_token_status` | 查询或重置 Token 预算 | P4.5 |
 | `mimo_delete_task` | 永久删除已结束且没有 Worktree 的任务 | P5.1 |
+| `mimo_wait_task` | daemon 内单次等待任务完成或超时，返回受限摘要 | P4.6，工作区已实现但未部署 |
 
 ---
 
@@ -238,6 +239,44 @@ node --test $tests
 - 第一实施动作必须是提交当前 Runner/review 修复基线，然后再开发启动器。
 
 详细方案：`docs/modules/windows-launcher-portability.md`。
+
+---
+
+## 十二、P5.2 配置与只读运行查看（2026-06-21）
+
+- P5.2 第一阶段已通过真实 MCP 协作完成并合并：持久化配置、环境覆盖、`start-production.ps1`。
+- 默认配置文件：`%LOCALAPPDATA%\MiMoBridge\config.json`；当前本机配置保留原项目 runtime。
+- MiMo 回复轮次已修复为继续使用保存的 Worktree，并在每轮完成后重新审计越界修改。
+- 管理后台已增加“实时运行查看”：仅返回受限事件摘要，不读取完整日志、不暴露 stdin、不提供输入/停止控制。
+- 已完成任务会向前选择最近存在的日志轮次；真实 API smoke 返回 round 2 的 5 条事件，881 字符，无 raw output/stdin。
+- 根、daemon、UI 构建通过；正常回归 223/223（继续排除已知挂起的 `runner-integration.test.mjs`）。
+- 自动浏览器点击未执行：Python Playwright 不存在，安装超时；静态资源、API、UI build 和测试均通过。
+
+## 十三、压缩交接与 P4.6（2026-06-21）
+
+### 13.1 当前 Git 与运行状态
+
+- `master`，HEAD：`cc59c1a Show latest completed MiMo task events`。
+- daemon 由无触发器的临时计划任务 `MiMoBridge-Dev-Daemon` 按需启动；它不是最终开机自启方案。
+- `127.0.0.1:3210` health `ok`，MCP `ready`，MiMo configured，队列为空。
+- 两个旧任务已删除；实时查看任务 `task_273ff90e443e` 已 accepted，暂留作界面示例。
+
+### 13.2 尚未提交的 P4.6
+
+- 工作区新增 `mimo_wait_task`，目标是一次等待代替每分钟轮询。
+- 变更文件：`src/tools/wait-task.ts`、`src/index.ts`、`apps/local-daemon/src/tool-context.ts`、`apps/local-daemon/src/mcp.ts`、`tests/wait-task.test.mjs`、`tests/stdio-protocol.test.mjs`。
+- 根和 daemon 构建通过；定向测试 9/9。
+- 尚未运行本轮正常回归、尚未提交、尚未重启 daemon，因此当前运行实例还没有正式验收 11 工具表面。
+
+### 13.3 压缩后读取顺序
+
+1. `docs/HANDOVER_STATUS.md`
+2. 本文第十二、十三节
+3. `docs/modules/low-token-wait.md`
+4. `docs/modules/windows-launcher-portability.md`
+5. `docs/OPEN_TASKS.md`
+
+下一步：先完成 P4.6 回归、提交、重启和 HTTP MCP smoke；然后再下发启动器任务。默认不要重读全仓。
 
 ---
 

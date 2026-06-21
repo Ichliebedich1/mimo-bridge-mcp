@@ -2,41 +2,32 @@
 
 ## Pending
 
-- Commit the current Runner terminal-event fix, no-change review risk, tests, and handover docs.
-- Verify the shared local daemon remains available across Codex turns and formalize the supported background startup path.
-- Replace machine-specific startup paths with persisted local configuration and first-run discovery.
-- Add a Windows one-click launcher with start/stop/restart/open/log/status controls and optional logon startup.
-- Add a read-only task live-run viewer; show bounded recent events/log tails without interactive terminal input or interruption controls.
-- Build a Windows 10 x64 portable ZIP and installer; bundle the Node runtime but require MiMo re-authentication on each device.
+- Finish normal regression, commit, deploy, and HTTP-smoke P4.6 `mimo_wait_task`.
+- Implement the Windows 10 x64 one-click launcher with start/stop/restart/open/log/status controls.
+- Add first-run configuration, desktop shortcut, and opt-in logon startup.
+- Build portable ZIP and installer; bundle Node, never MiMo credentials/tasks/Worktrees.
+- Audit active Worktree cancellation cleanup.
 - Connect `TokenBudgetManager` to real MiMo token events.
-- Audit cleanup and discard behavior when an active Worktree task is cancelled.
 
 ## Completed
 
-- P4.5 Review Package generation and persistence.
-- Bounded `summary`, `review`, `diff`, `focused`, `logs`, and explicit `full` modes.
-- Risk flags for out-of-bounds changes and failed tests.
-- Workspace path guard for focused evidence.
-- P4 Runner-bound write serialization.
-- Duplicate queued reply rejection.
-- Queued Worktree cleanup on cancellation.
-- Runner ignores intermediate `step_finish(reason="tool-calls")` events and waits for the terminal step.
-- Coding tasks with no changes and no reported tests receive `NO_CHANGES_AND_NO_TESTS`.
-- Real MiMo smoke completed read, edit, verification read, and final stop.
-- P5.2/P5.3 one-click startup and portability approach documented.
+- Persistent config and build-free `start-production.ps1`.
+- Follow-up MiMo rounds stay inside their task Worktree and are re-audited.
+- Read-only live-run viewer with bounded JSONL tail parsing and no stdin/control surface.
+- Real Codex -> MCP -> MiMo -> review -> merge collaboration workflow.
+- Normal regression after live viewer: 223/223.
+- Temporary detached daemon proof using an on-demand Scheduled Task with no trigger.
 
 ## Risks
 
-- The known P2 Runner integration test remains excluded because it hangs.
-- The daemon is currently healthy, but persistence across Codex turns has not been verified.
-- The current startup script is tied to this machine and rebuilds on every launch.
-- `node-pty` is a native dependency, so portable artifacts must be built and tested for the target Windows architecture.
-- MiMo authentication, active task state, and Worktrees must not be silently copied between devices.
+- P4.6 is currently uncommitted and not loaded by the running daemon.
+- The on-demand development Scheduled Task is not the final launcher or installer behavior.
+- Automated browser interaction was not run; Playwright installation timed out.
+- Known Runner integration hang and Windows PTY warning noise remain.
 
 ## Next Steps
 
-1. Commit the current uncommitted fix as a baseline.
-2. Implement configuration discovery and production startup without rebuilds.
-3. Add the one-click launcher and optional logon startup.
-4. Validate a portable package on a clean Windows x64 environment.
-5. Perform one supervised UI -> MiMo -> Review Package -> Codex -> merge workflow.
+1. Finish/deploy P4.6 and verify the 11-tool HTTP MCP surface.
+2. Use `mimo_wait_task` for all later MiMo work instead of repeated polling.
+3. Build and validate the one-click launcher.
+4. Package and test the Windows 10 x64 portable and installer artifacts.

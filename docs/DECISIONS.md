@@ -29,3 +29,18 @@
 
 - Decision: `step_finish` with `reason="tool-calls"` is an intermediate event; the Runner completes only on a terminal step such as `reason="stop"` or on process exit.
 - Reason: MiMo emits a step-finish event between tool-call rounds. Treating every step-finish as terminal killed MiMo immediately after its first file-reading round.
+
+## 2026-06-21: Windows 10 x64 Is The First Distribution Target
+
+- Decision: first release supports Windows 10 x64; logon startup is disabled by default; packages bundle Node but not MiMo credentials.
+- Reason: one target reduces native `node-pty` packaging risk and keeps authentication device-local.
+
+## 2026-06-21: Live Viewing Is Read-Only
+
+- Decision: the task UI displays bounded event summaries only and never attaches to MiMo stdin or exposes input/stop controls.
+- Reason: users can observe progress without interrupting the Bridge-owned process.
+
+## 2026-06-21: Wait Once Instead Of Polling Repeatedly
+
+- Decision: Codex should use `mimo_wait_task` after start/reply and receive one bounded result on readiness or timeout.
+- Reason: repeated status calls and narration waste context tokens without improving execution.

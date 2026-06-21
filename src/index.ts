@@ -12,6 +12,7 @@ import { createListTasksHandler } from "./tools/list-tasks.js";
 import { createMergeTaskHandler } from "./tools/merge-task.js";
 import { createTokenStatusHandler } from "./tools/token-status.js";
 import { createDeleteTaskHandler } from "./tools/delete-task.js";
+import { createWaitTaskHandler } from "./tools/wait-task.js";
 
 async function main() {
   const config = loadConfig();
@@ -24,6 +25,7 @@ async function main() {
 
   const startTask = createStartTaskHandler(config, taskStore);
   const getTask = createGetTaskHandler(taskStore);
+  const waitTask = createWaitTaskHandler(taskStore);
   const replyTask = createReplyTaskHandler(config, taskStore);
   const cancelTask = createCancelTaskHandler(taskStore);
   const finishTask = createFinishTaskHandler(taskStore);
@@ -50,6 +52,18 @@ async function main() {
     getTask.schema.shape,
     async (params) => {
       const result = await getTask.handler(params);
+      return {
+        content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+      };
+    }
+  );
+
+  server.tool(
+    "mimo_wait_task",
+    "低 Token 等待任务状态变化，完成后返回受限审查摘要",
+    waitTask.schema.shape,
+    async (params) => {
+      const result = await waitTask.handler(params);
       return {
         content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
       };

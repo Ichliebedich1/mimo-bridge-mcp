@@ -30,6 +30,13 @@ When reviewing a MiMo task, call `mimo_get_task` in this order:
 
 Never read the whole repository, complete logs, complete diff, or unrelated files merely for convenience.
 
+## Mandatory Low-Token Waiting
+
+- After `mimo_start_task` or `mimo_reply_task`, call `mimo_wait_task` once with a bounded timeout.
+- Do not poll `mimo_get_task` every minute or narrate unchanged task status.
+- If a wait times out, use exponential backoff and return only the minimal status until the task changes.
+- Use the UI live viewer only when the user explicitly opens it; its polling must not enter Codex context.
+
 ## Current Boundary
 
 - P4.5 token-budget review is implemented and tested.
@@ -38,8 +45,8 @@ Never read the whole repository, complete logs, complete diff, or unrelated file
 
 ## Planned Windows Launcher And Distribution
 
-- `apps/local-daemon/start-local.ps1` is currently machine-specific and is not a production installer entrypoint.
-- P5.2 must first move Node, MiMo, allowed roots, runtime directory, and port into persisted local configuration with first-run discovery.
+- `apps/local-daemon/start-local.ps1` is the development build/start entry; `start-production.ps1` starts existing artifacts.
+- Persisted configuration defaults to `%LOCALAPPDATA%\MiMoBridge\config.json`; the first-run UI still needs implementation.
 - Production startup must use existing build artifacts and must not rebuild the UI or daemon on every launch.
 - The launcher must reuse the existing localhost daemon, guard against duplicate instances and port conflicts, wait for `/api/health`, and then open the existing admin UI.
-- P5.3 targets Windows 10/11 x64 first. Bundle the Node runtime and production artifacts, but do not migrate MiMo credentials, active tasks, or Worktrees between devices.
+- P5.3 targets Windows 10 x64 first. Bundle the Node runtime and production artifacts, but do not migrate MiMo credentials, active tasks, or Worktrees between devices.

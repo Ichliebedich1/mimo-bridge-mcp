@@ -99,16 +99,17 @@ describe("STDIO MCP protocol", () => {
     }
   });
 
-  it("tools/list should return all 10 tools", async () => {
+  it("tools/list should return all 11 tools", async () => {
     const result = await sendRequest("tools/list");
 
     assert.ok(result.result);
     assert.ok(result.result.tools);
-    assert.strictEqual(result.result.tools.length, 10);
+    assert.strictEqual(result.result.tools.length, 11);
 
     const toolNames = result.result.tools.map((t) => t.name);
     assert.ok(toolNames.includes("mimo_start_task"));
     assert.ok(toolNames.includes("mimo_get_task"));
+    assert.ok(toolNames.includes("mimo_wait_task"));
     assert.ok(toolNames.includes("mimo_reply_task"));
     assert.ok(toolNames.includes("mimo_cancel_task"));
     assert.ok(toolNames.includes("mimo_finish_task"));

@@ -18,7 +18,15 @@ Browser admin UI ── REST API ──┘                         │
 
 ## Current Configuration
 
-The daemon currently receives `MIMO_NODE_PATH`, `MIMO_ENTRY_PATH`, `MIMO_ALLOWED_ROOTS`, `MIMO_RUNTIME_DIR`, and `MIMO_DAEMON_PORT` through environment variables. `start-local.ps1` hardcodes machine-specific values and rebuilds before every start.
+The daemon loads `%LOCALAPPDATA%\MiMoBridge\config.json` by default. `MIMO_BRIDGE_CONFIG` selects another file, and per-field environment variables override persisted values. `start-local.ps1` builds for development; `start-production.ps1` starts existing artifacts only.
+
+## Low-Token Execution Flow
+
+```text
+mimo_start_task -> mimo_wait_task (single bounded wait) -> Review Package -> focused evidence only if needed
+```
+
+The read-only UI viewer polls only while its modal is open. Codex should not repeatedly poll task summaries.
 
 ## Planned Startup Architecture
 
