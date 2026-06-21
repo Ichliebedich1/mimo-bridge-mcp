@@ -10,7 +10,7 @@ $artifactsDir = Join-Path $repoRoot "artifacts"
 $portableDir = Join-Path $artifactsDir "portable"
 $packageRoot = Join-Path $portableDir "MiMoBridge"
 $appRoot = Join-Path $packageRoot "app"
-$zipPath = Join-Path $artifactsDir "MiMoBridge-portable-win10-x64.zip"
+$zipPath = Join-Path $artifactsDir "MiMoBridge-portable-win10-win11-x64.zip"
 
 function Invoke-CheckedCommand {
   param(
@@ -131,7 +131,7 @@ call "%~dp0MiMo Bridge Launcher.cmd" configure
 Write-Utf8NoBom -Path (Join-Path $packageRoot "Configure MiMo Bridge.cmd") -Content $configureCmd
 
 $readme = @'
-# MiMo Bridge Portable - Windows 10 x64
+# MiMo Bridge Portable - Windows 10/11 x64
 
 This is a portable application package for MiMo Bridge MCP.
 
@@ -178,7 +178,7 @@ try {
 
 $manifest = [ordered]@{
   name = "MiMo Bridge Portable"
-  target = "windows-10-x64"
+  target = "windows-10-11-x64"
   source_commit = $commit
   generated_at = (Get-Date).ToUniversalTime().ToString("o")
   includes_node = $true

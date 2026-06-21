@@ -50,4 +50,4 @@ Never read the whole repository, complete logs, complete diff, or unrelated file
 - Persisted configuration defaults to `%LOCALAPPDATA%\MiMoBridge\config.json`; portable packages set `MIMO_BRIDGE_CONFIG` and `MIMO_BRIDGE_DATA_DIR` to the package `data` directory.
 - Production startup must use existing build artifacts and must not rebuild the UI or daemon on every launch.
 - The launcher must reuse the existing localhost daemon, guard against duplicate instances and port conflicts, wait for `/api/health`, and then open the existing admin UI.
-- P5.3 targets Windows 10 x64 first. `scripts/build-portable.ps1` creates the portable ZIP with bundled `node.exe`, built artifacts, pruned dependencies, and `.cmd` launchers. Do not migrate MiMo credentials, active tasks, runtime logs, or Worktrees between devices.
+- P5.3 targets Windows 10/11 x64. `scripts/build-portable.ps1` creates the portable ZIP with bundled `node.exe`, built artifacts, pruned dependencies, and `.cmd` launchers. `scripts/build-installer.ps1` creates the EXE installer from that portable payload. Do not migrate MiMo credentials, active tasks, runtime logs, or Worktrees between devices.

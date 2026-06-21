@@ -3,7 +3,7 @@
 **Date:** 2026-06-21  
 **Repository:** `C:\Users\86172\Desktop\MiMo Code project\Agent 协作项目\mimo-bridge-mcp`  
 **Current module:** P5.3 installer / clean-machine validation
-**Target:** Windows 10 x64 only
+**Target:** Windows 10/11 x64 only
 
 ## 1. Read This First
 
@@ -20,17 +20,17 @@ P4.6 low-token waiting is committed and deployed. P5.2 launcher commands are com
 - Running MCP: `http://127.0.0.1:3210/mcp`.
 - Last verified health: daemon `ok`, MCP `ready`, MiMo `configured`, queue empty.
 - HTTP MCP exposes 11 tools, including `mimo_wait_task`.
-- Normal regression: `242/242` passed, excluding the known hanging `tests/runner-integration.test.mjs`.
-- Launcher focused regression: `12/12` passed.
+- Normal regression: `247/247` passed, excluding the known hanging `tests/runner-integration.test.mjs`.
+- Launcher plus installer focused regression: `16/16` passed.
 - Root and local-daemon TypeScript builds pass.
 - P5.2 launcher lifecycle commands, first-run wizard, shortcut command, and opt-in autostart command are implemented.
-- P5.3 portable ZIP generation is implemented; Windows installer is not implemented.
+- P5.3 portable ZIP and EXE installer generation are implemented; clean-machine validation is pending.
 
 No source changes are pending. Generated portable artifacts are ignored under `artifacts/`.
 
 ## 3. User Decisions That Must Not Change
 
-1. First release supports **Windows 10 x64 only**.
+1. First release supports **Windows 10/11 x64 only**.
 2. Windows logon autostart is **off by default** and enabled only when the user checks an option.
 3. Portable/install packages bundle Node, but never bundle MiMo credentials, MiMo login state, active tasks, runtime logs, or Git Worktrees.
 4. MiMo Code must be installed and logged in separately on every destination computer.
@@ -54,7 +54,7 @@ No source changes are pending. Generated portable artifacts are ignored under `a
 | P5.1 | Safe permanent deletion of terminal tasks | Complete |
 | P5.2 stage 1 | Persisted daemon config and build-free production start | Complete |
 | P5.2 stage 2 | One-click launcher, setup wizard, shortcuts, optional autostart | Implemented; clean-machine validation pending |
-| P5.3 | Windows 10 x64 portable ZIP and installer | Portable ZIP implemented; installer pending |
+| P5.3 | Windows 10/11 x64 portable ZIP and EXE installer | Implemented; clean-machine validation pending |
 
 ## 5. Existing Architecture
 
@@ -127,7 +127,7 @@ Implementation order:
 5. Desktop shortcut and opt-in logon Scheduled Task.
 6. Automated tests and a real local smoke test.
 
-Do not begin installer packaging until the generated portable ZIP passes on a clean Windows 10 x64 machine.
+Installer packaging is implemented; do not call release complete until portable and installer flows pass on clean Windows 10/11 x64 machines.
 
 ## 8. P5.2 Acceptance Criteria
 
@@ -226,7 +226,7 @@ $tests = Get-ChildItem -LiteralPath 'tests' -Filter '*.test.mjs' |
 node --test $tests
 ```
 
-Expected current result: `242/242` pass. Windows may print `node-pty AttachConsole failed` and `TimeoutNaNWarning`; these are tracked test noise when the final process exits with code 0 and all tests pass. Launcher focused regression is `12/12`.
+Expected current result: `247/247` pass. Windows may print `node-pty AttachConsole failed` and `TimeoutNaNWarning`; these are tracked test noise when the final process exits with code 0 and all tests pass. Launcher plus installer focused regression is `16/16`.
 
 Portable package command:
 
@@ -236,7 +236,7 @@ npm.cmd run package:portable
 
 Generated outputs are ignored by Git under `artifacts/`.
 
-Latest generated ZIP: `artifacts/MiMoBridge-portable-win10-x64.zip`; manifest `source_commit=f410e6f`; size about 55.6 MB on this machine.
+Latest generated artifacts: `artifacts/MiMoBridge-portable-win10-win11-x64.zip` and `artifacts/MiMoBridgeSetup-win10-win11-x64.exe`; generated artifacts are ignored by Git.
 
 Do not silently add `tests/runner-integration.test.mjs` to the normal suite. It is known to hang and requires a separate repair task.
 
@@ -311,7 +311,7 @@ Only the last case counts toward the user's consecutive-failure rule unless evid
 2. Run `git status --short` and confirm the worktree is clean before starting.
 3. Regenerate the portable package with `npm.cmd run package:portable` if the source changed.
 4. Confirm `/api/health` and verify the MCP exposes 11 tools.
-5. Validate the launcher by real double-click or interactive console on a clean Windows 10 x64 machine.
+5. Validate the launcher and installer by real double-click or interactive console on clean Windows 10/11 x64 machines.
 6. Verify reboot/logon behavior, no-system-Node behavior, port conflict handling, first-run errors, shortcut, and opt-in autostart.
 7. Only then start Windows installer packaging.
 8. Report changed files, test counts, risks, and the exact next stage.

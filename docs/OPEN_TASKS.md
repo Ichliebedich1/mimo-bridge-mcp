@@ -2,8 +2,8 @@
 
 ## Pending
 
-- Run clean-machine/manual validation for the Windows 10 x64 launcher: reboot/logon, no system Node, port conflict, first-run errors, and real user double-click flow.
-- Build the Windows installer; portable ZIP generation is implemented.
+- Run clean-machine/manual validation for the Windows 10/11 x64 launcher and installer: reboot/logon, no system Node, port conflict, first-run errors, and real user double-click flow.
+
 - Audit active Worktree cancellation cleanup.
 - Connect `TokenBudgetManager` to real MiMo token events.
 
@@ -12,7 +12,8 @@
 - Persistent config and build-free `start-production.ps1`.
 - Windows launcher lifecycle controller and CLI: start/stop/restart/open/log/status, duplicate-instance guard, port-conflict report, first-run config wizard, desktop shortcut command, and opt-in autostart command.
 - Local launcher smoke: status, duplicate start, safe stop, start to healthy daemon, shortcut creation, autostart disabled, and bounded logs.
-- Portable package script: `npm.cmd run package:portable` creates `artifacts/MiMoBridge-portable-win10-x64.zip` with bundled `node.exe`, built artifacts, pruned dependencies, package-local `data`, and no MiMo credentials/tasks/Worktrees.
+- Portable package script: `npm.cmd run package:portable` creates `artifacts/MiMoBridge-portable-win10-win11-x64.zip` with bundled `node.exe`, built artifacts, pruned dependencies, package-local `data`, and no MiMo credentials/tasks/Worktrees.
+- Installer package script: `npm.cmd run package:installer` creates `artifacts/MiMoBridgeSetup-win10-win11-x64.exe` by embedding the portable payload and installer script in a MinGW resource-stub EXE.
 - Portable smoke: package-local config on port 3211 started successfully, `/api/health` returned ok/MCP ready/MiMo configured, then the smoke daemon was stopped.
 - Follow-up MiMo rounds stay inside their task Worktree and are re-audited.
 - Read-only live-run viewer with bounded JSONL tail parsing and no stdin/control surface.
@@ -31,5 +32,5 @@
 ## Next Steps
 
 1. Use `mimo_wait_task` for all later MiMo work instead of repeated polling.
-2. Validate the launcher on a clean Windows 10 x64 machine and after reboot/logon.
-3. Build and test the Windows installer; keep portable ZIP validation in the release checklist.
+2. Validate the launcher and installer on clean Windows 10/11 x64 machines and after reboot/logon.
+3. Keep portable ZIP and EXE installer validation in the release checklist.

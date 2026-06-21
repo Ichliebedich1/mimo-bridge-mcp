@@ -30,9 +30,9 @@
 - Decision: `step_finish` with `reason="tool-calls"` is an intermediate event; the Runner completes only on a terminal step such as `reason="stop"` or on process exit.
 - Reason: MiMo emits a step-finish event between tool-call rounds. Treating every step-finish as terminal killed MiMo immediately after its first file-reading round.
 
-## 2026-06-21: Windows 10 x64 Is The First Distribution Target
+## 2026-06-21: Windows 10/11 x64 Is The First Distribution Target
 
-- Decision: first release supports Windows 10 x64; logon startup is disabled by default; packages bundle Node but not MiMo credentials.
+- Decision: first release supports Windows 10/11 x64; logon startup is disabled by default; packages bundle Node but not MiMo credentials.
 - Reason: one target reduces native `node-pty` packaging risk and keeps authentication device-local.
 
 ## 2026-06-21: Live Viewing Is Read-Only
