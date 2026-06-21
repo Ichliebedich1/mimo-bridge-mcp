@@ -4,6 +4,7 @@ import { fail, ok } from "./api-result.js";
 import { readJsonBody, sendJson } from "./http-utils.js";
 import type { DaemonConfig } from "./daemon-config.js";
 import type { ToolContext } from "./tool-context.js";
+import { readLiveTaskView, parseLiveParams } from "./live-task-view.js";
 
 const StartTaskBodySchema = z.object({
   objective: z.string().min(1),
@@ -126,6 +127,17 @@ export async function handleAdminApi(
           ...body,
         });
         sendJson(res, toolStatusCode(data), wrapToolResult(data));
+        return true;
+      }
+
+      if (req.method === "GET" && action === "live") {
+        const { max_events, max_chars } = parseLiveParams(url.searchParams);
+        const result = readLiveTaskView(context.taskStore, taskId, max_events, max_chars);
+        if ("error" in result) {
+          sendJson(res, 404, fail(result.error));
+        } else {
+          sendJson(res, 200, ok(result));
+        }
         return true;
       }
     }

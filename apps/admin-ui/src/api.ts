@@ -2,6 +2,7 @@ import type {
   CreateTaskInput,
   FocusedTaskResult,
   FullTaskResult,
+  LiveTaskView,
   RiskFlag,
   Task,
   TaskActionResult,
@@ -213,6 +214,14 @@ export async function fetchFullTask(taskId: string): Promise<FullTaskResult> {
     truncated: response.truncated,
     raw: response,
   };
+}
+
+export async function fetchLiveTask(taskId: string, maxEvents = 40, maxChars = 8000): Promise<LiveTaskView> {
+  const params = new URLSearchParams({
+    max_events: String(maxEvents),
+    max_chars: String(maxChars),
+  });
+  return unwrap(await getJson<LiveTaskView>('/api/tasks/' + encodeURIComponent(taskId) + '/live?' + params));
 }
 
 export async function fetchQueue(): Promise<QueueStatusResponse> {
@@ -467,7 +476,7 @@ function firstLine(text?: string): string {
   return (text ?? '').split(/\r?\n/)[0]?.trim() ?? '';
 }
 
-function formatDateTime(value?: string): string | undefined {
+export function formatDateTime(value?: string): string | undefined {
   if (!value) {
     return undefined;
   }

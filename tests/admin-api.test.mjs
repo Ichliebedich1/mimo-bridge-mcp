@@ -300,3 +300,60 @@ test("admin API rejects arbitrary routes and invalid task creation bodies", asyn
     fixture.cleanup();
   }
 });
+
+test("admin API returns live task view with bounded events", async () => {
+  const fixture = createContext();
+  try {
+    fixture.context.taskStore.updateTaskStatus(fixture.taskId, "running");
+    const logPath = fixture.context.taskStore.getLogPath(fixture.taskId, 1);
+    const { writeFileSync } = await import("node:fs");
+    const events = [
+      JSON.stringify({ type: "start", timestamp: Date.now(), summary: "task started" }),
+      JSON.stringify({ type: "tool_use", timestamp: Date.now() + 1000, summary: "reading", tool: "file_read" }),
+    ];
+    writeFileSync(logPath, events.join("\n") + "\n", "utf-8");
+
+    const result = await callApi(fixture.context, "GET", "/api/tasks/" + fixture.taskId + "/live");
+    assert.strictEqual(result.statusCode, 200);
+    assert.strictEqual(result.body.ok, true);
+    assert.strictEqual(result.body.data.task_id, fixture.taskId);
+    assert.strictEqual(result.body.data.is_live, true);
+    assert.strictEqual(result.body.data.events.length, 2);
+    assert.strictEqual(result.body.data.events[0].event_type, "start");
+    assert.strictEqual(result.body.data.events[1].tool, "file_read");
+    assert.strictEqual(typeof result.body.data.truncated, "boolean");
+  } finally {
+    fixture.cleanup();
+  }
+});
+
+test("admin API live view respects max_events and max_chars bounds", async () => {
+  const fixture = createContext();
+  try {
+    fixture.context.taskStore.updateTaskStatus(fixture.taskId, "running");
+    const logPath = fixture.context.taskStore.getLogPath(fixture.taskId, 1);
+    const { writeFileSync } = await import("node:fs");
+    const events = [];
+    for (let i = 0; i < 50; i++) {
+      events.push(JSON.stringify({ type: "ev_" + i, timestamp: Date.now() + i * 1000, summary: "step " + i }));
+    }
+    writeFileSync(logPath, events.join("\n") + "\n", "utf-8");
+
+    const bounded = await callApi(fixture.context, "GET", "/api/tasks/" + fixture.taskId + "/live?max_events=5&max_chars=2000");
+    assert.strictEqual(bounded.statusCode, 200);
+    assert.ok(bounded.body.data.events.length <= 5);
+  } finally {
+    fixture.cleanup();
+  }
+});
+
+test("admin API live view returns 404 for nonexistent task", async () => {
+  const fixture = createContext();
+  try {
+    const result = await callApi(fixture.context, "GET", "/api/tasks/task_nonexistent/live");
+    assert.strictEqual(result.statusCode, 404);
+    assert.strictEqual(result.body.ok, false);
+  } finally {
+    fixture.cleanup();
+  }
+});
