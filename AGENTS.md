@@ -7,6 +7,8 @@
 - Admin UI build: `cd apps/admin-ui; npm.cmd run build`
 - Local daemon build: `cd apps/local-daemon; npm.cmd run build`
 - Portable package: `npm.cmd run package:portable`
+- Installer package: `npm.cmd run package:installer`
+- Release validation: `npm.cmd run validate:release`
 - Normal regression: `node --test (rg --files tests -g '*.test.mjs' | Where-Object { $_ -notmatch 'runner-integration\.test\.mjs$' })`
 - Do not run `tests/runner-integration.test.mjs` in the normal suite; it is a tracked hanging P2 test debt.
 
@@ -44,10 +46,15 @@ Never read the whole repository, complete logs, complete diff, or unrelated file
 - P4 write tasks are serialized through `TaskQueue`; queue occupancy ends only on the real Runner completion, failure, or cancellation callback.
 - Keep regression coverage for duplicate queued replies and queued Worktree cleanup when changing task lifecycle code.
 
-## Planned Windows Launcher And Distribution
+## Windows Launcher And Distribution
 
 - `apps/local-daemon/start-local.ps1` is the development build/start entry; `start-production.ps1` starts existing artifacts.
 - Persisted configuration defaults to `%LOCALAPPDATA%\MiMoBridge\config.json`; portable packages set `MIMO_BRIDGE_CONFIG` and `MIMO_BRIDGE_DATA_DIR` to the package `data` directory.
 - Production startup must use existing build artifacts and must not rebuild the UI or daemon on every launch.
 - The launcher must reuse the existing localhost daemon, guard against duplicate instances and port conflicts, wait for `/api/health`, and then open the existing admin UI.
 - P5.3 targets Windows 10/11 x64. `scripts/build-portable.ps1` creates the portable ZIP with bundled `node.exe`, built artifacts, pruned dependencies, and `.cmd` launchers. `scripts/build-installer.ps1` creates the EXE installer from that portable payload. Do not migrate MiMo credentials, active tasks, runtime logs, or Worktrees between devices.
+
+## Active Documentation Set
+
+- Keep: `README.md`, `PROJECT_MEMORY.md`, `docs/HANDOVER_STATUS.md`, `docs/OPEN_TASKS.md`, `docs/RELEASE_VALIDATION.md`, `docs/MODULE_MAP.md`, `docs/ARCHITECTURE.md`, `docs/DECISIONS.md`, `docs/modules/*.md`, and the app-level README files.
+- Historical snapshots such as old root handoff/project documents should not be recreated unless they contain new current facts that are also linked from the active set.

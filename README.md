@@ -1,114 +1,90 @@
-# mimo-bridge-mcp-server
+# MiMo Bridge MCP
 
-MCP 传话员：连接 Codex 与 MiMo Code 的桥梁
+MiMo Bridge MCP lets Codex delegate bounded coding tasks to MiMo Code through one shared local daemon. Codex plans, constrains, reviews, and accepts work; MiMo executes inside task boundaries and Git Worktrees.
 
-## 简介
+## Current Status
 
-本项目是一个 MCP (Model Context Protocol) 服务器，负责在 Codex 和 MiMo Code 之间传递任务和结果。
+- Target OS: Windows 10/11 x64.
+- Runtime: localhost-only Node daemon at `http://127.0.0.1:3210`.
+- MCP endpoint: `http://127.0.0.1:3210/mcp`.
+- Admin UI: served by the same daemon at `http://127.0.0.1:3210/`.
+- Distribution: portable ZIP and EXE installer with bundled Node.
+- MiMo Code must be installed and logged in separately on each machine.
 
-## 功能
+## Important Docs
 
-- `mimo_start_task`: 创建并后台启动 MiMo 任务
-- `mimo_get_task`: 查询任务状态、回复和日志摘要
-- `mimo_reply_task`: 继续已有 MiMo 会话
+Read these first when taking over the project:
 
-## 安装
+1. `PROJECT_MEMORY.md` - long-term project memory and current release state.
+2. `AGENTS.md` - agent rules, collaboration workflow, and commands.
+3. `docs/HANDOVER_STATUS.md` - short current handover summary.
+4. `docs/OPEN_TASKS.md` - pending work and risks.
+5. `docs/RELEASE_VALIDATION.md` - clean Windows validation checklist.
+6. `docs/modules/windows-launcher-portability.md` - launcher, portable, and installer details.
 
-```bash
-npm install
-npm run build
+## Build And Test
+
+```powershell
+npm.cmd run build
+cd apps/admin-ui; npm.cmd run build; cd ../..
+cd apps/local-daemon; npm.cmd run build; cd ../..
 ```
 
-## 配置
+Normal regression excludes the known hanging runner integration test:
 
-在 Codex 配置文件中添加：
-
-```toml
-[mcp_servers.mimo_bridge]
-command = 'C:\Program Files\nodejs\node.exe'
-args = ['<本项目路径>/dist/index.js']
-startup_timeout_sec = 10
-tool_timeout_sec = 30
-enabled = true
-
-[mcp_servers.mimo_bridge.env]
-MIMO_NODE_PATH = '<MiMo Node.js 路径>'
-MIMO_ENTRY_PATH = '<MiMo CLI 入口路径>'
-MIMO_ALLOWED_ROOTS = '<允许的工作区根目录>'
-MIMO_RUNTIME_DIR = '<运行时目录路径>'
+```powershell
+$tests = Get-ChildItem -LiteralPath 'tests' -Filter '*.test.mjs' |
+  Where-Object { $_.Name -ne 'runner-integration.test.mjs' } |
+  ForEach-Object { $_.FullName }
+node --test $tests
 ```
 
-## 测试
+Focused release checks:
 
-```bash
-npm test
+```powershell
+node --test tests/release-validation.test.mjs tests/installer-package.test.mjs tests/launcher-controller.test.mjs
+npm.cmd run validate:release
 ```
 
-## 中文排错说明
+## Run Locally
 
-### 启动失败
+Development start:
 
-**问题**: `MIMO_NODE_PATH 环境变量未设置`
-
-**解决**: 在 Codex 配置文件中设置 `MIMO_NODE_PATH` 环境变量，指向 MiMo 自带的 Node.js 可执行文件。
-
----
-
-**问题**: `MIMO_ENTRY_PATH 指向的文件不存在`
-
-**解决**: 检查 `MIMO_ENTRY_PATH` 路径是否正确。MiMo CLI 入口通常位于：
-```
-D:\AI\Mimo2 Codex\.tools\node-v22.22.3-win-x64\node_modules\@mimo-ai\cli\bin\mimo
+```powershell
+powershell -ExecutionPolicy Bypass -File apps/local-daemon/start-local.ps1
 ```
 
----
+Launcher controls:
 
-**问题**: `无法获取 MiMo Node.js 版本`
+```powershell
+powershell -ExecutionPolicy Bypass -File apps/local-daemon/launcher.ps1 status
+powershell -ExecutionPolicy Bypass -File apps/local-daemon/launcher.ps1 start -Open
+powershell -ExecutionPolicy Bypass -File apps/local-daemon/launcher.ps1 stop
+powershell -ExecutionPolicy Bypass -File apps/local-daemon/launcher.ps1 restart -Open
+powershell -ExecutionPolicy Bypass -File apps/local-daemon/launcher.ps1 logs
+```
 
-**解决**: 确保 `MIMO_NODE_PATH` 指向的 Node.js 可执行文件存在且可运行。
+## Package
 
-### 任务创建失败
+```powershell
+npm.cmd run package:portable
+npm.cmd run package:installer
+```
 
-**问题**: `已有任务在运行中，第一版只支持同时运行一个写任务`
+Generated release outputs are ignored by Git under `artifacts/`:
 
-**解决**: 等待当前任务完成或取消后再创建新任务。
+- `artifacts/MiMoBridge-portable-win10-win11-x64.zip`
+- `artifacts/MiMoBridgeSetup-win10-win11-x64.exe`
+- `artifacts/release-validation.json`
 
----
+## Review Workflow
 
-**问题**: `路径不在允许的根目录范围内`
+Codex should use the low-token protocol:
 
-**解决**: 确保 `workspace_path` 在 `MIMO_ALLOWED_ROOTS` 设置的目录范围内。
+1. Start or reply to a MiMo task.
+2. Call `mimo_wait_task` once with a bounded timeout.
+3. Review `mimo_get_task(detail_level="review")`.
+4. Escalate only to focused diff, file, or log reads when risk flags require it.
+5. Merge or discard the task Worktree through MCP; MiMo must not merge its own Worktree.
 
----
-
-**问题**: `session_id 格式无效`
-
-**解决**: 会话 ID 必须符合格式 `ses_` 后跟字母、数字或下划线。
-
-### 任务执行失败
-
-**问题**: `MiMo 未返回 sessionID，任务失败`
-
-**解决**: 检查 MiMo 是否正常运行，查看 `runtime/logs/` 目录下的日志文件。
-
----
-
-**问题**: `任务超时`
-
-**解决**: 增加 `runtime_timeout_seconds` 参数值，或检查 MiMo 是否卡住。
-
-### 测试失败
-
-**问题**: 测试提示 `缺少 --file 参数`
-
-**解决**: 确保测试脚本正确传递了所有必需参数。
-
----
-
-**问题**: 测试提示 `任务说明文件缺少 '# 任务说明' 标记`
-
-**解决**: 任务说明文件必须包含 `# 任务说明` 标题。
-
-## 作者
-
-MiMo Code (Xiaomi MiMo)
+Do not read the whole repository, full logs, complete diff, or unrelated files just for convenience.

@@ -51,6 +51,14 @@ This file is the project-local long-term memory. Update it after each meaningful
    - node --test tests/launcher-controller.test.mjs
 9. Normal regression must continue excluding tests/runner-integration.test.mjs.
 
+## Active Documentation Set
+
+- Primary entry points: README.md, PROJECT_MEMORY.md, AGENTS.md, docs/HANDOVER_STATUS.md, and docs/OPEN_TASKS.md.
+- Architecture and module references: docs/ARCHITECTURE.md, docs/MODULE_MAP.md, docs/DECISIONS.md, docs/PROJECT_BRIEF.md, docs/RELEASE_VALIDATION.md, and docs/modules/*.md.
+- Third-party takeover entry: docs/THIRD_PARTY_AGENT_HANDOFF.md is now a short index, not a duplicated long-form state dump.
+- Removed from active docs during cleanup: root HANDOFF.md, root PROJECT.md, and docs/UI_DEVELOPMENT.md. Do not depend on those paths for current facts.
+- Current release artifacts stay ignored under artifacts/. The portable staging directory artifacts/portable/MiMoBridge is kept because validate-release.ps1 -SkipPackageBuild reads it.
+
 ## Latest Notes
 
 - Win11 support is treated as the same Windows x64 release line as Win10 because both are NT 10.x and the current stack is Node/PowerShell/localhost.
@@ -58,3 +66,4 @@ This file is the project-local long-term memory. Update it after each meaningful
 - The installer-created launchers set MIMO_BRIDGE_NODE_PATH, MIMO_BRIDGE_DATA_DIR, and MIMO_BRIDGE_CONFIG explicitly.
 - Latest local verification: npm.cmd run package:installer passed; npm.cmd run validate:release -- -SkipPackageBuild passed and wrote artifacts\release-validation.json; artifacts\MiMoBridgeSetup-win10-win11-x64.exe -SelfTest passed; node --test tests/release-validation.test.mjs tests/installer-package.test.mjs tests/launcher-controller.test.mjs passed 17/17; normal regression excluding runner-integration passed 248/248.
 - Installer EXE supports -SelfTest. This extracts the embedded payload to TEMP, checks required app files, and rejects bundled runtime data or MiMo credential files without installing anything.
+- Documentation cleanup consolidated stale handoff/design snapshots into the active docs listed above and removed obsolete ignored build artifacts that can be regenerated.

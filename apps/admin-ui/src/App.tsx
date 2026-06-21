@@ -620,7 +620,7 @@ function CreateTaskPage({ actionBusy, onCreate }: { actionBusy: boolean; onCreat
             </label>
             <label>
               <span>只读路径</span>
-              <textarea value={readonlyPaths} onChange={(event) => setReadonlyPaths(event.target.value)} placeholder="每行一个路径，例如 docs/UI_DEVELOPMENT.md" rows={4} />
+              <textarea value={readonlyPaths} onChange={(event) => setReadonlyPaths(event.target.value)} placeholder="每行一个路径，例如 docs/RELEASE_VALIDATION.md" rows={4} />
             </label>
           </div>
           <label>

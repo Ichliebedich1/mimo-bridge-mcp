@@ -23,6 +23,7 @@
 - Normal regression after live viewer: 223/223.
 - Temporary detached daemon proof using an on-demand Scheduled Task with no trigger.
 - P4.6 `mimo_wait_task` committed, deployed, HTTP-smoked, and covered by the 228/228 normal regression.
+- Documentation cleanup consolidated old root handoff/project snapshots and the old P5 UI design document into the active documentation set.
 
 ## Risks
 
