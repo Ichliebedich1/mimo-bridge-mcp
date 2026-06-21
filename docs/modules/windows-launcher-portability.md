@@ -43,6 +43,7 @@ Existing P5 daemon/UI, MiMo CLI, Node runtime, production dependencies, and Wind
 4. Add desktop shortcut and optional per-user logon startup.
 5. Add first-run setup for MiMo discovery, allowed roots, runtime directory, and Codex MCP endpoint.
 6. Produce Windows x64 portable ZIP and installer.
+7. Add a read-only live-run viewer from the admin task page. It may display status, bounded recent events, and log tails, but must not attach to MiMo stdin, reuse an interactive CLI window, or provide stop/input controls.
 
 ## Implementation Approach
 
@@ -50,8 +51,10 @@ Keep the existing React UI and Node daemon. Build a thin Windows launcher around
 
 ## Pending Work
 
-- Confirm Windows 10/11 x64 as the first target.
-- Confirm logon startup is opt-in.
+- Target Windows 10 x64 only for the first release.
+- Keep logon startup disabled by default and enable it only when the user checks the option.
+- Bundle Node in portable/installable artifacts, but never bundle or migrate MiMo login information.
+- Implement the read-only live-run viewer after the configuration/startup layer is merged.
 - Decide the final launcher shell after the configuration/startup layer is tested.
 
 ## Test Method

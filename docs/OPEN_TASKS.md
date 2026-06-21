@@ -6,7 +6,8 @@
 - Verify the shared local daemon remains available across Codex turns and formalize the supported background startup path.
 - Replace machine-specific startup paths with persisted local configuration and first-run discovery.
 - Add a Windows one-click launcher with start/stop/restart/open/log/status controls and optional logon startup.
-- Build a Windows x64 portable ZIP and installer; bundle the Node runtime but require MiMo re-authentication on each device.
+- Add a read-only task live-run viewer; show bounded recent events/log tails without interactive terminal input or interruption controls.
+- Build a Windows 10 x64 portable ZIP and installer; bundle the Node runtime but require MiMo re-authentication on each device.
 - Connect `TokenBudgetManager` to real MiMo token events.
 - Audit cleanup and discard behavior when an active Worktree task is cancelled.
 

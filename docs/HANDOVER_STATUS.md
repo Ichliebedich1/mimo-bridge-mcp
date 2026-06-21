@@ -41,10 +41,11 @@ Allow Codex to plan and review while MiMo performs bounded coding tasks through 
 
 1. Commit the current Runner/review fix and documentation as a recoverable baseline.
 2. Implement P5.2: portable configuration plus one-click Windows launcher and optional logon startup.
-3. Implement P5.3: Windows x64 portable ZIP and installer with first-run setup.
-4. Connect real MiMo token events.
-5. Audit active Worktree cancellation cleanup.
-6. Run one supervised UI -> MiMo -> Review Package -> Codex -> merge workflow.
+3. Add a read-only "view live run" action to the task UI after the configuration/startup work is merged. It must show bounded task events/log tails without attaching an interactive terminal or exposing controls that can interrupt MiMo.
+4. Implement P5.3: Windows 10 x64 portable ZIP and installer with first-run setup.
+5. Connect real MiMo token events.
+6. Audit active Worktree cancellation cleanup.
+7. Run one supervised UI -> MiMo -> Review Package -> Codex -> merge workflow.
 
 ## Risks / Blockers
 
