@@ -1,5 +1,19 @@
 import type { MimoEvent } from "../types.js";
 
+const CONTINUATION_REASONS = new Set(["tool-calls", "tool_calls", "tool-use", "tool_use"]);
+
+export function isTerminalMimoEvent(event: MimoEvent): boolean {
+  const isStepFinish =
+    event.type === "step_finish" ||
+    event.type === "step-finish" ||
+    event.part?.type === "step-finish";
+
+  if (!isStepFinish) return false;
+
+  const reason = event.part?.reason?.trim().toLowerCase();
+  return !reason || !CONTINUATION_REASONS.has(reason);
+}
+
 export interface ParsedResult {
   sessionId: string | null;
   textChunks: string[];

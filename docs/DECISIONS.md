@@ -24,3 +24,8 @@
 
 - Decision: every start/reply enters `TaskQueue`, and its queue Promise resolves only after Runner completion, failure, or cancellation.
 - Reason: process spawn is not task completion; releasing at spawn allows concurrent writes despite a `queued` response.
+
+## 2026-06-21: Tool-Call Step Finish Is Not Task Completion
+
+- Decision: `step_finish` with `reason="tool-calls"` is an intermediate event; the Runner completes only on a terminal step such as `reason="stop"` or on process exit.
+- Reason: MiMo emits a step-finish event between tool-call rounds. Treating every step-finish as terminal killed MiMo immediately after its first file-reading round.

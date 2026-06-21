@@ -31,6 +31,7 @@ Risk flags currently include:
 - `TASK_ERROR`
 - `ISSUES_REPORTED`
 - `REVIEW_DATA_UNAVAILABLE`
+- `NO_CHANGES_AND_NO_TESTS`
 
 ## Mandatory Review Flow
 

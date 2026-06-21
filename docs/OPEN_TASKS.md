@@ -2,9 +2,12 @@
 
 ## Pending
 
-- Make the shared local daemon remain available across Codex turns and verify the supported startup path.
+- Commit the current Runner terminal-event fix, no-change review risk, tests, and handover docs.
+- Verify the shared local daemon remains available across Codex turns and formalize the supported background startup path.
+- Replace machine-specific startup paths with persisted local configuration and first-run discovery.
+- Add a Windows one-click launcher with start/stop/restart/open/log/status controls and optional logon startup.
+- Build a Windows x64 portable ZIP and installer; bundle the Node runtime but require MiMo re-authentication on each device.
 - Connect `TokenBudgetManager` to real MiMo token events.
-- Flag a coding task as risky when it reaches review with no changed files and no reported tests.
 - Audit cleanup and discard behavior when an active Worktree task is cancelled.
 
 ## Completed
@@ -16,15 +19,23 @@
 - P4 Runner-bound write serialization.
 - Duplicate queued reply rejection.
 - Queued Worktree cleanup on cancellation.
+- Runner ignores intermediate `step_finish(reason="tool-calls")` events and waits for the terminal step.
+- Coding tasks with no changes and no reported tests receive `NO_CHANGES_AND_NO_TESTS`.
+- Real MiMo smoke completed read, edit, verification read, and final stop.
+- P5.2/P5.3 one-click startup and portability approach documented.
 
 ## Risks
 
 - The known P2 Runner integration test remains excluded because it hangs.
-- A no-change MiMo coding task can currently receive `review_recommendation=approve` when tests are not reported.
-- The daemon passed startup smoke after P4 but was offline at the later handoff check.
+- The daemon is currently healthy, but persistence across Codex turns has not been verified.
+- The current startup script is tied to this machine and rebuilds on every launch.
+- `node-pty` is a native dependency, so portable artifacts must be built and tested for the target Windows architecture.
+- MiMo authentication, active task state, and Worktrees must not be silently copied between devices.
 
 ## Next Steps
 
-1. Start the shared daemon through `apps/local-daemon/start-local.ps1` and verify it remains online across turns.
-2. Restart the Codex MCP connection and perform one supervised real MiMo coding task.
-3. Add the no-change review risk flag, then connect real token usage events.
+1. Commit the current uncommitted fix as a baseline.
+2. Implement configuration discovery and production startup without rebuilds.
+3. Add the one-click launcher and optional logon startup.
+4. Validate a portable package on a clean Windows x64 environment.
+5. Perform one supervised UI -> MiMo -> Review Package -> Codex -> merge workflow.

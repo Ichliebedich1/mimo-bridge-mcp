@@ -35,3 +35,11 @@ Never read the whole repository, complete logs, complete diff, or unrelated file
 - P4.5 token-budget review is implemented and tested.
 - P4 write tasks are serialized through `TaskQueue`; queue occupancy ends only on the real Runner completion, failure, or cancellation callback.
 - Keep regression coverage for duplicate queued replies and queued Worktree cleanup when changing task lifecycle code.
+
+## Planned Windows Launcher And Distribution
+
+- `apps/local-daemon/start-local.ps1` is currently machine-specific and is not a production installer entrypoint.
+- P5.2 must first move Node, MiMo, allowed roots, runtime directory, and port into persisted local configuration with first-run discovery.
+- Production startup must use existing build artifacts and must not rebuild the UI or daemon on every launch.
+- The launcher must reuse the existing localhost daemon, guard against duplicate instances and port conflicts, wait for `/api/health`, and then open the existing admin UI.
+- P5.3 targets Windows 10/11 x64 first. Bundle the Node runtime and production artifacts, but do not migrate MiMo credentials, active tasks, or Worktrees between devices.

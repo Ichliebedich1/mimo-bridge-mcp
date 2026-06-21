@@ -1,8 +1,30 @@
 import { describe, it } from "node:test";
 import assert from "node:assert";
-import { createEventParser } from "../dist/services/event-parser.js";
+import { createEventParser, isTerminalMimoEvent } from "../dist/services/event-parser.js";
 
 describe("event-parser", () => {
+  it("should keep running after tool-call steps and finish only on a terminal step", () => {
+    const toolCallStep = {
+      type: "step_finish",
+      timestamp: Date.now(),
+      sessionID: "ses_tool_loop",
+      part: {
+        id: "prt_tool_calls",
+        messageID: "msg_tool_calls",
+        sessionID: "ses_tool_loop",
+        type: "step-finish",
+        reason: "tool-calls",
+      },
+    };
+    const finalStep = {
+      ...toolCallStep,
+      part: { ...toolCallStep.part, id: "prt_stop", reason: "stop" },
+    };
+
+    assert.strictEqual(isTerminalMimoEvent(toolCallStep), false);
+    assert.strictEqual(isTerminalMimoEvent(finalStep), true);
+  });
+
   it("should parse valid JSONL events", () => {
     const parser = createEventParser();
 

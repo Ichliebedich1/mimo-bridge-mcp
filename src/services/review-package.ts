@@ -323,6 +323,14 @@ export function generateReviewPackage(
   if (task.error) riskFlags.push("TASK_ERROR");
   if (task.issues.length > 0) riskFlags.push("ISSUES_REPORTED");
   if (reviewDataError) riskFlags.push("REVIEW_DATA_UNAVAILABLE");
+  if (
+    task.status === "review" &&
+    task.config.editable_paths.length > 0 &&
+    allChangedFiles.length === 0 &&
+    testResult === "not_reported"
+  ) {
+    riskFlags.push("NO_CHANGES_AND_NO_TESTS");
+  }
 
   const reviewPackage: ReviewPackage = {
     task_id: task.task_id,

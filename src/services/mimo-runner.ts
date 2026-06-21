@@ -3,7 +3,7 @@ import { execFileSync } from "node:child_process";
 import { platform } from "node:os";
 import * as pty from "node-pty";
 import type { TaskState, TaskResult } from "../types.js";
-import { createEventParser } from "./event-parser.js";
+import { createEventParser, isTerminalMimoEvent } from "./event-parser.js";
 
 export interface RunnerOptions {
   mimoNodePath: string;
@@ -113,9 +113,7 @@ export function runMimoTask(
     }
 
     const parsed = parser.parse(data);
-    const finished = parsed.events.some(
-      (event) => event.type === "step_finish" || event.type === "step-finish" || event.part?.type === "step-finish"
-    );
+    const finished = parsed.events.some(isTerminalMimoEvent);
     if (finished && !settled && !cancelled) {
       complete(0);
       stopPtyProcessTree(ptyProcess);

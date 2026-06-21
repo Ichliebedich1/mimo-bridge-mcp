@@ -151,6 +151,8 @@ test("review package supports tasks with no changed files", async () => {
 
     assert.deepStrictEqual(result.review_package.changed_files, []);
     assert.strictEqual(result.review_package.changed_files_count, 0);
+    assert.ok(result.review_package.risk_flags.includes("NO_CHANGES_AND_NO_TESTS"));
+    assert.strictEqual(result.review_package.review_recommendation, "needs_attention");
     assert.ok(result.review_package.generated_at);
   } finally {
     rmSync(fixture.root, { recursive: true, force: true });
