@@ -20,15 +20,16 @@ Let Codex plan, constrain, review, and accept work while MiMo executes bounded c
 - Follow-up rounds stay in the saved Worktree and are re-audited before review.
 - Runner terminal-event fix: intermediate `tool-calls` no longer terminate MiMo.
 - Review guard: zero-change coding tasks without tests receive `needs_attention`.
-- Normal regression: 223/223 passing, excluding the tracked hanging Runner integration test.
+- P4.6 low-token waiting over STDIO and shared HTTP MCP.
+- Normal regression: 228/228 passing, excluding the tracked hanging Runner integration test.
 
 ## Current Runtime
 
 - UI: `http://127.0.0.1:3210/`
 - MCP: `http://127.0.0.1:3210/mcp`
 - Current health: daemon `ok`, MCP `ready`, MiMo configured, queue empty.
-- P4.6 `mimo_wait_task` is implemented and directed tests pass, but it is not committed or deployed yet.
+- HTTP MCP exposes 11 tools including deployed `mimo_wait_task`.
 
 ## Next Goal
 
-Deploy P4.6 low-token waiting, finish the P5.2 Windows one-click launcher, then build the P5.3 Windows 10 x64 portable/installable distribution.
+Finish the P5.2 Windows one-click launcher, then build the P5.3 Windows 10 x64 portable/installable distribution.

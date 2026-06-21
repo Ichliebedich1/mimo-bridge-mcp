@@ -6,7 +6,7 @@ Run MiMo through a Windows PTY and turn JSON events into task completion data.
 
 ## Current Status
 
-Implemented. Intermediate `step_finish(reason="tool-calls")` events now continue execution; terminal steps such as `stop` complete the task. This latest fix is not committed.
+Implemented and committed. Intermediate `step_finish(reason="tool-calls")` events now continue execution; terminal steps such as `stop` complete the task.
 
 ## Entry Files
 

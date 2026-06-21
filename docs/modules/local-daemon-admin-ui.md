@@ -32,7 +32,7 @@ P5.2 must manage this daemon's lifecycle and open this UI. It must not introduce
 
 ## Pending Work
 
-One-click launcher, real token events, and deployment of `mimo_wait_task`.
+One-click launcher and real token events.
 
 ## Test Method
 

@@ -10,7 +10,7 @@ Expose `mimo_wait_task(task_id, timeout_seconds, detail_level, max_chars)` over 
 
 ## Current Status
 
-Implemented in the working tree, not committed or deployed. Root and daemon builds pass; directed tests are 9/9.
+Implemented, committed in `522e7a7`, and deployed to the shared daemon. Root and daemon builds pass; normal regression is 228/228, excluding the tracked hanging Runner integration test.
 
 ## Entry Files
 
@@ -42,10 +42,7 @@ Codex must call this after `mimo_start_task` or `mimo_reply_task` instead of rep
 
 ## Required Changes
 
-1. Run normal regression.
-2. Commit P4.6.
-3. Rebuild/restart the shared daemon.
-4. Verify HTTP MCP lists 11 tools and exercise immediate, completed, and timeout behavior.
+No code changes remain for P4.6. Future callers must use this tool after start/reply instead of polling `mimo_get_task`.
 
 ## Implementation Approach
 
@@ -53,7 +50,7 @@ The daemon polls local persisted task state internally at one-second intervals. 
 
 ## Pending Work
 
-Deployment and real HTTP MCP smoke.
+Monitor real task usage while implementing P5.2; retain bounded responses and exponential backoff after a timeout.
 
 ## Test Method
 
@@ -63,4 +60,4 @@ cd apps/local-daemon; npm.cmd run build; cd ../..
 node --test tests/wait-task.test.mjs tests/stdio-protocol.test.mjs
 ```
 
-Then run the normal regression excluding `tests/runner-integration.test.mjs`.
+HTTP smoke verified 11 tools, immediate terminal-task return, and the minimal timeout response.

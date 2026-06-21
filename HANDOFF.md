@@ -9,21 +9,20 @@
 
 - 当前范围：P4 写任务队列修复、共享 HTTP MCP 和 Codex 审查交接。
 - 目标：管理界面、Codex 和 MiMo 使用同一个守护进程，同时保留 Codex 直接执行复杂任务的能力。
-- 已完成：本地管理界面、共享守护进程、10 个 MCP 工具、Review-first 工作台、“交给 Codex 审查”入口和安全任务删除。
+- 已完成：本地管理界面、共享守护进程、11 个 MCP 工具、Review-first 工作台、“交给 Codex 审查”入口、安全任务删除和低 Token 等待。
 - 协作方式：界面按钮复制带任务 ID 的低上下文审查指令并打开 Codex 新会话；Codex 重启后通过共享 HTTP MCP 查询和调度任务。
 - 代码阻塞：无；P4 已绑定真实 Runner 完成、失败或取消回调，写任务会实际串行。
 - 最新修复：Runner 不再把 `step_finish(reason="tool-calls")` 当作任务完成；零修改且未报告测试的编码任务不再建议 `approve`。
-- 当前运行：`127.0.0.1:3210` health 为 `ok`、MCP 为 `ready`、队列为空；跨 Codex 会话持续驻留仍需验证。
-- 建议下一步：重连 Codex MCP，并完成一次 UI -> MiMo -> Review Package -> Codex -> merge 的监督式端到端流程。
+- 当前运行：`127.0.0.1:3210` health 为 `ok`、MCP 为 `ready`、MiMo 已配置、队列为空。
+- 建议下一步：使用 `mimo_wait_task` 协作开发 P5.2 Windows 一键启动器。
 
 ---
 
 ## 一、当前 Git 状态
 
 - 分支：`master`
-- 当前工作区：包含 2026-06-21 Runner/review 修复和交接文档更新，尚未提交
-- 当前 HEAD：`748a994 Document post-P4 handoff state`
-- 最新已提交代码：`8a58d84 Fix P4 write task serialization`
+- P4.6 功能提交：`522e7a7 Add low-token task waiting`
+- 当前工作区：仅包含本次验收后的交接文档同步
 
 | 提交 | 内容 |
 |------|------|
@@ -98,7 +97,7 @@
 
 ---
 
-## 四、MCP 工具列表（当前部署 10 个，P4.6 待部署后 11 个）
+## 四、MCP 工具列表（当前部署 11 个）
 
 | 工具 | 说明 | P4 新增 |
 |------|------|---------|
@@ -112,7 +111,7 @@
 | `mimo_queue_status` | 查询队列状态 | ✅ |
 | `mimo_token_status` | 查询或重置 Token 预算 | P4.5 |
 | `mimo_delete_task` | 永久删除已结束且没有 Worktree 的任务 | P5.1 |
-| `mimo_wait_task` | daemon 内单次等待任务完成或超时，返回受限摘要 | P4.6，工作区已实现但未部署 |
+| `mimo_wait_task` | daemon 内单次等待任务完成或超时，返回受限摘要 | P4.6，已部署 |
 
 ---
 
@@ -261,12 +260,12 @@ node --test $tests
 - `127.0.0.1:3210` health `ok`，MCP `ready`，MiMo configured，队列为空。
 - 两个旧任务已删除；实时查看任务 `task_273ff90e443e` 已 accepted，暂留作界面示例。
 
-### 13.2 尚未提交的 P4.6
+### 13.2 已完成的 P4.6
 
-- 工作区新增 `mimo_wait_task`，目标是一次等待代替每分钟轮询。
+- `mimo_wait_task` 用一次 daemon 内等待代替每分钟轮询，提交为 `522e7a7`。
 - 变更文件：`src/tools/wait-task.ts`、`src/index.ts`、`apps/local-daemon/src/tool-context.ts`、`apps/local-daemon/src/mcp.ts`、`tests/wait-task.test.mjs`、`tests/stdio-protocol.test.mjs`。
-- 根和 daemon 构建通过；定向测试 9/9。
-- 尚未运行本轮正常回归、尚未提交、尚未重启 daemon，因此当前运行实例还没有正式验收 11 工具表面。
+- 根和 daemon 构建通过；正常回归 228/228（排除已知挂起测试）。
+- daemon 已重启；HTTP MCP 验证 11 个工具、已结束任务立即返回、运行中任务超时仅返回最小摘要。
 
 ### 13.3 压缩后读取顺序
 
@@ -276,7 +275,7 @@ node --test $tests
 4. `docs/modules/windows-launcher-portability.md`
 5. `docs/OPEN_TASKS.md`
 
-下一步：先完成 P4.6 回归、提交、重启和 HTTP MCP smoke；然后再下发启动器任务。默认不要重读全仓。
+下一步：使用 P4.6 的单次等待机制下发并审查启动器任务。默认不要重读全仓。
 
 ---
 
