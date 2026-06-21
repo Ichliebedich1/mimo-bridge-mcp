@@ -10,11 +10,18 @@ if (-not $nodePath) {
 }
 
 $entryPath = Join-Path $repoRoot "apps\local-daemon\dist\apps\local-daemon\src\index.js"
+$launcherPath = Join-Path $repoRoot "apps\local-daemon\dist\apps\local-daemon\src\launcher-cli.js"
 
 if (-not (Test-Path -LiteralPath $entryPath)) {
   Write-Error "Build artifact not found: $entryPath. Run start-local.ps1 to build first."
   exit 1
 }
 
+if (-not (Test-Path -LiteralPath $launcherPath)) {
+  Write-Error "Launcher artifact not found: $launcherPath. Run start-local.ps1 to build first."
+  exit 1
+}
+
 Write-Host "Starting MiMo Bridge Local Daemon..."
-& $nodePath "$entryPath"
+& $nodePath "$launcherPath" start --open
+exit $LASTEXITCODE

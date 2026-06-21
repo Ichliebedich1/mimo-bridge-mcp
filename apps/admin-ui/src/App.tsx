@@ -21,7 +21,6 @@ import {
   type HealthResponse,
   type QueueStatusResponse,
 } from './api';
-import { mockQueue, mockTasks } from './mockData';
 import { CODEX_NEW_THREAD_URL, copyCodexReviewPrompt } from './codex-handoff.mjs';
 import type {
   ChangedFile,
@@ -91,12 +90,12 @@ const testLabels: Record<Task['testResult'], string> = {
 
 function App() {
   const [page, setPage] = useState<Page>('overview');
-  const [selectedTaskId, setSelectedTaskId] = useState<string>(mockTasks[0]?.id ?? '');
+  const [selectedTaskId, setSelectedTaskId] = useState<string>('');
   const [statusFilter, setStatusFilter] = useState<'all' | TaskStatus>('all');
   const [lastRefresh, setLastRefresh] = useState('刚刚');
   const [confirmAction, setConfirmAction] = useState<ConfirmAction | null>(null);
-  const [tasks, setTasks] = useState<Task[]>(mockTasks);
-  const [queueItems, setQueueItems] = useState<QueueItem[]>(mockQueue);
+  const [tasks, setTasks] = useState<Task[]>([]);
+  const [queueItems, setQueueItems] = useState<QueueItem[]>([]);
   const [health, setHealth] = useState<HealthResponse | null>(null);
   const [apiError, setApiError] = useState<string | null>(null);
   const [tokenStatus, setTokenStatus] = useState<unknown>(null);
@@ -129,8 +128,9 @@ function App() {
       setSelectedTaskId((current) => (nextTasks.length > 0 && !nextTasks.some((task) => task.id === current) ? nextTasks[0].id : current));
     } catch (error) {
       setHealth(null);
-      setTasks(mockTasks);
-      setQueueItems(mockQueue);
+      setTasks([]);
+      setQueueItems([]);
+      setSelectedTaskId('');
       setApiError(error instanceof Error ? error.message : String(error));
       setLastRefresh(formatClock());
     } finally {

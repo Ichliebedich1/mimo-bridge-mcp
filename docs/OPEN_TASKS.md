@@ -2,8 +2,7 @@
 
 ## Pending
 
-- Implement the Windows 10 x64 one-click launcher with start/stop/restart/open/log/status controls.
-- Add first-run configuration, desktop shortcut, and opt-in logon startup.
+- Run clean-machine/manual validation for the Windows 10 x64 one-click launcher: shortcut, opt-in logon startup, reboot/logon, no system Node, and clear first-run errors.
 - Build portable ZIP and installer; bundle Node, never MiMo credentials/tasks/Worktrees.
 - Audit active Worktree cancellation cleanup.
 - Connect `TokenBudgetManager` to real MiMo token events.
@@ -11,6 +10,7 @@
 ## Completed
 
 - Persistent config and build-free `start-production.ps1`.
+- Windows launcher lifecycle controller and CLI: start/stop/restart/open/log/status, duplicate-instance guard, port-conflict report, first-run config wizard, desktop shortcut command, and opt-in autostart command.
 - Follow-up MiMo rounds stay inside their task Worktree and are re-audited.
 - Read-only live-run viewer with bounded JSONL tail parsing and no stdin/control surface.
 - Real Codex -> MCP -> MiMo -> review -> merge collaboration workflow.

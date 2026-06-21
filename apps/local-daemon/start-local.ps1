@@ -20,5 +20,6 @@ if (-not $nodePath) {
 }
 
 Write-Host "Starting MiMo Bridge Local Daemon..."
-$entryPath = Join-Path $repoRoot "apps\local-daemon\dist\apps\local-daemon\src\index.js"
-& $nodePath "$entryPath"
+$launcherPath = Join-Path $repoRoot "apps\local-daemon\dist\apps\local-daemon\src\launcher-cli.js"
+& $nodePath "$launcherPath" start --open
+exit $LASTEXITCODE

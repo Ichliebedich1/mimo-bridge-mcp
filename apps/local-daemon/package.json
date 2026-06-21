@@ -6,7 +6,9 @@
   "description": "Localhost-only daemon that shares MiMo MCP tool state with the admin UI.",
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "start": "node dist/apps/local-daemon/src/index.js",
-    "dev": "npm.cmd run build && node dist/apps/local-daemon/src/index.js"
+    "start": "node dist/apps/local-daemon/src/launcher-cli.js start",
+    "start:daemon": "node dist/apps/local-daemon/src/index.js",
+    "launcher": "node dist/apps/local-daemon/src/launcher-cli.js",
+    "dev": "npm.cmd run build && node dist/apps/local-daemon/src/launcher-cli.js start --open"
   }
 }
