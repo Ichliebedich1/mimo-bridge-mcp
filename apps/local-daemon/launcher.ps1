@@ -17,7 +17,7 @@ $repoRoot = Resolve-Path -LiteralPath (Join-Path $PSScriptRoot "..\..")
 $cliPath = Join-Path $repoRoot "apps\local-daemon\dist\apps\local-daemon\src\launcher-cli.js"
 
 if (-not (Test-Path -LiteralPath $cliPath)) {
-  Write-Error "找不到 launcher 构建产物: $cliPath。请先运行 apps\local-daemon\start-local.ps1 完成构建。"
+  Write-Error "Launcher artifact not found: $cliPath. Run apps\local-daemon\start-local.ps1 first."
   exit 1
 }
 

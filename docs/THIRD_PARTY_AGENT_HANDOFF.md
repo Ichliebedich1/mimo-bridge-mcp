@@ -2,41 +2,42 @@
 
 **Date:** 2026-06-21  
 **Repository:** `C:\Users\86172\Desktop\MiMo Code project\Agent 协作项目\mimo-bridge-mcp`  
-**Current module:** P5.2 Windows one-click launcher  
+**Current module:** P5.2 launcher validation / P5.3 packaging prep
 **Target:** Windows 10 x64 only
 
 ## 1. Read This First
 
-The MiMo Bridge core is already usable. Do not rebuild the project architecture or create another backend. The next job is to finish P5.2: provide a Windows one-click launcher and first-run setup around the existing Node daemon and React admin UI.
+The MiMo Bridge core is already usable. Do not rebuild the project architecture or create another backend. P5.2 launcher code now exists; the next job is clean-machine validation, then P5.3 packaging.
 
 P4.6 low-token waiting was completed immediately before this handoff. Its code is committed and deployed. The current uncommitted changes are documentation updates only and must not be discarded.
 
 ## 2. Exact Current State
 
 - Git branch: `master`.
-- Current code HEAD: `522e7a7 Add low-token task waiting`.
-- P4.6 code is committed; post-deployment documentation is not committed yet.
+- Current code HEAD includes the Windows launcher lifecycle controls.
+- Current uncommitted changes are small launcher smoke fixes and documentation updates.
 - Running UI: `http://127.0.0.1:3210/`.
 - Running MCP: `http://127.0.0.1:3210/mcp`.
 - Last verified health: daemon `ok`, MCP `ready`, MiMo `configured`, queue empty.
 - HTTP MCP exposes 11 tools, including `mimo_wait_task`.
-- Normal regression: `228/228` passed, excluding the known hanging `tests/runner-integration.test.mjs`.
+- Normal regression: `242/242` passed, excluding the known hanging `tests/runner-integration.test.mjs`.
+- Launcher focused regression: `11/11` passed.
 - Root and local-daemon TypeScript builds pass.
-- P5.2 launcher UI and first-run wizard have not been implemented.
+- P5.2 launcher lifecycle commands, first-run wizard, shortcut command, and opt-in autostart command are implemented.
 - P5.3 portable ZIP and installer have not been implemented.
 
-Current uncommitted files are documentation only:
+Current uncommitted files include launcher smoke fixes and documentation updates:
 
-- `HANDOFF.md`
+- `apps/local-daemon/launcher.ps1`
+- `apps/local-daemon/src/launcher-controller.ts`
+- `tests/launcher-controller.test.mjs`
 - `docs/HANDOVER_STATUS.md`
 - `docs/OPEN_TASKS.md`
 - `docs/PROJECT_BRIEF.md`
-- `docs/modules/local-daemon-admin-ui.md`
-- `docs/modules/low-token-wait.md`
-- `docs/modules/runner-parser.md`
+- `docs/modules/windows-launcher-portability.md`
 - `docs/THIRD_PARTY_AGENT_HANDOFF.md` (this file)
 
-Do not reset, checkout, overwrite, or delete these changes. Review and preserve them. The safest first Git action is to commit this documentation state before writing launcher code.
+Do not reset, checkout, overwrite, or delete these changes. Review and preserve them.
 
 ## 3. User Decisions That Must Not Change
 
@@ -63,7 +64,7 @@ Do not reset, checkout, overwrite, or delete these changes. Review and preserve 
 | P5 | Shared HTTP MCP, local daemon, React admin UI, Codex handoff | Complete |
 | P5.1 | Safe permanent deletion of terminal tasks | Complete |
 | P5.2 stage 1 | Persisted daemon config and build-free production start | Complete |
-| P5.2 stage 2 | One-click launcher, setup wizard, shortcuts, optional autostart | **Current work; not started** |
+| P5.2 stage 2 | One-click launcher, setup wizard, shortcuts, optional autostart | Implemented; clean-machine validation pending |
 | P5.3 | Windows 10 x64 portable ZIP and installer | Pending after P5.2 |
 
 ## 5. Existing Architecture
@@ -137,7 +138,7 @@ Implementation order:
 5. Desktop shortcut and opt-in logon Scheduled Task.
 6. Automated tests and a real local smoke test.
 
-Do not begin P5.3 packaging until P5.2 lifecycle and first-run behavior pass locally.
+Do not begin P5.3 packaging until P5.2 lifecycle and first-run behavior pass on a clean Windows 10 x64 machine.
 
 ## 8. P5.2 Acceptance Criteria
 
@@ -236,7 +237,7 @@ $tests = Get-ChildItem -LiteralPath 'tests' -Filter '*.test.mjs' |
 node --test $tests
 ```
 
-Expected current result: `228/228` pass. Windows may print `node-pty AttachConsole failed` and `TimeoutNaNWarning`; these are tracked test noise when the final process exits with code 0 and all tests pass.
+Expected current result: `242/242` pass. Windows may print `node-pty AttachConsole failed` and `TimeoutNaNWarning`; these are tracked test noise when the final process exits with code 0 and all tests pass.
 
 Do not silently add `tests/runner-integration.test.mjs` to the normal suite. It is known to hang and requires a separate repair task.
 
@@ -309,12 +310,12 @@ Only the last case counts toward the user's consecutive-failure rule unless evid
 
 1. Read the seven files listed in section 10; do not scan the full repository first.
 2. Run `git status --short` and confirm only documentation is dirty.
-3. Review and commit the pending handoff documentation without changing code.
+3. Review and commit the pending launcher smoke fixes and documentation updates.
 4. Confirm `/api/health` and verify the MCP exposes 11 tools.
-5. Read the existing P5.2 configuration/start scripts and launcher design document.
-6. Implement only P5.2 lifecycle controller stage 2, with focused tests.
-7. Build root, daemon, and UI as affected; run focused tests, then the normal regression.
-8. Report changed files, test counts, risks, and the exact next stage. Do not begin P5.3 implicitly.
+5. Validate the launcher by real double-click or interactive console on a clean Windows 10 x64 machine.
+6. Verify reboot/logon behavior, no-system-Node behavior, port conflict handling, first-run errors, shortcut, and opt-in autostart.
+7. Only then start P5.3 portable ZIP and installer packaging.
+8. Report changed files, test counts, risks, and the exact next stage.
 
 ## 17. Required Handoff Report Format
 

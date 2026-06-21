@@ -144,6 +144,7 @@ interface ResolvedDependencies {
   isPortOpen: (port: number, timeoutMs?: number) => Promise<boolean>;
   getPortProcessInfo: (port: number) => Promise<ProcessInfo | null>;
   spawnDaemon: (nodePath: string, args: string[], options: SpawnOptions) => SpawnedDaemon;
+  usesCustomSpawnDaemon: boolean;
   isProcessAlive: (pid: number) => boolean;
   killProcess: (pid: number) => boolean;
   readProcessCommandLine: (pid: number) => Promise<string | null>;
@@ -208,27 +209,35 @@ export class LauncherController {
     }
 
     const nodePath = resolveNodePath(this.deps.env);
-    const stdoutFd = openSync(paths.stdoutLogPath, "a");
-    const stderrFd = openSync(paths.stderrLogPath, "a");
     let child: SpawnedDaemon;
-    try {
-      child = this.deps.spawnDaemon(nodePath, [paths.daemonEntryPath], {
-        cwd: paths.repoRoot,
-        detached: true,
-        stdio: ["ignore", stdoutFd, stderrFd],
-        env: {
-          ...this.deps.env,
-          MIMO_BRIDGE_LAUNCHED_BY: STATE_OWNER,
-        },
-        windowsHide: true,
-      });
-    } catch (error) {
-      closeSync(stdoutFd);
-      closeSync(stderrFd);
-      return failResult("spawn_failed", "启动 daemon 进程失败：" + stringifyError(error));
+    if (process.platform === "win32" && !this.deps.usesCustomSpawnDaemon) {
+      const launched = startDaemonWithPowerShell(paths, nodePath, this.deps.runPowerShell);
+      if (!launched.ok) {
+        return failResult("spawn_failed", "启动 daemon 进程失败：" + launched.error, launched.details);
+      }
+      child = { pid: launched.pid, unref: () => undefined };
+    } else {
+      const stdoutFd = openSync(paths.stdoutLogPath, "a");
+      const stderrFd = openSync(paths.stderrLogPath, "a");
+      try {
+        child = this.deps.spawnDaemon(nodePath, [paths.daemonEntryPath], {
+          cwd: paths.repoRoot,
+          detached: true,
+          stdio: ["ignore", stdoutFd, stderrFd],
+          env: {
+            ...this.deps.env,
+            MIMO_BRIDGE_LAUNCHED_BY: STATE_OWNER,
+          },
+          windowsHide: true,
+        });
+      } catch (error) {
+        closeIfNotStandardStream(stdoutFd);
+        closeIfNotStandardStream(stderrFd);
+        return failResult("spawn_failed", "启动 daemon 进程失败：" + stringifyError(error));
+      }
+      closeIfNotStandardStream(stdoutFd);
+      closeIfNotStandardStream(stderrFd);
     }
-    closeSync(stdoutFd);
-    closeSync(stderrFd);
 
     if (!child.pid || child.pid <= 0) {
       return failResult("spawn_failed", "启动 daemon 后没有拿到有效 PID。");
@@ -636,6 +645,7 @@ function resolveDependencies(deps: LauncherDependencies): ResolvedDependencies {
     isPortOpen: deps.isPortOpen ?? defaultIsPortOpen,
     getPortProcessInfo: deps.getPortProcessInfo ?? ((port) => defaultGetPortProcessInfo(port, runPowerShell)),
     spawnDaemon: deps.spawnDaemon ?? defaultSpawnDaemon,
+    usesCustomSpawnDaemon: Boolean(deps.spawnDaemon),
     isProcessAlive: deps.isProcessAlive ?? defaultIsProcessAlive,
     killProcess: deps.killProcess ?? defaultKillProcess,
     readProcessCommandLine: deps.readProcessCommandLine ?? ((pid) => defaultReadProcessCommandLine(pid, runPowerShell)),
@@ -691,6 +701,25 @@ function defaultSpawnDaemon(nodePath: string, args: string[], options: SpawnOpti
   };
 }
 
+function startDaemonWithPowerShell(paths: LauncherPaths, nodePath: string, runPowerShell: (script: string, timeoutMs?: number) => CommandResult): { ok: true; pid: number } | { ok: false; error: string; details?: unknown } {
+  const script =
+    "$env:MIMO_BRIDGE_LAUNCHED_BY = " + psQuote(STATE_OWNER) + "\n" +
+    "$nodePath = " + psQuote(nodePath) + "\n" +
+    "$entryPath = " + psQuote(paths.daemonEntryPath) + "\n" +
+    "$entryArg = '\"' + $entryPath + '\"'\n" +
+    "$repoRoot = " + psQuote(paths.repoRoot) + "\n" +
+    "$stdoutPath = " + psQuote(paths.stdoutLogPath) + "\n" +
+    "$stderrPath = " + psQuote(paths.stderrLogPath) + "\n" +
+    "$process = Start-Process -FilePath $nodePath -ArgumentList $entryArg -WorkingDirectory $repoRoot -RedirectStandardOutput $stdoutPath -RedirectStandardError $stderrPath -WindowStyle Hidden -PassThru\n" +
+    "$process.Id\n";
+  const result = runPowerShell(script, 20_000);
+  const pid = Number(result.stdout.trim());
+  if (result.status !== 0 || !Number.isInteger(pid) || pid <= 0) {
+    return { ok: false, error: result.stderr || result.error || "无法取得 daemon PID。", details: result };
+  }
+  return { ok: true, pid };
+}
+
 function defaultIsProcessAlive(pid: number): boolean {
   try {
     process.kill(pid, 0);
@@ -701,11 +730,26 @@ function defaultIsProcessAlive(pid: number): boolean {
 }
 
 function defaultKillProcess(pid: number): boolean {
+  if (process.platform === "win32") {
+    const result = spawnSync("powershell.exe", [
+      "-NoProfile",
+      "-Command",
+      "Stop-Process -Id " + String(pid) + " -Force -ErrorAction Stop",
+    ], { encoding: "utf-8", windowsHide: true });
+    return result.status === 0;
+  }
+
   try {
     process.kill(pid, "SIGTERM");
     return true;
   } catch {
     return false;
+  }
+}
+
+function closeIfNotStandardStream(fd: number): void {
+  if (fd > 2) {
+    closeSync(fd);
   }
 }
 

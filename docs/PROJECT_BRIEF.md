@@ -15,13 +15,13 @@ Let Codex plan, constrain, review, and accept work while MiMo executes bounded c
 ## Current Completed Work
 
 - P0-P5.1 task lifecycle, PTY Runner, Worktree isolation, write queue, low-context review, shared HTTP MCP, admin UI, Codex handoff, and safe task deletion.
-- P5.2 stage 1 persisted configuration and build-free production start.
+- P5.2 persisted configuration, build-free production start, launcher lifecycle commands, first-run configuration, desktop shortcut command, and opt-in autostart command.
 - Read-only live-run viewer with bounded event summaries.
 - Follow-up rounds stay in the saved Worktree and are re-audited before review.
 - Runner terminal-event fix: intermediate `tool-calls` no longer terminate MiMo.
 - Review guard: zero-change coding tasks without tests receive `needs_attention`.
 - P4.6 low-token waiting over STDIO and shared HTTP MCP.
-- Normal regression: 228/228 passing, excluding the tracked hanging Runner integration test.
+- Normal regression: 242/242 passing, excluding the tracked hanging Runner integration test.
 
 ## Current Runtime
 
@@ -32,4 +32,4 @@ Let Codex plan, constrain, review, and accept work while MiMo executes bounded c
 
 ## Next Goal
 
-Finish the P5.2 Windows one-click launcher, then build the P5.3 Windows 10 x64 portable/installable distribution.
+Validate the P5.2 launcher on a clean Windows 10 x64 machine, then build the P5.3 Windows 10 x64 portable/installable distribution.

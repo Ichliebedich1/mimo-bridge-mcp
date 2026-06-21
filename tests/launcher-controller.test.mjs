@@ -106,6 +106,37 @@ describe("launcher-controller", () => {
     assert.strictEqual(state.daemonEntryPath, paths.daemonEntryPath);
   });
 
+  it("starts through PowerShell with a quoted daemon path on Windows", async () => {
+    if (process.platform !== "win32") {
+      return;
+    }
+    const paths = makePaths("start-powershell path with spaces");
+    const health = [healthDown(3210), healthOk(3210)];
+    let scriptText = "";
+    const controller = new LauncherController({
+      paths,
+      dependencies: {
+        sleep: async () => undefined,
+        fetchHealth: async () => health.shift() ?? healthOk(3210),
+        isPortOpen: async () => false,
+        runPowerShell: (script) => {
+          scriptText = script;
+          return { status: 0, stdout: "24680\n", stderr: "" };
+        },
+      },
+    });
+
+    const result = await controller.start();
+    const state = readState(paths.statePath);
+
+    assert.strictEqual(result.ok, true);
+    assert.strictEqual(result.status, "started");
+    assert.ok(scriptText.includes("Start-Process"));
+    assert.ok(scriptText.includes("$entryArg = '\"' + $entryPath + '\"'"));
+    assert.ok(state);
+    assert.strictEqual(state.pid, 24680);
+  });
+
   it("refuses to stop a healthy daemon without launcher ownership state", async () => {
     const paths = makePaths("no-state");
     let killCalls = 0;
