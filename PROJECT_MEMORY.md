@@ -45,10 +45,11 @@ This file is the project-local long-term memory. Update it after each meaningful
 4. Use npm.cmd run package:portable for the portable package.
 5. Use npm.cmd run package:installer for the EXE installer.
 6. Use npm.cmd run validate:release for automated local release validation, or npm.cmd run validate:release -- -SkipPackageBuild after artifacts already exist.
-7. Run focused tests before broad regression:
+7. Use docs/RELEASE_VALIDATION.md for clean Windows 10/11 x64 manual validation.
+8. Run focused tests before broad regression:
    - node --test tests/installer-package.test.mjs
    - node --test tests/launcher-controller.test.mjs
-8. Normal regression must continue excluding tests/runner-integration.test.mjs.
+9. Normal regression must continue excluding tests/runner-integration.test.mjs.
 
 ## Latest Notes
 

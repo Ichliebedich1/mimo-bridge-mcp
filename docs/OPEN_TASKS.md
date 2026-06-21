@@ -2,7 +2,7 @@
 
 ## Pending
 
-- Run clean-machine/manual validation for the Windows 10/11 x64 launcher and installer: reboot/logon, no system Node, port conflict, first-run errors, and real user double-click flow.
+- Run docs/RELEASE_VALIDATION.md on clean Windows 10/11 x64 machines: reboot/logon, no system Node, port conflict, first-run errors, and real user double-click flow.
 
 - Audit active Worktree cancellation cleanup.
 - Connect `TokenBudgetManager` to real MiMo token events.

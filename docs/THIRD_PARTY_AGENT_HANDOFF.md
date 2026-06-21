@@ -310,10 +310,10 @@ Only the last case counts toward the user's consecutive-failure rule unless evid
 1. Read the seven files listed in section 10; do not scan the full repository first.
 2. Run `git status --short` and confirm the worktree is clean before starting.
 3. Regenerate the portable package with `npm.cmd run package:portable` if the source changed.
-4. Confirm `/api/health` and verify the MCP exposes 11 tools.
-5. Validate the launcher and installer by real double-click or interactive console on clean Windows 10/11 x64 machines.
-6. Verify reboot/logon behavior, no-system-Node behavior, port conflict handling, first-run errors, shortcut, and opt-in autostart.
-7. Only then start Windows installer packaging.
+4. Run `npm.cmd run validate:release` before copying artifacts to a clean machine.
+5. Confirm `/api/health` and verify the MCP exposes 11 tools on the target machine.
+6. Validate the launcher and installer by real double-click or interactive console on clean Windows 10/11 x64 machines using `docs/RELEASE_VALIDATION.md`.
+7. Verify reboot/logon behavior, no-system-Node behavior, port conflict handling, first-run errors, shortcut, opt-in autostart, and uninstall.
 8. Report changed files, test counts, risks, and the exact next stage.
 
 ## 17. Required Handoff Report Format
