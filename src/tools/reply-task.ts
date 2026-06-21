@@ -1,7 +1,7 @@
 import { z } from "zod";
 import type { Config } from "../config.js";
 import type { TaskStore } from "../services/task-store.js";
-import type { TaskResult } from "../types.js";
+import type { TaskConfig, TaskResult, TaskState, WorktreeState } from "../types.js";
 import { validateSessionId } from "../services/path-guard.js";
 import { writeReplyBrief } from "../services/prompt-builder.js";
 import { runMimoTask } from "../services/mimo-runner.js";
@@ -14,6 +14,48 @@ export interface ReplyTaskDependencies {
   runTask?: typeof runMimoTask;
   runningTasks?: RunningTaskRegistry;
   taskQueue?: TaskQueue;
+}
+
+interface ReplyExecutionContext {
+  taskConfig: TaskConfig;
+  worktreeState: WorktreeState | null;
+  gitManager: GitWorktreeManager | null;
+}
+
+function resolveReplyExecutionContext(taskId: string, task: TaskState): ReplyExecutionContext {
+  const worktreeState = task.worktree;
+  if (!worktreeState) {
+    return {
+      taskConfig: task.config,
+      worktreeState: null,
+      gitManager: null,
+    };
+  }
+
+  const gitManager = GitWorktreeManager.fromWorktreeState(worktreeState);
+  gitManager.assertWorktreeState(taskId, worktreeState);
+
+  return {
+    taskConfig: { ...task.config, workspace_path: worktreeState.worktree_path },
+    worktreeState,
+    gitManager,
+  };
+}
+
+function buildBlockedWorktreeReplyError(error: unknown): string {
+  const detail = error instanceof Error ? error.message : String(error);
+  return `Invalid Worktree state; blocked follow-up reply before spawning MiMo: ${detail}`;
+}
+
+function markMainRepoMutationDuringReply(result: TaskResult): TaskResult {
+  const warning =
+    "Original repository status changed while a Worktree follow-up was running; blocking review because MiMo may have edited the main repository.";
+  return {
+    ...result,
+    status: "failed",
+    error: result.error ? `${result.error}; ${warning}` : warning,
+    issues: [...result.issues, warning],
+  };
 }
 
 export const ReplyTaskSchema = z.object({
@@ -37,19 +79,28 @@ export function createReplyTaskHandler(
     const task = taskStore.getTask(taskId);
     if (!task) return Promise.resolve();
 
-    let worktreeState = task.worktree;
-    let taskConfig = task.config;
+    let executionContext: ReplyExecutionContext;
     try {
-      if (worktreeState) {
-        const gitManager = GitWorktreeManager.fromWorktreeState(worktreeState);
-        gitManager.assertWorktreeState(taskId, worktreeState);
-        taskConfig = { ...task.config, workspace_path: worktreeState.worktree_path };
-      }
+      executionContext = resolveReplyExecutionContext(taskId, task);
     } catch (err) {
-      const error = err instanceof Error ? err.message : String(err);
+      const error = buildBlockedWorktreeReplyError(err);
       taskStore.updateTaskStatus(taskId, "failed", error);
       refreshReviewPackage(taskStore, taskId);
       return Promise.resolve();
+    }
+
+    const { taskConfig, gitManager } = executionContext;
+    let worktreeState = executionContext.worktreeState;
+    let originalRepoStatusBefore: string | null = null;
+    if (gitManager) {
+      try {
+        originalRepoStatusBefore = gitManager.getRepoStatusSnapshot();
+      } catch (err) {
+        const error = buildBlockedWorktreeReplyError(err);
+        taskStore.updateTaskStatus(taskId, "failed", error);
+        refreshReviewPackage(taskStore, taskId);
+        return Promise.resolve();
+      }
     }
 
     return new Promise((resolve) => {
@@ -63,16 +114,23 @@ export function createReplyTaskHandler(
       const complete = (result: TaskResult) => {
         if (settled) return;
         try {
-          if (result.session_id) {
-            taskStore.updateTaskSession(taskId, result.session_id);
+          let resultToStore = result;
+          if (gitManager && originalRepoStatusBefore !== null) {
+            const originalRepoStatusAfter = gitManager.getRepoStatusSnapshot();
+            if (originalRepoStatusAfter !== originalRepoStatusBefore) {
+              resultToStore = markMainRepoMutationDuringReply(result);
+            }
           }
-          taskStore.updateTaskResult(taskId, result);
-          taskStore.updateTaskStatus(taskId, result.status);
+          if (resultToStore.session_id) {
+            taskStore.updateTaskSession(taskId, resultToStore.session_id);
+          }
+          taskStore.updateTaskResult(taskId, resultToStore);
+          taskStore.updateTaskStatus(taskId, resultToStore.status);
 
           if (worktreeState) {
             try {
-              const gitManager = GitWorktreeManager.fromWorktreeState(worktreeState);
-              const summary = gitManager.getDiffSummaryForState(
+              const worktreeGitManager = GitWorktreeManager.fromWorktreeState(worktreeState);
+              const summary = worktreeGitManager.getDiffSummaryForState(
                 taskId,
                 worktreeState,
                 task.config.editable_paths
@@ -151,6 +209,12 @@ export function createReplyTaskHandler(
 
       if (task.current_round > task.config.max_rounds) {
         return { error: `已达到最大沟通轮数: ${task.config.max_rounds}` };
+      }
+
+      try {
+        resolveReplyExecutionContext(task.task_id, task);
+      } catch (err) {
+        return { error: buildBlockedWorktreeReplyError(err) };
       }
 
       if (taskQueue.hasQueued(task.task_id)) {

@@ -566,6 +566,14 @@ export class GitWorktreeManager {
     return output.length === 0;
   }
 
+  getRepoStatusSnapshot(): string {
+    return execFileSync("git", ["status", "--porcelain=v1", "-z"], {
+      cwd: this.repoPath,
+      encoding: "utf-8",
+      timeout: 5000,
+    });
+  }
+
   mergeWorktree(taskId: string, targetBranch: string, branchName: string = `task/${taskId}`): void {
     const worktreePath = resolve(this.worktreesDir, taskId);
 
