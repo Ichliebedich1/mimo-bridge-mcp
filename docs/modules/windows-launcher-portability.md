@@ -92,7 +92,7 @@ $tests = Get-ChildItem -LiteralPath 'tests' -Filter '*.test.mjs' | Where-Object 
 node --test $tests
 ```
 
-Expected current counts: launcher regression 11/11; normal regression 242/242.
+Expected current counts: launcher regression 12/12; normal regression 242/242.
 
 Portable package generation:
 
@@ -104,5 +104,7 @@ Generated outputs:
 
 - `artifacts/portable/MiMoBridge`
 - `artifacts/MiMoBridge-portable-win10-x64.zip`
+
+Latest generated ZIP manifest: `source_commit=f410e6f`; size is about 55.6 MB on this machine.
 
 The package root contains `MiMo Bridge Launcher.cmd`, `Start MiMo Bridge.cmd`, `Stop MiMo Bridge.cmd`, `Configure MiMo Bridge.cmd`, `README_PORTABLE.md`, `package-manifest.json`, `node/node.exe`, `app/`, and `data/`.

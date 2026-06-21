@@ -9,39 +9,24 @@
 
 The MiMo Bridge core is already usable. Do not rebuild the project architecture or create another backend. P5.2 launcher code exists, and P5.3 portable ZIP generation now exists. The next job is clean-machine validation and Windows installer packaging.
 
-P4.6 low-token waiting was completed immediately before this handoff. Its code is committed and deployed. The current uncommitted changes are documentation updates only and must not be discarded.
+P4.6 low-token waiting is committed and deployed. P5.2 launcher commands are committed. P5.3 portable ZIP generation is committed.
 
 ## 2. Exact Current State
 
 - Git branch: `master`.
-- Current code HEAD includes the Windows launcher lifecycle controls.
-- Current uncommitted changes are portable packaging code and documentation updates.
+- Current HEAD: `f410e6f feat: add Windows portable package`.
+- Current worktree is clean at handoff time.
 - Running UI: `http://127.0.0.1:3210/`.
 - Running MCP: `http://127.0.0.1:3210/mcp`.
 - Last verified health: daemon `ok`, MCP `ready`, MiMo `configured`, queue empty.
 - HTTP MCP exposes 11 tools, including `mimo_wait_task`.
 - Normal regression: `242/242` passed, excluding the known hanging `tests/runner-integration.test.mjs`.
-- Launcher focused regression: `11/11` passed.
+- Launcher focused regression: `12/12` passed.
 - Root and local-daemon TypeScript builds pass.
 - P5.2 launcher lifecycle commands, first-run wizard, shortcut command, and opt-in autostart command are implemented.
 - P5.3 portable ZIP generation is implemented; Windows installer is not implemented.
 
-Current uncommitted files include portable packaging and documentation updates:
-
-- `apps/local-daemon/src/launcher-controller.ts`
-- `.gitignore`
-- `package.json`
-- `scripts/build-portable.ps1`
-- `tests/launcher-controller.test.mjs`
-- `AGENTS.md`
-- `docs/HANDOVER_STATUS.md`
-- `docs/MODULE_MAP.md`
-- `docs/OPEN_TASKS.md`
-- `docs/PROJECT_BRIEF.md`
-- `docs/modules/windows-launcher-portability.md`
-- `docs/THIRD_PARTY_AGENT_HANDOFF.md` (this file)
-
-Do not reset, checkout, overwrite, or delete these changes. Review and preserve them.
+No source changes are pending. Generated portable artifacts are ignored under `artifacts/`.
 
 ## 3. User Decisions That Must Not Change
 
@@ -241,7 +226,7 @@ $tests = Get-ChildItem -LiteralPath 'tests' -Filter '*.test.mjs' |
 node --test $tests
 ```
 
-Expected current result: `242/242` pass. Windows may print `node-pty AttachConsole failed` and `TimeoutNaNWarning`; these are tracked test noise when the final process exits with code 0 and all tests pass.
+Expected current result: `242/242` pass. Windows may print `node-pty AttachConsole failed` and `TimeoutNaNWarning`; these are tracked test noise when the final process exits with code 0 and all tests pass. Launcher focused regression is `12/12`.
 
 Portable package command:
 
@@ -250,6 +235,8 @@ npm.cmd run package:portable
 ```
 
 Generated outputs are ignored by Git under `artifacts/`.
+
+Latest generated ZIP: `artifacts/MiMoBridge-portable-win10-x64.zip`; manifest `source_commit=f410e6f`; size about 55.6 MB on this machine.
 
 Do not silently add `tests/runner-integration.test.mjs` to the normal suite. It is known to hang and requires a separate repair task.
 
@@ -321,8 +308,8 @@ Only the last case counts toward the user's consecutive-failure rule unless evid
 ## 16. First Actions For The Taking-Over Agent
 
 1. Read the seven files listed in section 10; do not scan the full repository first.
-2. Run `git status --short` and confirm only documentation is dirty.
-3. Review and commit the pending launcher smoke fixes and documentation updates.
+2. Run `git status --short` and confirm the worktree is clean before starting.
+3. Regenerate the portable package with `npm.cmd run package:portable` if the source changed.
 4. Confirm `/api/health` and verify the MCP exposes 11 tools.
 5. Validate the launcher by real double-click or interactive console on a clean Windows 10 x64 machine.
 6. Verify reboot/logon behavior, no-system-Node behavior, port conflict handling, first-run errors, shortcut, and opt-in autostart.

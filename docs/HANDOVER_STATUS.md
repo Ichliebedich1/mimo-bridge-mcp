@@ -10,7 +10,7 @@ Let Codex split and review work while MiMo performs bounded coding tasks through
 
 ## Current Progress
 
-- Branch: `master`; HEAD: `cc59c1a Show latest completed MiMo task events`.
+- Branch: `master`; HEAD: `f410e6f feat: add Windows portable package`.
 - P0-P5.1 are complete. P5.2 launcher/config/shortcut/autostart commands are implemented in the current launcher code.
 - Follow-up MiMo rounds are forced back into the saved Worktree and re-audited; fix merged in `7e41770`.
 - The read-only live-run viewer is merged in `fa952ab`; completed-task round selection is fixed in `cc59c1a`.
@@ -19,8 +19,9 @@ Let Codex split and review work while MiMo performs bounded coding tasks through
 - Normal regression after the live viewer: `223/223` passed, excluding `tests/runner-integration.test.mjs`.
 - P4.6 `mimo_wait_task` is committed in `522e7a7` and loaded by the shared daemon.
 - Root and daemon builds pass. Normal regression: `242/242`, excluding `tests/runner-integration.test.mjs`.
-- Launcher focused regression: `11/11`. Local smoke verified launcher-owned health, duplicate start, safe stop/start, logs, desktop shortcut creation, and autostart disabled by default.
+- Launcher focused regression: `12/12`. Local smoke verified launcher-owned health, duplicate start, safe stop/start, logs, desktop shortcut creation, and autostart disabled by default.
 - P5.3 portable packaging is implemented through `npm.cmd run package:portable`; generated package includes bundled `node.exe`, built artifacts, pruned dependencies, local `data`, `.cmd` launchers, and no MiMo credentials/tasks/Worktrees.
+- Latest generated ZIP: `artifacts/MiMoBridge-portable-win10-x64.zip`, manifest `source_commit=f410e6f`, about 55.6 MB.
 - Portable smoke used package-local config on port 3211, verified `/api/health` ok/MCP ready/MiMo configured, then stopped the smoke daemon.
 - HTTP MCP lists 11 tools. Terminal tasks return immediately; a running smoke fixture returned the minimal timeout payload after 1,004 ms and was deleted.
 
