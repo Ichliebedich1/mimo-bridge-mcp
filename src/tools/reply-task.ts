@@ -8,6 +8,7 @@ import { runMimoTask } from "../services/mimo-runner.js";
 import { globalRunningTasks, type RunningTaskRegistry } from "../services/running-tasks.js";
 import { globalTaskQueue, type TaskQueue } from "../services/task-queue.js";
 import { refreshReviewPackage } from "../services/review-package.js";
+import { GitWorktreeManager } from "../services/git-worktree.js";
 
 export interface ReplyTaskDependencies {
   runTask?: typeof runMimoTask;
@@ -36,6 +37,21 @@ export function createReplyTaskHandler(
     const task = taskStore.getTask(taskId);
     if (!task) return Promise.resolve();
 
+    let worktreeState = task.worktree;
+    let taskConfig = task.config;
+    try {
+      if (worktreeState) {
+        const gitManager = GitWorktreeManager.fromWorktreeState(worktreeState);
+        gitManager.assertWorktreeState(taskId, worktreeState);
+        taskConfig = { ...task.config, workspace_path: worktreeState.worktree_path };
+      }
+    } catch (err) {
+      const error = err instanceof Error ? err.message : String(err);
+      taskStore.updateTaskStatus(taskId, "failed", error);
+      refreshReviewPackage(taskStore, taskId);
+      return Promise.resolve();
+    }
+
     return new Promise((resolve) => {
       let settled = false;
       const finish = () => {
@@ -52,6 +68,26 @@ export function createReplyTaskHandler(
           }
           taskStore.updateTaskResult(taskId, result);
           taskStore.updateTaskStatus(taskId, result.status);
+
+          if (worktreeState) {
+            try {
+              const gitManager = GitWorktreeManager.fromWorktreeState(worktreeState);
+              const summary = gitManager.getDiffSummaryForState(
+                taskId,
+                worktreeState,
+                task.config.editable_paths
+              );
+              worktreeState = {
+                ...worktreeState,
+                diff_summary: summary.diffStat,
+                out_of_bounds_files: summary.outOfBoundsFiles,
+                has_out_of_bounds_changes: summary.hasOutOfBoundsChanges,
+              };
+              taskStore.updateTaskWorktree(taskId, worktreeState);
+            } catch (err) {
+              process.stderr.write(`[reply-task] 获取 diff 摘要失败: ${err}\n`);
+            }
+          }
           refreshReviewPackage(taskStore, taskId);
         } finally {
           finish();
@@ -72,7 +108,7 @@ export function createReplyTaskHandler(
           {
             mimoNodePath: config.mimoNodePath,
             mimoEntryPath: config.mimoEntryPath,
-            task,
+            task: { ...task, config: taskConfig },
             runtimeDir: config.runtimeDir,
             timeoutMs: task.config.runtime_timeout_seconds * 1000,
           },

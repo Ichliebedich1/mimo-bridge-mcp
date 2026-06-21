@@ -473,7 +473,11 @@ export class GitWorktreeManager {
       ...changedFiles.untracked,
     ];
 
-    const diffStat = this.getDiffStat(taskId, baseCommit);
+    let diffStat = this.getDiffStat(taskId, baseCommit);
+    if (changedFiles.untracked.length > 0) {
+      const untrackedLines = changedFiles.untracked.map((file) => ` ${file} | untracked`).join("\n");
+      diffStat += `${diffStat && !diffStat.endsWith("\n") ? "\n" : ""}${untrackedLines}\n`;
+    }
 
     const outOfBoundsFiles = this.checkOutOfBounds(worktreePath, allChanged, editablePaths, originalWorkspacePath);
 

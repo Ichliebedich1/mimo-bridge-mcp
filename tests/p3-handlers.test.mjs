@@ -10,6 +10,7 @@ import { TaskStore } from "../dist/services/task-store.js";
 import { RunningTaskRegistry } from "../dist/services/running-tasks.js";
 import { createMergeTaskHandler } from "../dist/tools/merge-task.js";
 import { createStartTaskHandler } from "../dist/tools/start-task.js";
+import { createReplyTaskHandler } from "../dist/tools/reply-task.js";
 
 function createRepoFixture(name) {
   const root = join(tmpdir(), `${name}-${Date.now()}-${Math.random().toString(16).slice(2)}`);
@@ -236,6 +237,86 @@ test("mimo_start_task completion audits the saved runtime worktree", async () =>
 
     const completed = taskStore.getTask(started.task_id);
     assert.strictEqual(completed.status, "review");
+    assert.strictEqual(completed.worktree.has_out_of_bounds_changes, true);
+    assert.ok(completed.worktree.out_of_bounds_files.includes("outside.txt"));
+    assert.match(completed.worktree.diff_summary, /outside\.txt/);
+    assert.strictEqual(runningTasks.size, 0);
+  } finally {
+    rmSync(fixture.root, { recursive: true, force: true });
+  }
+});
+
+test("mimo_reply_task keeps follow-up rounds in the saved Worktree and re-audits changes", async () => {
+  const fixture = createRepoFixture("p3-handler-reply");
+  try {
+    const taskStore = new TaskStore(fixture.runtimeDir);
+    const task = taskStore.createTask({
+      objective: "continue editing in worktree",
+      workspace_path: fixture.repoDir,
+      editable_paths: ["allowed"],
+      readonly_paths: [],
+      acceptance_criteria: [],
+      max_rounds: 5,
+      runtime_timeout_seconds: 60,
+    });
+    const manager = new GitWorktreeManager(fixture.repoDir, fixture.runtimeDir);
+    const info = manager.createWorktree(task.task_id);
+    taskStore.updateTaskWorktree(task.task_id, {
+      repo_path: fixture.repoDir,
+      worktrees_root: dirname(info.worktreePath),
+      worktree_path: info.worktreePath,
+      branch_name: info.branchName,
+      base_commit: info.baseCommit,
+      base_branch: manager.getCurrentBranch(),
+      diff_summary: null,
+      out_of_bounds_files: [],
+      has_out_of_bounds_changes: false,
+    });
+    taskStore.updateTaskStatus(task.task_id, "review");
+    taskStore.updateTaskSession(task.task_id, "ses_reply_worktree");
+
+    const runningTasks = new RunningTaskRegistry();
+    let runnerOptions;
+    let completeReply;
+    const replyTask = createReplyTaskHandler(
+      {
+        mimoNodePath: "unused-node",
+        mimoEntryPath: "unused-entry",
+        allowedRoots: [fixture.root],
+        runtimeDir: fixture.runtimeDir,
+      },
+      taskStore,
+      {
+        runningTasks,
+        runTask: (options, onResult) => {
+          runnerOptions = options;
+          completeReply = onResult;
+          return { process: {}, cancel: () => {} };
+        },
+      }
+    );
+
+    const started = await replyTask.handler({ task_id: task.task_id, message: "continue" });
+    assert.strictEqual(started.status, "running");
+    assert.strictEqual(runnerOptions.task.config.workspace_path, info.worktreePath);
+
+    writeFileSync(join(info.worktreePath, "outside.txt"), "follow-up outside change\n");
+    completeReply({
+      task_id: task.task_id,
+      agent: "mimo",
+      session_id: "ses_reply_worktree",
+      status: "review",
+      summary: "reply done",
+      modified_files: ["outside.txt"],
+      test_results: "",
+      questions: [],
+      issues: [],
+      raw_log_path: "",
+      stderr_log_path: "",
+      error: null,
+    });
+
+    const completed = taskStore.getTask(task.task_id);
     assert.strictEqual(completed.worktree.has_out_of_bounds_changes, true);
     assert.ok(completed.worktree.out_of_bounds_files.includes("outside.txt"));
     assert.match(completed.worktree.diff_summary, /outside\.txt/);
