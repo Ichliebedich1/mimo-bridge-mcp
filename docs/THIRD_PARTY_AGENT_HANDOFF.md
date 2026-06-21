@@ -236,7 +236,7 @@ npm.cmd run package:portable
 
 Generated outputs are ignored by Git under `artifacts/`.
 
-Latest generated artifacts: `artifacts/MiMoBridge-portable-win10-win11-x64.zip` and `artifacts/MiMoBridgeSetup-win10-win11-x64.exe`; generated artifacts are ignored by Git.
+Latest generated artifacts: `artifacts/MiMoBridge-portable-win10-win11-x64.zip` and `artifacts/MiMoBridgeSetup-win10-win11-x64.exe`; installer `-SelfTest` passed locally without installing; generated artifacts are ignored by Git.
 
 Do not silently add `tests/runner-integration.test.mjs` to the normal suite. It is known to hang and requires a separate repair task.
 

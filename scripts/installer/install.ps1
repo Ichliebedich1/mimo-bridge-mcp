@@ -4,6 +4,7 @@ param(
   [switch]$Autostart,
   [switch]$Uninstall,
   [switch]$DeleteUserData,
+  [switch]$SelfTest,
   [string]$InstallDir
 )
 
@@ -160,6 +161,66 @@ function Copy-Directory {
     } else {
       Copy-Item -LiteralPath $item.FullName -Destination $target -Force
     }
+  }
+}
+
+function Test-InstallerPayload {
+  Assert-SupportedWindows
+  $payloadZip = Join-Path $PSScriptRoot "MiMoBridge-payload.zip"
+  if (-not (Test-Path -LiteralPath $payloadZip)) {
+    throw "Missing installer payload: $payloadZip"
+  }
+
+  $tempRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("mimo-bridge-selftest-" + [guid]::NewGuid().ToString("N"))
+  New-Item -ItemType Directory -Force -Path $tempRoot | Out-Null
+  try {
+    Expand-Archive -LiteralPath $payloadZip -DestinationPath $tempRoot -Force
+    $payloadRoot = Join-Path $tempRoot "MiMoBridge"
+    if (-not (Test-Path -LiteralPath $payloadRoot)) {
+      $payloadRoot = $tempRoot
+    }
+
+    $requiredFiles = @(
+      "node\node.exe",
+      "app\apps\local-daemon\dist\apps\local-daemon\src\index.js",
+      "app\apps\local-daemon\dist\apps\local-daemon\src\launcher-cli.js",
+      "app\apps\local-daemon\launcher.ps1",
+      "app\apps\admin-ui\dist\index.html",
+      "MiMo Bridge Launcher.cmd",
+      "Start MiMo Bridge.cmd",
+      "Stop MiMo Bridge.cmd",
+      "Configure MiMo Bridge.cmd"
+    )
+    foreach ($relativePath in $requiredFiles) {
+      $path = Join-Path $payloadRoot $relativePath
+      if (-not (Test-Path -LiteralPath $path)) {
+        throw "Installer payload missing required file: $relativePath"
+      }
+    }
+
+    $forbiddenPaths = @("runtime", "worktrees", "tasks", ".git", "data\config.json", "data\tasks", "data\launcher-state.json", "data\daemon.out.log", "data\daemon.err.log")
+    foreach ($relativePath in $forbiddenPaths) {
+      $path = Join-Path $payloadRoot $relativePath
+      if (Test-Path -LiteralPath $path) {
+        throw "Installer payload includes forbidden runtime data: $relativePath"
+      }
+    }
+
+    $dataDir = Join-Path $payloadRoot "data"
+    if ((Test-Path -LiteralPath $dataDir) -and (Get-ChildItem -LiteralPath $dataDir -Force -Recurse | Select-Object -First 1)) {
+      throw "Installer payload data directory must be empty."
+    }
+
+    $sensitiveFiles = Get-ChildItem -LiteralPath $payloadRoot -Force -Recurse -File -ErrorAction SilentlyContinue |
+      Where-Object { $_.Name -in @("auth.json", "mimocode.jsonc") } |
+      Select-Object -First 1
+    if ($sensitiveFiles) {
+      throw "Installer payload includes a sensitive file: $($sensitiveFiles.FullName)"
+    }
+
+    Write-Host "MiMo Bridge installer self-test passed."
+  } finally {
+    Remove-Item -LiteralPath $tempRoot -Recurse -Force -ErrorAction SilentlyContinue
   }
 }
 
@@ -367,7 +428,9 @@ function Uninstall-App {
   }
 }
 
-if ($Uninstall) {
+if ($SelfTest) {
+  Test-InstallerPayload
+} elseif ($Uninstall) {
   Uninstall-App
 } else {
   Install-App

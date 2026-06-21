@@ -42,6 +42,8 @@ test("installer preserves user data by default and leaves autostart opt-in", asy
   assert.match(installer, /Start MiMo Bridge when Windows logs in\?" -Default \$false/);
   assert.match(installer, /User data is preserved/);
   assert.match(installer, /\[switch\]\$DeleteUserData/);
+  assert.match(installer, /\[switch\]\$SelfTest/);
+  assert.match(installer, /MiMo Bridge installer self-test passed/);
   assert.match(installer, /MiMo credentials, task logs, active tasks, and Worktrees are not bundled/);
   assert.match(installer, /MIMO_BRIDGE_NODE_PATH/);
   assert.match(installer, /MIMO_BRIDGE_DATA_DIR/);

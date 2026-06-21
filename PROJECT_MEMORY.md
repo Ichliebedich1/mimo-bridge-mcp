@@ -54,4 +54,5 @@ This file is the project-local long-term memory. Update it after each meaningful
 - Win11 support is treated as the same Windows x64 release line as Win10 because both are NT 10.x and the current stack is Node/PowerShell/localhost.
 - The installer is a MinGW resource-stub EXE that embeds install.ps1 and the portable payload; it should not require system Node on the target computer.
 - The installer-created launchers set MIMO_BRIDGE_NODE_PATH, MIMO_BRIDGE_DATA_DIR, and MIMO_BRIDGE_CONFIG explicitly.
-- Latest local verification: npm.cmd run package:installer passed; node --test tests/installer-package.test.mjs tests/launcher-controller.test.mjs passed 16/16; normal regression excluding runner-integration passed 247/247.
+- Latest local verification: npm.cmd run package:installer passed; artifacts\MiMoBridgeSetup-win10-win11-x64.exe -SelfTest passed; node --test tests/installer-package.test.mjs tests/launcher-controller.test.mjs passed 16/16; normal regression excluding runner-integration passed 247/247.
+- Installer EXE supports -SelfTest. This extracts the embedded payload to TEMP, checks required app files, and rejects bundled runtime data or MiMo credential files without installing anything.

@@ -100,6 +100,18 @@ Portable package generation:
 npm.cmd run package:portable
 ```
 
+Installer package generation:
+
+```powershell
+npm.cmd run package:installer
+```
+
+Installer payload self-test:
+
+```powershell
+artifacts\MiMoBridgeSetup-win10-win11-x64.exe -SelfTest
+```
+
 Generated outputs:
 
 - `artifacts/portable/MiMoBridge`
