@@ -3,6 +3,7 @@ dist/
 bin/
 obj/
 runtime/
+runtime-temp-*/
 artifacts/
 *.log
 .DS_Store
