@@ -47,7 +47,7 @@ Let Codex split and review work while MiMo performs bounded coding tasks through
 2. Validate double-click installer, portable ZIP, reboot/logon, no system Node, port conflict, first-run config, Codex MCP connection, real MiMo task, autostart opt-in, and uninstall behavior.
 3. Audit active Worktree cancellation cleanup.
 4. Connect `TokenBudgetManager` to real MiMo token events.
-5. Improve MCP SDK client examples/documentation so `mimo_wait_task` calls pass a request timeout longer than `timeout_seconds`; otherwise the client can time out before daemon-side waiting returns.
+5. Improve MCP SDK client examples/documentation so `mimo_wait_task` calls pass a request timeout longer than `timeout_seconds`; otherwise the client can time out before daemon-side waiting returns. Documented in `docs/modules/low-token-wait.md` with 1800/3600s daemon-side wait examples and SDK request timeout guidance.
 
 ## Risks / Blockers
 

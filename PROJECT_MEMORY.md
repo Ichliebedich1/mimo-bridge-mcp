@@ -36,7 +36,7 @@ This file is the project-local long-term memory. Update it after each meaningful
 - TokenBudgetManager is not connected to real MiMo token events.
 - Active Worktree cancellation cleanup needs a focused audit.
 - Clean-machine double-click, reboot/logon, no-system-Node, port-conflict, and uninstall validation are pending.
-- MCP SDK callers must pass a request timeout longer than `mimo_wait_task.timeout_seconds`; otherwise the client can time out even though daemon-side low-token waiting is working.
+- MCP SDK callers must pass a request timeout longer than `mimo_wait_task.timeout_seconds`; otherwise the client can time out even though daemon-side low-token waiting is working. Documented in `docs/modules/low-token-wait.md` with 1800/3600s examples.
 
 ## Next Handoff Checklist
 
