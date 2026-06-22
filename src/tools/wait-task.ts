@@ -6,7 +6,7 @@ const WaitDetailLevelSchema = z.enum(["summary", "review"]);
 
 export const WaitTaskSchema = z.object({
   task_id: z.string().min(1, "任务 ID 不能为空"),
-  timeout_seconds: z.number().int().min(1).max(600).default(300),
+  timeout_seconds: z.number().int().min(1).max(3600).default(1800),
   detail_level: WaitDetailLevelSchema.default("review"),
   max_chars: z.number().int().min(1000).max(20000).default(8000),
 });
