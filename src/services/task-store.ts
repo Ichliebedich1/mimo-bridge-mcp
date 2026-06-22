@@ -5,12 +5,27 @@ import type { TaskState, TaskConfig, TaskStatus, WorktreeState, ReviewPackage } 
 
 const TASK_ID_PATTERN = /^task_[a-f0-9]{12}$/;
 
+interface TombstoneEntry {
+  task_id: string;
+  session_id: string | null;
+  deleted_at: string;
+}
+
+interface TombstoneFile {
+  version: 1;
+  sessions: TombstoneEntry[];
+}
+
+const MAX_TOMBSTONES = 1000;
+
 export class TaskStore {
   private tasksDir: string;
   private briefsDir: string;
   private logsDir: string;
+  private runtimeDir: string;
 
   constructor(runtimeDir: string) {
+    this.runtimeDir = resolve(runtimeDir);
     this.tasksDir = resolve(runtimeDir, "tasks");
     this.briefsDir = resolve(runtimeDir, "briefs");
     this.logsDir = resolve(runtimeDir, "logs");
@@ -214,6 +229,8 @@ export class TaskStore {
       return false;
     }
 
+    const task = this.getTask(taskId);
+
     const roundPrefix = `${taskId}-round-`;
     for (const file of readdirSync(this.briefsDir)) {
       if (file.startsWith(roundPrefix) && file.endsWith(".md")) {
@@ -231,7 +248,54 @@ export class TaskStore {
       unlinkSync(tmpPath);
     }
     unlinkSync(taskFilePath);
+
+    if (task) {
+      this.recordTombstone(task.task_id, task.session_id);
+    }
+
     return true;
+  }
+
+  private recordTombstone(taskId: string, sessionId: string | null): void {
+    const tombstonePath = join(this.runtimeDir, "deleted-mimo-sessions.json");
+    let tombstoneFile: TombstoneFile = { version: 1, sessions: [] };
+
+    if (existsSync(tombstonePath)) {
+      try {
+        tombstoneFile = JSON.parse(readFileSync(tombstonePath, "utf-8")) as TombstoneFile;
+      } catch {
+        tombstoneFile = { version: 1, sessions: [] };
+      }
+    }
+
+    tombstoneFile.sessions = tombstoneFile.sessions.filter((s) => s.task_id !== taskId);
+    tombstoneFile.sessions.push({
+      task_id: taskId,
+      session_id: sessionId,
+      deleted_at: new Date().toISOString(),
+    });
+
+    if (tombstoneFile.sessions.length > MAX_TOMBSTONES) {
+      tombstoneFile.sessions = tombstoneFile.sessions.slice(-MAX_TOMBSTONES);
+    }
+
+    const tmpPath = `${tombstonePath}.tmp`;
+    writeFileSync(tmpPath, JSON.stringify(tombstoneFile, null, 2), "utf-8");
+    try {
+      renameSync(tmpPath, tombstonePath);
+    } catch {
+      try {
+        writeFileSync(tombstonePath, JSON.stringify(tombstoneFile, null, 2), "utf-8");
+      } finally {
+        try {
+          if (existsSync(tmpPath)) {
+            unlinkSync(tmpPath);
+          }
+        } catch {
+          // ignore cleanup errors
+        }
+      }
+    }
   }
 
   getBriefPath(taskId: string, round: number): string {
