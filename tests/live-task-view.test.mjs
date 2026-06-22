@@ -34,27 +34,26 @@ test("parseJsonlLine sanitizes event_type to safe characters", () => {
   assert.ok(event.event_type.length <= 64);
 });
 
-test("parseJsonlLine filters out summaries containing local filesystem paths", () => {
+test("parseJsonlLine sanitizes summaries containing local filesystem paths", () => {
   const winPath = JSON.stringify({ type: "info", timestamp: Date.now(), summary: "reading C:\\Users\\secret\\file.txt" });
   const unixPath = JSON.stringify({ type: "info", timestamp: Date.now(), summary: "reading /home/user/secret" });
-  assert.ok(parseJsonlLine(winPath).summary.includes("已过滤"));
-  assert.ok(parseJsonlLine(unixPath).summary.includes("已过滤"));
+  assert.ok(parseJsonlLine(winPath).summary.includes("[local path]"));
+  assert.ok(parseJsonlLine(unixPath).summary.includes("[local path]"));
 });
 
-test("parseJsonlLine filters out summaries containing session/stdin references", () => {
+test("parseJsonlLine sanitizes summaries containing session/stdin references", () => {
   const stdin = JSON.stringify({ type: "info", timestamp: Date.now(), summary: "sending to stdin" });
   const sessionId = JSON.stringify({ type: "info", timestamp: Date.now(), summary: "session_id changed" });
-  assert.ok(parseJsonlLine(stdin).summary.includes("已过滤"));
-  assert.ok(parseJsonlLine(sessionId).summary.includes("已过滤"));
+  assert.match(parseJsonlLine(stdin).summary, /\[stdin\]|已过滤/);
+  assert.ok(parseJsonlLine(sessionId).summary.includes("[session]"));
 });
 
-test("parseJsonlLine truncates long summaries to 200 chars", () => {
+test("parseJsonlLine truncates long summaries to 1000 chars", () => {
   const longText = "x".repeat(500);
   const line = JSON.stringify({ type: "info", timestamp: Date.now(), summary: longText });
   const event = parseJsonlLine(line);
   assert.ok(event);
-  assert.ok(event.summary.length <= 201);
-  assert.ok(event.summary.endsWith("…"));
+  assert.strictEqual(event.summary, longText);
 });
 
 test("parseJsonlLine parses MiMo event structure: part.tool, part.state.status, part.state.title", () => {
@@ -99,7 +98,7 @@ test("parseJsonlLine uses part.state.input.description when title is absent", ()
   assert.strictEqual(event.status, "running");
 });
 
-test("parseJsonlLine never returns part.state.output or raw command text", () => {
+test("parseJsonlLine prefers explicit summary over part.state.output", () => {
   const withOutput = JSON.stringify({
     type: "cmd",
     timestamp: Date.now(),
@@ -120,6 +119,37 @@ test("parseJsonlLine never returns part.state.output or raw command text", () =>
   assert.ok(!serialized.includes("rm -rf"));
   assert.ok(!serialized.includes("--force"));
   assert.strictEqual(event.summary, "safe summary");
+});
+
+test("parseJsonlLine exposes visible tool output with sanitization", () => {
+  const line = JSON.stringify({
+    type: "tool_use",
+    timestamp: Date.now(),
+    part: {
+      tool: "bash",
+      state: {
+        status: "completed",
+        output: "npm test passed\nC:\\Users\\secret\\file.txt\nsecret_token_abc123",
+      },
+    },
+  });
+  const event = parseJsonlLine(line);
+  assert.ok(event);
+  assert.strictEqual(event.tool, "bash");
+  assert.ok(event.summary.includes("npm test passed"));
+  assert.ok(event.summary.includes("[local path]"));
+  assert.ok(!JSON.stringify(event).includes("secret_token_abc123"));
+});
+
+test("parseJsonlLine keeps multiline visible MiMo text", () => {
+  const text = "第一行：我正在检查文件。\n第二行：我会运行测试。";
+  const event = parseJsonlLine(JSON.stringify({
+    type: "text",
+    timestamp: Date.now(),
+    part: { type: "text", text },
+  }));
+  assert.ok(event);
+  assert.strictEqual(event.summary, text);
 });
 
 test("parseJsonlLine sanitizes and length-limits tool and status fields", () => {

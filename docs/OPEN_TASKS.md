@@ -23,6 +23,7 @@
 - Portable smoke: package-local config on port 3211 started successfully, `/api/health` returned ok/MCP ready/MiMo configured, then the smoke daemon was stopped.
 - Follow-up MiMo rounds stay inside their task Worktree and are re-audited.
 - Read-only live-run viewer with bounded JSONL tail parsing and no stdin/control surface.
+- Live viewer enhancement: surfaces MiMo-visible text/tool output summaries from JSONL logs, preserves multiline text, and sanitizes local paths/session/stdin/token/password values.
 - Real Codex -> MCP -> MiMo -> review -> merge collaboration workflow.
 - Normal regression after live viewer: 223/223.
 - Temporary detached daemon proof using an on-demand Scheduled Task with no trigger.

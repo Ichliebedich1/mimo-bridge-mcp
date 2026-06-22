@@ -63,6 +63,8 @@ This file is the project-local long-term memory. Update it after each meaningful
 
 ## Latest Notes
 
+- Live viewer enhancement completed and locally verified: `/api/tasks/:id/live` now shows more MiMo-visible runtime text from `part.text`, `state.output`, `state.metadata.output`, and `state.error` in the existing `summary` field. Local paths/session/stdin/token/password values are sanitized; summary budget is raised from 200 to 1000 chars; admin UI live viewer is wider and preserves multiline text. Boundary: this cannot show hidden model chain-of-thought, only text already emitted into MiMo JSONL logs.
+
 - Win11 support is treated as the same Windows x64 release line as Win10 because both are NT 10.x and the current stack is Node/PowerShell/localhost.
 - The installer is a MinGW resource-stub EXE that embeds install.ps1 and the portable payload; it should not require system Node on the target computer.
 - The installer-created launchers set MIMO_BRIDGE_NODE_PATH, MIMO_BRIDGE_DATA_DIR, and MIMO_BRIDGE_CONFIG explicitly.

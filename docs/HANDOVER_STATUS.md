@@ -21,6 +21,8 @@ Let Codex split and review work while MiMo performs bounded coding tasks through
 
 ## Completed
 
+- Live viewer enhancement is complete and locally verified: the read-only viewer now surfaces more MiMo-visible text and sanitized tool output summaries from runtime JSONL logs, with wider UI and multiline wrapping. It does not and cannot display hidden model chain-of-thought that MiMo CLI does not emit.
+
 - One localhost daemon serves MCP, REST API, and the React admin UI.
 - Codex and the browser share one task queue and runtime state.
 - Review defaults to bounded Review Packages; focused diff/file/log reads are explicit escalation.
@@ -52,6 +54,8 @@ Let Codex split and review work while MiMo performs bounded coding tasks through
 6. Implement P5.4 safe agent invocation wrapper from `docs/modules/safe-agent-invocation.md` to avoid Windows shell quoting and Chinese-path encoding failures during Codex/MiMo delegation.
 
 ## Risks / Blockers
+
+- Live viewer boundary: it can display visible MiMo text and sanitized tool output that exists in JSONL logs; it cannot display private/hidden model reasoning that the CLI does not emit.
 
 - `tests/runner-integration.test.mjs` hangs on Windows and is excluded from normal regression.
 - Windows PTY tests can print `AttachConsole failed` and `TimeoutNaNWarning`; judge by exit code and regression result.

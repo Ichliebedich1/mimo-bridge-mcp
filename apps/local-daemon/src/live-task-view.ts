@@ -201,7 +201,7 @@ export function parseJsonlLine(line: string): LiveEvent | null {
 
   const rawType = typeof parsed.type === "string" ? parsed.type : "unknown";
   const timestamp = extractTimestamp(parsed);
-  const summary = extractSummary(parsed);
+  const summary = sanitizeLiveText(extractSummary(parsed));
 
   if (containsBlockedContent(summary)) {
     return {
@@ -254,6 +254,9 @@ function extractSummary(record: Record<string, unknown>): string {
       const state = part.state;
       if (typeof state.title === "string") return state.title;
       if (isRecord(state.input) && typeof state.input.description === "string") return state.input.description;
+      if (typeof state.output === "string") return state.output;
+      if (isRecord(state.metadata) && typeof state.metadata.output === "string") return state.metadata.output;
+      if (typeof state.error === "string") return state.error;
     }
     if (typeof part.text === "string") return part.text;
     if (typeof part.type === "string") return `[${part.type}]`;
@@ -289,13 +292,26 @@ function sanitizeEventType(type: string): string {
 }
 
 function truncateSummary(summary: string): string {
-  const MAX_SUMMARY = 200;
+  const MAX_SUMMARY = 1000;
   if (summary.length <= MAX_SUMMARY) return summary;
   return summary.slice(0, MAX_SUMMARY) + "…";
 }
 
 function containsBlockedContent(summary: string): boolean {
   return BLOCKED_SUMMARY_PATTERNS.some((pattern) => pattern.test(summary));
+}
+
+function sanitizeLiveText(value: string): string {
+  return value
+    .replace(/\u001b\[[0-9;]*m/g, "")
+    .replace(/[A-Z]:\\[^\r\n"']*/gi, "[local path]")
+    .replace(/\/(?:home|tmp|var|usr|opt)\/[^\s"']*/gi, "[local path]")
+    .replace(/\bses_[A-Za-z0-9_-]+\b/g, "[session]")
+    .replace(/\bsession(?:_id|ID)?\b/gi, "[session]")
+    .replace(/\bstdin\b/gi, "[stdin]")
+    .replace(/\b(?:secret[_-]?)?token[_:-]?[A-Za-z0-9_.-]+\b/gi, "[redacted-token]")
+    .replace(/\bpassword\b\s*[:=]\s*\S+/gi, "password=[redacted]")
+    .trim();
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
