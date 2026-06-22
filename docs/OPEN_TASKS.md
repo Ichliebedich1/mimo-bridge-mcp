@@ -29,6 +29,7 @@
 - P4.6 `mimo_wait_task` committed, deployed, HTTP-smoked, and covered by the 228/228 normal regression. P4.6 low-token wait improvement: default 1800s, max 3600s, SDK request timeout documented.
 - Documentation cleanup consolidated old root handoff/project snapshots and the old P5 UI design document into the active documentation set.
 - Safe-delete visibility in the admin UI: backend now returns `can_delete`, `delete_blockers`, and `delete_label`; task list has a `可安全删除` filter; delete action is driven by backend `can_delete`. Verified through real Codex -> MCP -> MiMo -> review -> focused diff -> merge flow and `node --test tests/admin-api.test.mjs`.
+- Default Chinese display chain: ReviewPackage now includes optional `objective_zh` and `mimo_summary_zh` fields; admin UI title/objective/summary prefer zh fields with English fallback; task briefs and Codex handoff prompts request Chinese summaries for future tasks. No external translation API used.
 
 ## Risks
 

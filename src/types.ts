@@ -47,6 +47,7 @@ export interface ReviewPackage {
   task_id: string;
   status: TaskStatus;
   objective: string;
+  objective_zh?: string;
   editable_paths: string[];
   changed_files: string[];
   changed_files_count: number;
@@ -58,6 +59,7 @@ export interface ReviewPackage {
   exit_code: number | null;
   log_tail: string;
   mimo_summary: string;
+  mimo_summary_zh?: string;
   risk_flags: string[];
   generated_at: string;
   review_recommendation: ReviewRecommendation;

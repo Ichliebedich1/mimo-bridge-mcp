@@ -33,6 +33,7 @@ Let Codex split and review work while MiMo performs bounded coding tasks through
 - Installed launcher `.cmd` generation now writes `MIMO_BRIDGE_DATA_DIR` and `MIMO_BRIDGE_CONFIG` as single-line environment variables.
 - Plain double-click installer launch now defaults to quiet install; autostart remains opt-in/off by default.
 - Safe-delete visibility now surfaces backend-derived `can_delete`, `delete_blockers`, and `delete_label` in `/api/tasks` and `/api/tasks/:id`. The admin UI has a `可安全删除` filter and shows delete only when `can_delete` is true.
+- Default Chinese display chain: ReviewPackage has optional `objective_zh` / `mimo_summary_zh` fields; admin UI prefers zh for title/objective/summary with English fallback; future task briefs request Chinese summaries. No external translation API.
 - Real full-flow retest completed: Codex delegated the safe-delete visibility slice through MCP to MiMo, waited with `mimo_wait_task`, reviewed the bounded Review Package first, escalated only to focused diff for changed files, requested one small MiMo fix, merged the Worktree, and marked the task accepted.
 
 ## Collaboration Needed

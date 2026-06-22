@@ -72,6 +72,7 @@ type ReviewPackageResponse = {
   task_id: string;
   status: TaskStatus;
   objective: string;
+  objective_zh?: string;
   editable_paths?: string[];
   changed_files: string[];
   changed_files_count: number;
@@ -82,6 +83,7 @@ type ReviewPackageResponse = {
   exit_code: number | null;
   log_tail?: string;
   mimo_summary: string;
+  mimo_summary_zh?: string;
   risk_flags: string[];
   generated_at?: string;
   review_recommendation: string;
@@ -403,9 +405,9 @@ function detailToUiTask(response: GetTaskResponse): Task {
   return {
     id: response.task_id,
     status: response.status,
-    title: review.objective || response.task_id,
-    summary: review.mimo_summary || 'Review Package 已生成。',
-    objective: review.objective,
+    title: review.objective_zh || review.objective || response.task_id,
+    summary: review.mimo_summary_zh || review.mimo_summary || 'Review Package 已生成。',
+    objective: review.objective_zh || review.objective,
     createdAt: formatDateTime(response.created_at),
     updatedAt: formatDateTime(response.updated_at) || formatDateTime(review.generated_at) || '来自 API',
     round: response.current_round ?? 0,
