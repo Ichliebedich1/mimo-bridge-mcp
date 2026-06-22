@@ -48,6 +48,7 @@ Let Codex split and review work while MiMo performs bounded coding tasks through
 3. Audit active Worktree cancellation cleanup.
 4. Connect `TokenBudgetManager` to real MiMo token events.
 5. Improve MCP SDK client examples/documentation so `mimo_wait_task` calls pass a request timeout longer than `timeout_seconds`; otherwise the client can time out before daemon-side waiting returns. Documented in `docs/modules/low-token-wait.md` with 1800/3600s daemon-side wait examples and SDK request timeout guidance.
+6. Implement P5.4 safe agent invocation wrapper from `docs/modules/safe-agent-invocation.md` to avoid Windows shell quoting and Chinese-path encoding failures during Codex/MiMo delegation.
 
 ## Risks / Blockers
 
@@ -55,6 +56,7 @@ Let Codex split and review work while MiMo performs bounded coding tasks through
 - Windows PTY tests can print `AttachConsole failed` and `TimeoutNaNWarning`; judge by exit code and regression result.
 - Codex shell capture can lose direct stdout when launcher commands spawn the daemon; verify daemon health with `launcher.ps1 status -Json`.
 - During the 2026-06-22 full-flow retest, the first `mimo_wait_task(timeout_seconds=600)` call used the MCP SDK default 60s request timeout and failed client-side. A later call with an explicit longer request timeout returned correctly. Treat this as caller usage debt, not a daemon failure.
+- During the 2026-06-23 delegation test, several startup attempts failed before MiMo received a task because PowerShell/inline Node command strings mishandled Chinese paths or special characters. Treat this as invocation-layer debt, not a MiMo execution failure.
 - Clean Windows validation is still the main external blocker before calling the package ready for general use.
 - The local machine install path has been smoke-tested, but a separate clean Windows 10/11 validation pass is still required.
 

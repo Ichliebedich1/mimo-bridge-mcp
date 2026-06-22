@@ -5,6 +5,7 @@
 - Run docs/RELEASE_VALIDATION.md on clean Windows 10/11 x64 machines: reboot/logon, no system Node, port conflict, first-run errors, and real user double-click flow.
 
 - Design and implement P6 multi-agent dispatch so Codex can assign separate tasks to MiMo and Reasonix instead of choosing only one active provider.
+- Implement P5.4 safe agent invocation wrapper from docs/modules/safe-agent-invocation.md so agents stop using ad hoc PowerShell/inline Node calls that can corrupt Chinese paths or special characters on some Windows machines.
 - Audit active Worktree cancellation cleanup.
 - Connect `TokenBudgetManager` to real MiMo token events.
 - Document or wrap MCP SDK calls so `mimo_wait_task` request timeout is explicitly longer than `timeout_seconds`; default SDK timeout can fire before daemon-side waiting returns. Documented in `docs/modules/low-token-wait.md` with 1800/3600s examples; real remaining work is ensuring all SDK callers adopt the documented pattern.
@@ -42,4 +43,5 @@
 2. Validate the launcher and installer on clean Windows 10/11 x64 machines and after reboot/logon.
 3. Keep portable ZIP and EXE installer validation in the release checklist.
 4. Start P6 with the design in `docs/modules/multi-agent-dispatch.md`: Agent Registry, generic `agent_*` tools, path-conflict scheduling, MiMo adapter migration, Reasonix TUI runner, and Reasonix GUI capability probe.
-5. When using `mimo_wait_task` from an MCP SDK script, pass request options such as `{ timeout: (timeout_seconds + 20) * 1000 }` to avoid client-side timeout. See `docs/modules/low-token-wait.md` for the 1800/3600s examples.
+5. Implement P5.4 before more cross-machine workflow tests, because it removes fragile shell quoting/encoding from agent-to-bridge calls.
+6. When using `mimo_wait_task` from an MCP SDK script, pass request options such as `{ timeout: (timeout_seconds + 20) * 1000 }` to avoid client-side timeout. See `docs/modules/low-token-wait.md` for the 1800/3600s examples.
