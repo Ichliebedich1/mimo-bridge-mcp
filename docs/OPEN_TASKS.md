@@ -4,6 +4,7 @@
 
 - Run docs/RELEASE_VALIDATION.md on clean Windows 10/11 x64 machines: reboot/logon, no system Node, port conflict, first-run errors, and real user double-click flow.
 
+- Design and implement P6 multi-agent dispatch so Codex can assign separate tasks to MiMo and Reasonix instead of choosing only one active provider.
 - Audit active Worktree cancellation cleanup.
 - Connect `TokenBudgetManager` to real MiMo token events.
 
@@ -38,3 +39,4 @@
 1. Use `mimo_wait_task` for all later MiMo work instead of repeated polling.
 2. Validate the launcher and installer on clean Windows 10/11 x64 machines and after reboot/logon.
 3. Keep portable ZIP and EXE installer validation in the release checklist.
+4. Start P6 with the design in `docs/modules/multi-agent-dispatch.md`: Agent Registry, generic `agent_*` tools, path-conflict scheduling, MiMo adapter migration, Reasonix TUI runner, and Reasonix GUI capability probe.

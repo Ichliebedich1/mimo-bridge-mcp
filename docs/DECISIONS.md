@@ -44,3 +44,8 @@
 
 - Decision: Codex should use `mimo_wait_task` after start/reply and receive one bounded result on readiness or timeout.
 - Reason: repeated status calls and narration waste context tokens without improving execution.
+
+## 2026-06-22: P6 Is Multi-Agent Dispatch, Not Provider Replacement
+
+- Decision: Reasonix support must add an Agent Registry and generic dispatch tools instead of replacing MiMo as the single configured provider.
+- Reason: the user wants Codex to assign work to both MiMo and Reasonix at the same time. A single `agentProvider` switch would block concurrent delegation and force unnecessary reconfiguration.
