@@ -471,3 +471,45 @@ test("summary mode returns only minimal task state", async () => {
     rmSync(fixture.root, { recursive: true, force: true });
   }
 });
+
+test("review package includes objective_zh and mimo_summary_zh when content is Chinese", async () => {
+  const fixture = createTaskFixture("review-zh-fields");
+  try {
+    const task = fixture.store.getTask(fixture.task.task_id);
+    task.status = "review";
+    task.config.objective = "修复登录页面的中文显示问题";
+    task.summary = "已修复登录页面，测试通过";
+    task.modified_files = [];
+    fixture.store.saveTask(task);
+
+    const getTask = createGetTaskHandler(fixture.store);
+    const result = await getTask.handler({ task_id: task.task_id, detail_level: "review" });
+
+    assert.strictEqual(result.review_package.objective_zh, "修复登录页面的中文显示问题");
+    assert.strictEqual(result.review_package.mimo_summary_zh, "已修复登录页面，测试通过");
+  } finally {
+    rmSync(fixture.root, { recursive: true, force: true });
+  }
+});
+
+test("review package omits zh fields when content is English only", async () => {
+  const fixture = createTaskFixture("review-no-zh-fields");
+  try {
+    const task = fixture.store.getTask(fixture.task.task_id);
+    task.status = "review";
+    task.config.objective = "fix login page rendering";
+    task.summary = "Fixed the login page. Tests pass.";
+    task.modified_files = [];
+    fixture.store.saveTask(task);
+
+    const getTask = createGetTaskHandler(fixture.store);
+    const result = await getTask.handler({ task_id: task.task_id, detail_level: "review" });
+
+    assert.strictEqual(result.review_package.objective_zh, undefined);
+    assert.strictEqual(result.review_package.mimo_summary_zh, undefined);
+    assert.strictEqual(result.review_package.objective, "fix login page rendering");
+    assert.strictEqual(result.review_package.mimo_summary, "Fixed the login page. Tests pass.");
+  } finally {
+    rmSync(fixture.root, { recursive: true, force: true });
+  }
+});

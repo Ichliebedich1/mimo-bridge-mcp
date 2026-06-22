@@ -48,6 +48,10 @@ export function buildTaskBrief(config: TaskConfig): string {
   lines.push("2. 测试运行结果");
   lines.push("3. 遗留问题或需要确认的事项");
   lines.push("");
+  lines.push("## 语言要求");
+  lines.push("");
+  lines.push("完成后的摘要、测试结果、遗留问题必须使用中文书写。文件名、命令、代码标识保持原文。");
+  lines.push("");
 
   return lines.join("\n");
 }

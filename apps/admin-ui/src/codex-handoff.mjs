@@ -15,6 +15,8 @@ export function buildCodexReviewPrompt(task) {
     "先检查 editable_paths、changed_files、out_of_bounds_report、diff_stat、test_result 和 risk_flags。",
     "只有发现具体风险时，才按相关路径读取 focused diff、文件或日志尾部。",
     "请负责最终验收；复杂或高风险部分由 Codex 直接执行，不必全部退回 MiMo。",
+    "",
+    "注意：后续任务摘要、测试结果、遗留问题应使用中文书写；文件名、命令、代码标识保持原文。",
   ].join("\n");
 }
 

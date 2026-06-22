@@ -268,6 +268,19 @@ function fitReviewPackageToBudget(reviewPackage: ReviewPackage, maxChars: number
     }
   }
 
+  if (result.objective_zh) {
+    while (size() > maxChars && result.objective_zh.length > 40) {
+      result.objective_zh = result.objective_zh.slice(0, Math.max(40, Math.floor(result.objective_zh.length / 2)));
+    }
+    if (size() > maxChars) delete result.objective_zh;
+  }
+  if (result.mimo_summary_zh) {
+    while (size() > maxChars && result.mimo_summary_zh.length > 40) {
+      result.mimo_summary_zh = result.mimo_summary_zh.slice(0, Math.max(40, Math.floor(result.mimo_summary_zh.length / 2)));
+    }
+    if (size() > maxChars) delete result.mimo_summary_zh;
+  }
+
   return result;
 }
 
@@ -332,10 +345,16 @@ export function generateReviewPackage(
     riskFlags.push("NO_CHANGES_AND_NO_TESTS");
   }
 
+  const objectiveText = truncateText(task.config.objective, 500).text;
+  const summaryText = summary.text;
+  const hasChinese = /[\u4e00-\u9fff]/.test(objectiveText);
+  const summaryHasChinese = /[\u4e00-\u9fff]/.test(summaryText);
+
   const reviewPackage: ReviewPackage = {
     task_id: task.task_id,
     status: task.status,
-    objective: truncateText(task.config.objective, 500).text,
+    objective: objectiveText,
+    ...(hasChinese ? { objective_zh: objectiveText } : {}),
     editable_paths: task.config.editable_paths.slice(0, 50),
     changed_files: changedFiles,
     changed_files_count: allChangedFiles.length,
@@ -349,7 +368,8 @@ export function generateReviewPackage(
     test_result: testResult,
     exit_code: task.exit_code ?? null,
     log_tail: logTail.text,
-    mimo_summary: summary.text,
+    mimo_summary: summaryText,
+    ...(summaryHasChinese ? { mimo_summary_zh: summaryText } : {}),
     risk_flags: [...new Set(riskFlags)],
     generated_at: new Date().toISOString(),
     review_recommendation: getRecommendation(task, riskFlags),
