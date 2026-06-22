@@ -1,0 +1,47 @@
+name: Feature request
+description: Suggest an improvement for MiMo Bridge MCP.
+title: "[Feature]: "
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What workflow pain does this solve?
+      placeholder: I want Codex to review a smaller task summary before reading any diff.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: Describe the change you would like.
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - MCP workflow
+        - MiMo runner
+        - Git Worktree handling
+        - Windows launcher
+        - Portable ZIP / installer
+        - Admin UI
+        - Documentation
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+  - type: checkboxes
+    id: boundaries
+    attributes:
+      label: Project boundaries
+      options:
+        - label: This keeps Codex or the user as the final reviewer before merge.
+        - label: This does not require exposing the local daemon to public networks.
+        - label: This preserves bounded tasks and Worktree isolation.
