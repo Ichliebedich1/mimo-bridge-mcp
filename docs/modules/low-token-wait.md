@@ -40,9 +40,24 @@ TaskStore and the existing bounded `mimo_get_task` review handler.
 
 Codex must call this after `mimo_start_task` or `mimo_reply_task` instead of repeatedly calling `mimo_get_task`.
 
+When using the MCP TypeScript SDK directly, pass request options with a timeout longer than `timeout_seconds`. The SDK default request timeout is 60 seconds, so a long daemon-side wait can be cut off by the client even when `mimo_wait_task` is working correctly.
+
+Example:
+
+```ts
+await client.callTool(
+  {
+    name: "mimo_wait_task",
+    arguments: { task_id, timeout_seconds: 300, detail_level: "review", max_chars: 8000 },
+  },
+  undefined,
+  { timeout: 320_000 },
+);
+```
+
 ## Required Changes
 
-No code changes remain for P4.6. Future callers must use this tool after start/reply instead of polling `mimo_get_task`.
+No daemon code changes remain for P4.6. Future callers must use this tool after start/reply instead of polling `mimo_get_task`, and SDK scripts must set a compatible client request timeout.
 
 ## Implementation Approach
 
@@ -60,4 +75,4 @@ cd apps/local-daemon; npm.cmd run build; cd ../..
 node --test tests/wait-task.test.mjs tests/stdio-protocol.test.mjs
 ```
 
-HTTP smoke verified 11 tools, immediate terminal-task return, and the minimal timeout response.
+HTTP smoke verified 11 tools, immediate terminal-task return, and the minimal timeout response. The 2026-06-22 real MiMo collaboration retest also verified that `mimo_wait_task` can return a bounded Review Package after a follow-up round when the MCP client timeout is explicitly extended.

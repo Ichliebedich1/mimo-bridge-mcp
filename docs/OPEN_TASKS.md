@@ -7,6 +7,7 @@
 - Design and implement P6 multi-agent dispatch so Codex can assign separate tasks to MiMo and Reasonix instead of choosing only one active provider.
 - Audit active Worktree cancellation cleanup.
 - Connect `TokenBudgetManager` to real MiMo token events.
+- Document or wrap MCP SDK calls so `mimo_wait_task` request timeout is explicitly longer than `timeout_seconds`; default SDK timeout can fire before daemon-side waiting returns.
 
 ## Completed
 
@@ -26,6 +27,7 @@
 - Temporary detached daemon proof using an on-demand Scheduled Task with no trigger.
 - P4.6 `mimo_wait_task` committed, deployed, HTTP-smoked, and covered by the 228/228 normal regression.
 - Documentation cleanup consolidated old root handoff/project snapshots and the old P5 UI design document into the active documentation set.
+- Safe-delete visibility in the admin UI: backend now returns `can_delete`, `delete_blockers`, and `delete_label`; task list has a `可安全删除` filter; delete action is driven by backend `can_delete`. Verified through real Codex -> MCP -> MiMo -> review -> focused diff -> merge flow and `node --test tests/admin-api.test.mjs`.
 
 ## Risks
 
@@ -40,3 +42,4 @@
 2. Validate the launcher and installer on clean Windows 10/11 x64 machines and after reboot/logon.
 3. Keep portable ZIP and EXE installer validation in the release checklist.
 4. Start P6 with the design in `docs/modules/multi-agent-dispatch.md`: Agent Registry, generic `agent_*` tools, path-conflict scheduling, MiMo adapter migration, Reasonix TUI runner, and Reasonix GUI capability probe.
+5. When using `mimo_wait_task` from an MCP SDK script, pass request options such as `{ timeout: (timeout_seconds + 20) * 1000 }` to avoid client-side timeout.

@@ -36,6 +36,7 @@ This file is the project-local long-term memory. Update it after each meaningful
 - TokenBudgetManager is not connected to real MiMo token events.
 - Active Worktree cancellation cleanup needs a focused audit.
 - Clean-machine double-click, reboot/logon, no-system-Node, port-conflict, and uninstall validation are pending.
+- MCP SDK callers must pass a request timeout longer than `mimo_wait_task.timeout_seconds`; otherwise the client can time out even though daemon-side low-token waiting is working.
 
 ## Next Handoff Checklist
 
@@ -70,3 +71,5 @@ This file is the project-local long-term memory. Update it after each meaningful
 - Installer repair after local double-click test: the EXE had installed files but generated installed launcher environment variables across multiple lines, making the app look missing/broken. Fixed `scripts/installer/install.ps1` to write explicit one-line installed launcher variables and fixed the EXE stub to default plain double-click installs to `-Quiet`.
 - Current local installed app path: `%LOCALAPPDATA%\MiMoBridgeApp`; current data path: `%LOCALAPPDATA%\MiMoBridge`. After repair install, installed daemon started from bundled `node.exe`, `/api/health` returned ok, MCP status ready, MiMo configured, queue empty.
 - Planned P6 is multi-agent dispatch, not provider replacement. Codex should be able to assign work to MiMo and Reasonix concurrently by explicit `agent_id`. Keep existing `mimo_*` tools compatible while adding generic `agent_*` tools. Reasonix TUI is the likely first executable adapter; Reasonix GUI needs a capability probe before any automation commitment.
+- Safe-delete visibility is implemented and merged via real Codex -> MCP -> MiMo -> Review Package -> focused diff -> merge flow. `/api/tasks` and `/api/tasks/:id` now return `can_delete`, `delete_blockers`, and `delete_label`; the admin UI has a `可安全删除` filter and only shows delete when backend-derived `can_delete` is true.
+- Latest safe-delete verification: `npm.cmd run build`, `cd apps/local-daemon; npm.cmd run build`, `cd apps/admin-ui; npm.cmd run build`, and `node --test tests/admin-api.test.mjs` passed. Daemon was restarted with `launcher.ps1 restart`; `/api/health` was ready and historical accepted/no-Worktree tasks returned `can_delete: true`, `delete_label: "可安全删除"`.
