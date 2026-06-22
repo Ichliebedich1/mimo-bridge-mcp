@@ -5,6 +5,12 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { dirname } from "node:path";
 
+const readTombstones = (runtimeDir) => {
+  const tombstonePath = join(runtimeDir, "deleted-mimo-sessions.json");
+  if (!existsSync(tombstonePath)) return null;
+  return JSON.parse(readFileSync(tombstonePath, "utf-8"));
+};
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
@@ -161,5 +167,117 @@ describe("task-store", () => {
 
     const tasks = store.listTasks();
     assert.ok(tasks.length >= 2);
+  });
+
+  it("should write tombstone with session_id on delete", () => {
+    const store = new TaskStore(testRuntimeDir);
+    const task = store.createTask({
+      objective: "tombstone test",
+      workspace_path: "C:\\test",
+      editable_paths: [],
+      readonly_paths: [],
+      acceptance_criteria: [],
+      max_rounds: 5,
+      runtime_timeout_seconds: 900,
+    });
+    store.updateTaskStatus(task.task_id, "accepted");
+    store.updateTaskSession(task.task_id, "ses_abc123");
+
+    const deleted = store.deleteTask(task.task_id);
+    assert.strictEqual(deleted, true);
+
+    const tombstoneFile = readTombstones(testRuntimeDir);
+    assert.ok(tombstoneFile);
+    assert.strictEqual(tombstoneFile.version, 1);
+    const entry = tombstoneFile.sessions.find((s) => s.task_id === task.task_id);
+    assert.ok(entry);
+    assert.strictEqual(entry.session_id, "ses_abc123");
+    assert.ok(entry.deleted_at);
+  });
+
+  it("should write tombstone with null session_id on delete", () => {
+    const store = new TaskStore(testRuntimeDir);
+    const task = store.createTask({
+      objective: "tombstone null session test",
+      workspace_path: "C:\\test",
+      editable_paths: [],
+      readonly_paths: [],
+      acceptance_criteria: [],
+      max_rounds: 5,
+      runtime_timeout_seconds: 900,
+    });
+    store.updateTaskStatus(task.task_id, "cancelled");
+
+    const deleted = store.deleteTask(task.task_id);
+    assert.strictEqual(deleted, true);
+
+    const tombstoneFile = readTombstones(testRuntimeDir);
+    assert.ok(tombstoneFile);
+    const entry = tombstoneFile.sessions.find((s) => s.task_id === task.task_id);
+    assert.ok(entry);
+    assert.strictEqual(entry.session_id, null);
+    assert.ok(entry.deleted_at);
+  });
+
+  it("should deduplicate tombstone entries by task_id", () => {
+    const store = new TaskStore(testRuntimeDir);
+    const task = store.createTask({
+      objective: "dedup test",
+      workspace_path: "C:\\test",
+      editable_paths: [],
+      readonly_paths: [],
+      acceptance_criteria: [],
+      max_rounds: 5,
+      runtime_timeout_seconds: 900,
+    });
+    store.updateTaskStatus(task.task_id, "failed");
+
+    store.deleteTask(task.task_id);
+
+    store.createTask({
+      objective: "recreate",
+      workspace_path: "C:\\test",
+      editable_paths: [],
+      readonly_paths: [],
+      acceptance_criteria: [],
+      max_rounds: 1,
+      runtime_timeout_seconds: 60,
+    });
+
+    const tombstoneFile = readTombstones(testRuntimeDir);
+    assert.ok(tombstoneFile);
+    const entries = tombstoneFile.sessions.filter((s) => s.task_id === task.task_id);
+    assert.strictEqual(entries.length, 1);
+  });
+
+  it("should bound tombstone entries to 1000", () => {
+    const store = new TaskStore(testRuntimeDir);
+    const tombstonePath = join(testRuntimeDir, "deleted-mimo-sessions.json");
+    const existing = {
+      version: 1,
+      sessions: Array.from({ length: 1000 }, (_, i) => ({
+        task_id: `task_${String(i).padStart(12, "0")}`,
+        session_id: null,
+        deleted_at: "2025-01-01T00:00:00.000Z",
+      })),
+    };
+    writeFileSync(tombstonePath, JSON.stringify(existing), "utf-8");
+
+    const task = store.createTask({
+      objective: "bounded test",
+      workspace_path: "C:\\test",
+      editable_paths: [],
+      readonly_paths: [],
+      acceptance_criteria: [],
+      max_rounds: 1,
+      runtime_timeout_seconds: 60,
+    });
+    store.updateTaskStatus(task.task_id, "accepted");
+    store.deleteTask(task.task_id);
+
+    const tombstoneFile = readTombstones(testRuntimeDir);
+    assert.ok(tombstoneFile);
+    assert.strictEqual(tombstoneFile.sessions.length, 1000);
+    assert.strictEqual(tombstoneFile.sessions[999].task_id, task.task_id);
   });
 });
