@@ -264,13 +264,18 @@ function augmentListTasksResult(data: unknown, context: ToolContext): unknown {
       if (!stored) {
         return task;
       }
+      const hasWorktree = Boolean(stored.worktree);
+      const safeDelete = computeSafeDelete(stored.status, hasWorktree);
       return {
         ...task,
         objective: stored.config.objective,
         created_at: stored.created_at,
         updated_at: stored.updated_at,
         current_round: stored.current_round,
-        has_worktree: Boolean(stored.worktree),
+        has_worktree: hasWorktree,
+        can_delete: safeDelete.can_delete,
+        delete_blockers: safeDelete.delete_blockers,
+        delete_label: safeDelete.delete_label,
       };
     }),
   };
@@ -286,13 +291,19 @@ function augmentTaskResult(data: unknown, context: ToolContext): unknown {
     return data;
   }
 
+  const hasWorktree = Boolean(stored.worktree);
+  const safeDelete = computeSafeDelete(stored.status, hasWorktree);
+
   return {
     ...data,
     objective: stored.config.objective,
     created_at: stored.created_at,
     updated_at: stored.updated_at,
     current_round: stored.current_round,
-    has_worktree: Boolean(stored.worktree),
+    has_worktree: hasWorktree,
+    can_delete: safeDelete.can_delete,
+    delete_blockers: safeDelete.delete_blockers,
+    delete_label: safeDelete.delete_label,
   };
 }
 
@@ -326,4 +337,22 @@ function sanitizeForBrowser(value: unknown): unknown {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
+}
+
+const TERMINAL_STATUSES = new Set(["accepted", "failed", "cancelled", "abandoned"]);
+
+function computeSafeDelete(status: string, hasWorktree: boolean): { can_delete: boolean; delete_blockers: string[]; delete_label: string } {
+  const blockers: string[] = [];
+  if (!TERMINAL_STATUSES.has(status)) {
+    blockers.push("任务未结束");
+  }
+  if (hasWorktree) {
+    blockers.push("存在 Worktree");
+  }
+  const can_delete = blockers.length === 0;
+  return {
+    can_delete,
+    delete_blockers: blockers,
+    delete_label: can_delete ? "可安全删除" : "不可删除",
+  };
 }
