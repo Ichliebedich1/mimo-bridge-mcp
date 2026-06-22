@@ -62,6 +62,9 @@ type ListTasksResponse = {
     has_worktree?: boolean;
     current_round?: number;
     priority?: number;
+    can_delete?: boolean;
+    delete_blockers?: string[];
+    delete_label?: string;
   }>;
 };
 
@@ -93,6 +96,9 @@ type GetTaskResponse = {
   updated_at?: string;
   current_round?: number;
   has_worktree?: boolean;
+  can_delete?: boolean;
+  delete_blockers?: string[];
+  delete_label?: string;
   review_package?: ReviewPackageResponse;
   summary?: string;
   completed?: boolean;
@@ -356,6 +362,9 @@ function toUiTask(task: ListTasksResponse['tasks'][number]): Task {
     recommendation: '打开详情后按低上下文协议审查。',
     workspaceLabel: '来自 API',
     hasWorktree: Boolean(task.has_worktree),
+    canDelete: Boolean(task.can_delete),
+    deleteBlockers: task.delete_blockers ?? [],
+    deleteLabel: task.delete_label ?? '不可删除',
     source: 'api',
   };
 }
@@ -380,6 +389,9 @@ function detailToUiTask(response: GetTaskResponse): Task {
       recommendation: '可稍后刷新，或查看任务状态。',
       workspaceLabel: '来自 API',
       hasWorktree: Boolean(response.has_worktree),
+      canDelete: Boolean(response.can_delete),
+      deleteBlockers: response.delete_blockers ?? [],
+      deleteLabel: response.delete_label ?? '不可删除',
       source: 'api',
     };
   }
@@ -411,6 +423,9 @@ function detailToUiTask(response: GetTaskResponse): Task {
     recommendation: recommendationLabel(review.review_recommendation),
     workspaceLabel: review.editable_paths?.length ? review.editable_paths.join('，') : '来自 API',
     hasWorktree: Boolean(response.has_worktree),
+    canDelete: Boolean(response.can_delete),
+    deleteBlockers: response.delete_blockers ?? [],
+    deleteLabel: response.delete_label ?? '不可删除',
     source: 'api',
   };
 }

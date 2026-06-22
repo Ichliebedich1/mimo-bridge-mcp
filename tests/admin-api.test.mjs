@@ -144,7 +144,8 @@ function createContext() {
       listTasks: {
         handler: async (input) => {
           calls.push(["listTasks", input]);
-          return { tasks: [{ task_id: task.task_id, status: "review", summary: "summary", raw_log_path: "C:\\sensitive\\raw.log" }] };
+          const allTasks = taskStore.listTasks(input.limit);
+          return { tasks: allTasks.map((t) => ({ task_id: t.task_id, status: t.status, summary: "summary", raw_log_path: "C:\\sensitive\\raw.log" })) };
         },
       },
       mergeTask: {
@@ -353,6 +354,120 @@ test("admin API live view returns 404 for nonexistent task", async () => {
     const result = await callApi(fixture.context, "GET", "/api/tasks/task_nonexistent/live");
     assert.strictEqual(result.statusCode, 404);
     assert.strictEqual(result.body.ok, false);
+  } finally {
+    fixture.cleanup();
+  }
+});
+
+test("admin API list includes safe-delete metadata for terminal task without worktree", async () => {
+  const fixture = createContext();
+  try {
+    const deletable = fixture.context.taskStore.createTask({
+      objective: "old cancelled task",
+      workspace_path: "C:\\workspace",
+      editable_paths: [],
+      readonly_paths: [],
+      acceptance_criteria: [],
+      max_rounds: 1,
+      runtime_timeout_seconds: 60,
+    });
+    fixture.context.taskStore.updateTaskStatus(deletable.task_id, "cancelled");
+
+    const result = await callApi(fixture.context, "GET", "/api/tasks?limit=20");
+    assert.strictEqual(result.statusCode, 200);
+    assert.strictEqual(result.body.ok, true);
+
+    const task = result.body.data.tasks.find((t) => t.task_id === deletable.task_id);
+    assert.ok(task, "expected to find the deletable task");
+    assert.strictEqual(task.can_delete, true);
+    assert.deepStrictEqual(task.delete_blockers, []);
+    assert.strictEqual(task.delete_label, "可安全删除");
+  } finally {
+    fixture.cleanup();
+  }
+});
+
+test("admin API list marks active task as not safe to delete", async () => {
+  const fixture = createContext();
+  try {
+    const active = fixture.context.taskStore.createTask({
+      objective: "running task",
+      workspace_path: "C:\\workspace",
+      editable_paths: [],
+      readonly_paths: [],
+      acceptance_criteria: [],
+      max_rounds: 1,
+      runtime_timeout_seconds: 60,
+    });
+    fixture.context.taskStore.updateTaskStatus(active.task_id, "running");
+
+    const result = await callApi(fixture.context, "GET", "/api/tasks?limit=20");
+    assert.strictEqual(result.statusCode, 200);
+
+    const task = result.body.data.tasks.find((t) => t.task_id === active.task_id);
+    assert.ok(task, "expected to find the active task");
+    assert.strictEqual(task.can_delete, false);
+    assert.ok(task.delete_blockers.includes("任务未结束"));
+    assert.strictEqual(task.delete_label, "不可删除");
+  } finally {
+    fixture.cleanup();
+  }
+});
+
+test("admin API list marks terminal task with worktree as not safe to delete", async () => {
+  const fixture = createContext();
+  try {
+    fixture.context.taskStore.updateTaskStatus(fixture.taskId, "cancelled");
+
+    const result = await callApi(fixture.context, "GET", "/api/tasks?limit=20");
+    assert.strictEqual(result.statusCode, 200);
+
+    const task = result.body.data.tasks.find((t) => t.task_id === fixture.taskId);
+    assert.ok(task, "expected to find the fixture task");
+    assert.strictEqual(task.status, "cancelled");
+    assert.strictEqual(task.has_worktree, true);
+    assert.strictEqual(task.can_delete, false);
+    assert.ok(task.delete_blockers.includes("存在 Worktree"));
+    assert.strictEqual(task.delete_label, "不可删除");
+  } finally {
+    fixture.cleanup();
+  }
+});
+
+test("admin API detail includes safe-delete metadata", async () => {
+  const fixture = createContext();
+  try {
+    const deletable = fixture.context.taskStore.createTask({
+      objective: "accepted no worktree",
+      workspace_path: "C:\\workspace",
+      editable_paths: [],
+      readonly_paths: [],
+      acceptance_criteria: [],
+      max_rounds: 1,
+      runtime_timeout_seconds: 60,
+    });
+    fixture.context.taskStore.updateTaskStatus(deletable.task_id, "accepted");
+
+    const result = await callApi(fixture.context, "GET", "/api/tasks/" + deletable.task_id + "?detail_level=review&max_chars=8000");
+    assert.strictEqual(result.statusCode, 200);
+    assert.strictEqual(result.body.ok, true);
+    assert.strictEqual(result.body.data.can_delete, true);
+    assert.deepStrictEqual(result.body.data.delete_blockers, []);
+    assert.strictEqual(result.body.data.delete_label, "可安全删除");
+  } finally {
+    fixture.cleanup();
+  }
+});
+
+test("admin API detail shows blockers for terminal task with worktree", async () => {
+  const fixture = createContext();
+  try {
+    fixture.context.taskStore.updateTaskStatus(fixture.taskId, "cancelled");
+    const result = await callApi(fixture.context, "GET", "/api/tasks/" + fixture.taskId + "?detail_level=review&max_chars=8000");
+    assert.strictEqual(result.statusCode, 200);
+    assert.strictEqual(result.body.data.can_delete, false);
+    assert.ok(result.body.data.delete_blockers.includes("存在 Worktree"));
+    assert.strictEqual(result.body.data.delete_label, "不可删除");
   } finally {
     fixture.cleanup();
   }

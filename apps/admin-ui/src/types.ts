@@ -42,6 +42,9 @@ export type Task = {
   recommendation: string;
   workspaceLabel: string;
   hasWorktree: boolean;
+  canDelete: boolean;
+  deleteBlockers: string[];
+  deleteLabel: string;
   source?: 'mock' | 'api';
 };
 

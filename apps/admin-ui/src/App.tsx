@@ -232,8 +232,9 @@ function App() {
 
   function confirmDeleteTask(taskId: string) {
     const task = tasks.find((candidate) => candidate.id === taskId);
-    if (!task || !isTaskDeletable(task)) {
-      setNotice({ tone: 'error', message: '只能删除已结束且没有 Worktree 的任务。' });
+    if (!task || !task.canDelete) {
+      const blockers = task?.deleteBlockers?.length ? task.deleteBlockers.join('，') : '只能删除已结束且没有 Worktree 的任务。';
+      setNotice({ tone: 'error', message: blockers });
       return;
     }
     setConfirmAction({
@@ -521,7 +522,10 @@ function TasksPage({
   onDeleteTask: (taskId: string) => void;
   onCreate: () => void;
 }) {
-  const filtered = filter === 'all' ? tasks : tasks.filter((task) => task.status === filter);
+  const [showSafeDeleteOnly, setShowSafeDeleteOnly] = useState(false);
+  const statusFiltered = filter === 'all' ? tasks : tasks.filter((task) => task.status === filter);
+  const filtered = showSafeDeleteOnly ? statusFiltered.filter((task) => task.canDelete) : statusFiltered;
+  const safeDeleteCount = statusFiltered.filter((task) => task.canDelete).length;
   const statuses: Array<'all' | TaskStatus> = ['all', 'queued', 'running', 'waiting', 'review', 'accepted', 'failed', 'cancelled', 'abandoned'];
 
   return (
@@ -538,6 +542,9 @@ function TasksPage({
             {filterLabel(status)}
           </button>
         ))}
+        <button className={showSafeDeleteOnly ? 'chip active' : 'chip'} onClick={() => setShowSafeDeleteOnly(!showSafeDeleteOnly)} type="button">
+          可安全删除{safeDeleteCount > 0 ? ' (' + safeDeleteCount + ')' : ''}
+        </button>
       </div>
       {filtered.length === 0 ? <EmptyState title="没有匹配任务" body="换一个状态筛选，或创建一个新的 MiMo 任务。" /> : <TaskTable tasks={filtered} onOpenTask={onOpenTask} onDeleteTask={onDeleteTask} />}
     </section>
@@ -719,7 +726,7 @@ function TaskDetailPage({
   const canCancel = task.status === 'queued' || task.status === 'running' || task.status === 'waiting';
   const hasBlocker = task.riskFlags.some((risk) => riskMeta[risk].severity === 'blocker');
   const hasAttention = task.riskFlags.length > 0 && !hasBlocker;
-  const canDelete = isTaskDeletable(task);
+  const canDelete = task.canDelete;
 
   async function loadFocused() {
     if (!selectedFile) {
@@ -856,6 +863,17 @@ function TaskDetailPage({
                 </div>
                 <p>{hasBlocker ? '存在阻塞风险，合并和验收按钮已保守禁用。' : '存在需要关注的风险，建议按文件加载 focused diff。'}</p>
               </>
+            )}
+          </div>
+
+          <div className="risk-section">
+            <h3>删除状态</h3>
+            {task.canDelete ? (
+              <div className="success-note">此任务可安全删除：状态已结束且无 Worktree。</div>
+            ) : (
+              <div className="warning-card compact">
+                <p>不可删除：{task.deleteBlockers.length > 0 ? task.deleteBlockers.join('；') : '任务未结束或存在 Worktree。'}</p>
+              </div>
             )}
           </div>
 
@@ -1147,7 +1165,7 @@ function TaskTable({
                   <button className="link-button" onClick={() => onOpenTask(task.id)} type="button">
                     查看
                   </button>
-                  {isTaskDeletable(task) && (
+                  {task.canDelete && (
                     <button className="link-button danger-link" onClick={() => onDeleteTask(task.id)} type="button">
                       删除
                     </button>
@@ -1477,8 +1495,8 @@ function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-function isTaskDeletable(task: Task): boolean {
-  return ['accepted', 'failed', 'cancelled', 'abandoned'].includes(task.status) && !task.hasWorktree;
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
 }
 
 async function writeClipboardText(text: string): Promise<void> {
@@ -1499,10 +1517,6 @@ async function writeClipboardText(text: string): Promise<void> {
   if (!copied) {
     throw new Error('浏览器不允许访问剪贴板');
   }
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null;
 }
 
 export default App;
