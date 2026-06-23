@@ -44,14 +44,17 @@ This file is the project-local long-term memory. Update it after each meaningful
 1. Read this file first.
 2. Run git status --short --branch.
 3. Read docs/HANDOVER_STATUS.md, docs/OPEN_TASKS.md, and docs/modules/windows-launcher-portability.md.
-4. Use npm.cmd run package:portable for the portable package.
-5. Use npm.cmd run package:installer for the EXE installer.
-6. Use npm.cmd run validate:release for automated local release validation, or npm.cmd run validate:release -- -SkipPackageBuild after artifacts already exist.
-7. Use docs/RELEASE_VALIDATION.md for clean Windows 10/11 x64 manual validation.
-8. Run focused tests before broad regression:
+4. If the issue involves the external Session Manager, read:
+   - `C:\Users\86172\Desktop\MiMo Code project\Mimo Code 会话管理\docs\HANDOVER_STATUS.md`
+   - `C:\Users\86172\Desktop\MiMo Code project\Mimo Code 会话管理\docs\modules\bridge-session-fallback.md`
+5. Use npm.cmd run package:portable for the portable package.
+6. Use npm.cmd run package:installer for the EXE installer.
+7. Use npm.cmd run validate:release for automated local release validation, or npm.cmd run validate:release -- -SkipPackageBuild after artifacts already exist.
+8. Use docs/RELEASE_VALIDATION.md for clean Windows 10/11 x64 manual validation.
+9. Run focused tests before broad regression:
    - node --test tests/installer-package.test.mjs
    - node --test tests/launcher-controller.test.mjs
-9. Normal regression must continue excluding tests/runner-integration.test.mjs.
+10. Normal regression must continue excluding tests/runner-integration.test.mjs.
 
 ## Active Documentation Set
 
@@ -63,8 +66,9 @@ This file is the project-local long-term memory. Update it after each meaningful
 
 ## Latest Notes
 
-- Cross-project Session Manager repair completed on 2026-06-23. User issue: MiMo sessions created by Codex/MiMo Bridge could appear in `Mimo Code 会话管理` but fail to open after their Bridge Worktree was merged/cleaned. MiMo task `task_0a88377ff37d` implemented the main fix in the external repo; Codex reviewed via low-token Review Package, escalated to focused target-repo diff because `use_worktree=false` reported no changed_files, added one missing session_id-scan fallback test/fix, rebuilt `release/MiMo-Code-Session-Manager.exe`, accepted the Bridge task, and committed target repo `09f70d03 fix: fallback for cleaned Bridge worktree sessions`.
-- Local Bridge config now includes `C:\Users\86172\Desktop\MiMo Code project\Mimo Code 会话管理` in `%LOCALAPPDATA%\MiMoBridge\config.json` allowedRoots so MiMo can work on that external project. This is local machine state, not a Git-tracked code change.
+- Context-compression checkpoint on 2026-06-23: committed baseline before this handoff-doc refresh was Bridge `master...origin/master [ahead 1]` at `01d734f docs: record session manager fallback collaboration`, and external Session Manager `master...origin/master [ahead 2]` at `f3fc5efd docs: add session manager handover` with previous code commit `09f70d03 fix: fallback for cleaned Bridge worktree sessions`. This checkpoint may itself be an uncommitted documentation edit if the user did not ask for a Git commit. Re-run `git status --short --branch` after resuming.
+- Cross-project Session Manager repair completed on 2026-06-23. User issue: MiMo sessions created by Codex/MiMo Bridge could appear in `Mimo Code 会话管理` but fail to open after their Bridge Worktree was merged/cleaned. MiMo task `task_0a88377ff37d` implemented the main fix in the external repo; Codex reviewed via low-token Review Package, escalated to focused target-repo diff because `use_worktree=false` reported no changed_files, added one missing session_id-scan fallback test/fix, rebuilt `release/MiMo-Code-Session-Manager.exe`, accepted the Bridge task, and committed target repo `09f70d03 fix: fallback for cleaned Bridge worktree sessions`. Session Manager docs were then committed as `f3fc5efd docs: add session manager handover`.
+- Local Bridge config now includes `C:\Users\86172\Desktop\MiMo Code project\Mimo Code 会话管理` in `%LOCALAPPDATA%\MiMoBridge\config.json` allowedRoots so MiMo can work on that external project. This is local machine state, not a Git-tracked code change and must be recreated on another computer.
 
 - Live viewer enhancement completed and locally verified: `/api/tasks/:id/live` now shows more MiMo-visible runtime text from `part.text`, `state.output`, `state.metadata.output`, and `state.error` in the existing `summary` field. Local paths/session/stdin/token/password values are sanitized; summary budget is raised from 200 to 1000 chars; admin UI live viewer is wider and preserves multiline text. Boundary: this cannot show hidden model chain-of-thought, only text already emitted into MiMo JSONL logs.
 

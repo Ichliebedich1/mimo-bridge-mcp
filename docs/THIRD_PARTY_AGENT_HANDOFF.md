@@ -12,9 +12,22 @@ This file is intentionally short. Older long-form handoff snapshots were consoli
 6. `docs/MODULE_MAP.md`
 7. `docs/modules/windows-launcher-portability.md`
 
+If the task involves the external local Session Manager, also read:
+
+1. `C:\Users\86172\Desktop\MiMo Code project\Mimo Code 会话管理\docs\HANDOVER_STATUS.md`
+2. `C:\Users\86172\Desktop\MiMo Code project\Mimo Code 会话管理\docs\modules\bridge-session-fallback.md`
+
 ## Current Assignment
 
 The project is past P5.3 implementation. The next useful work is release validation on clean Windows 10/11 x64 machines and small debt cleanup, not another architecture rewrite.
+
+Latest committed cross-project baseline on 2026-06-23, before this handoff-doc refresh:
+
+- Bridge repo expected state: `master...origin/master [ahead 1]`, latest commit `01d734f docs: record session manager fallback collaboration`.
+- External Session Manager repo expected state: `master...origin/master [ahead 2]`, latest commit `f3fc5efd docs: add session manager handover`, previous code commit `09f70d03 fix: fallback for cleaned Bridge worktree sessions`.
+- The Session Manager EXE was rebuilt at `C:\Users\86172\Desktop\MiMo Code project\Mimo Code 会话管理\release\MiMo-Code-Session-Manager.exe`.
+- Local Bridge config includes the Session Manager folder in `allowedRoots`; this is machine-local and must be recreated on another PC.
+- If this document was just updated for context compression, `git status` may show uncommitted documentation-only changes.
 
 ## Non-Negotiable Constraints
 

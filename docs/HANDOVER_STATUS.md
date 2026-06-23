@@ -11,7 +11,9 @@ Let Codex split and review work while MiMo performs bounded coding tasks through
 ## Current Progress
 
 - Branch: `master`.
-- Latest known pre-cleanup HEAD: `c94e399 docs: add release validation checklist`.
+- Committed Bridge baseline before this handoff-doc refresh: `master...origin/master [ahead 1]`.
+- Latest committed Bridge HEAD before this handoff-doc refresh: `01d734f docs: record session manager fallback collaboration`.
+- This handoff-doc refresh may be uncommitted if the user did not ask for a Git commit; always run `git status --short --branch` after context compression.
 - P0-P5.3 implementation is complete locally.
 - Shared daemon, HTTP MCP, admin UI, task queue, Worktree review, safe deletion, safe-delete visibility, low-token review, and `mimo_wait_task` are implemented.
 - Windows launcher lifecycle controls, persisted config, desktop shortcut command, opt-in autostart command, portable ZIP build, EXE installer build, installer self-test, and release-validation script are implemented.
@@ -19,6 +21,7 @@ Let Codex split and review work while MiMo performs bounded coding tasks through
 - Current release target is Windows 10/11 x64.
 - Current generated release artifacts are ignored under `artifacts/`.
 - Cross-project MiMo collaboration test on 2026-06-23 fixed the external `Mimo Code 会话管理` tool. Bridge task `task_0a88377ff37d` was delegated to MiMo, waited with `mimo_wait_task`, reviewed with Review Package first, then Codex escalated to focused diff in the target repo and accepted the task.
+- External Session Manager committed baseline before this handoff-doc refresh: `master...origin/master [ahead 2]`, latest docs commit `f3fc5efd docs: add session manager handover`, previous code commit `09f70d03 fix: fallback for cleaned Bridge worktree sessions`.
 
 ## Completed
 
@@ -38,7 +41,7 @@ Let Codex split and review work while MiMo performs bounded coding tasks through
 - Safe-delete visibility now surfaces backend-derived `can_delete`, `delete_blockers`, and `delete_label` in `/api/tasks` and `/api/tasks/:id`. The admin UI has a `可安全删除` filter and shows delete only when `can_delete` is true.
 - Default Chinese display chain: ReviewPackage has optional `objective_zh` / `mimo_summary_zh` fields; admin UI prefers zh for title/objective/summary with English fallback; future task briefs request Chinese summaries. No external translation API.
 - Real full-flow retest completed: Codex delegated the safe-delete visibility slice through MCP to MiMo, waited with `mimo_wait_task`, reviewed the bounded Review Package first, escalated only to focused diff for changed files, requested one small MiMo fix, merged the Worktree, and marked the task accepted.
-- External Session Manager fallback is complete: `Mimo Code 会话管理` commit `09f70d03 fix: fallback for cleaned Bridge worktree sessions` lets cleaned Bridge Worktree sessions open by falling back from stale `runtime/worktrees/.../task_xxx` directories to the original `config.workspace_path` stored in `runtime/tasks/task_xxx.json`. The EXE at `release/MiMo-Code-Session-Manager.exe` was rebuilt and `python -m unittest -v` passed 14/14.
+- External Session Manager fallback is complete: `Mimo Code 会话管理` code commit `09f70d03 fix: fallback for cleaned Bridge worktree sessions` lets cleaned Bridge Worktree sessions open by falling back from stale `runtime/worktrees/.../task_xxx` directories to the original `config.workspace_path` stored in `runtime/tasks/task_xxx.json`. Docs commit `f3fc5efd docs: add session manager handover` records the handoff. The EXE at `release/MiMo-Code-Session-Manager.exe` was rebuilt and `python -m unittest -v` passed 14/14.
 
 ## Collaboration Needed
 
@@ -72,4 +75,6 @@ Let Codex split and review work while MiMo performs bounded coding tasks through
 
 ## Recommended Next Action
 
-Run the release checklist on clean Windows 10/11 x64 machines, then update `PROJECT_MEMORY.md`, `docs/OPEN_TASKS.md`, and this file with the result. For further MiMo collaboration tests, keep using Review Package first and focused diff only when risk flags, `use_worktree=false`, or review notes require escalation.
+After context compression, read `PROJECT_MEMORY.md` first, then this file, then `docs/OPEN_TASKS.md`. If the next task concerns the local Session Manager, also read `C:\Users\86172\Desktop\MiMo Code project\Mimo Code 会话管理\docs\HANDOVER_STATUS.md` and `docs\modules\bridge-session-fallback.md`.
+
+Next engineering action: run the release checklist on clean Windows 10/11 x64 machines, then update `PROJECT_MEMORY.md`, `docs/OPEN_TASKS.md`, and this file with the result. For further MiMo collaboration tests, keep using Review Package first and focused diff only when risk flags, `use_worktree=false`, or review notes require escalation.
