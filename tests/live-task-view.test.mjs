@@ -141,6 +141,27 @@ test("parseJsonlLine exposes visible tool output with sanitization", () => {
   assert.ok(!JSON.stringify(event).includes("secret_token_abc123"));
 });
 
+test("parseJsonlLine summarizes file-read tool calls without dumping file content", () => {
+  const event = parseJsonlLine(JSON.stringify({
+    type: "tool_use",
+    timestamp: Date.now(),
+    part: {
+      tool: "read",
+      state: {
+        status: "completed",
+        input: { filePath: "C:\\Users\\test\\project\\src\\secret.ts" },
+        output: "<path>C:\\Users\\test\\project\\src\\secret.ts</path>\n<content>\nSECRET_SOURCE_SHOULD_NOT_APPEAR\n</content>",
+      },
+    },
+  }));
+  assert.ok(event);
+  assert.strictEqual(event.kind, "tool");
+  assert.strictEqual(event.tool, "read");
+  assert.ok(event.summary.includes("secret.ts"));
+  assert.ok(event.summary.includes("file content omitted"));
+  assert.ok(!event.summary.includes("SECRET_SOURCE_SHOULD_NOT_APPEAR"));
+});
+
 test("parseJsonlLine keeps multiline visible MiMo text", () => {
   const text = "第一行：我正在检查文件。\n第二行：我会运行测试。";
   const event = parseJsonlLine(JSON.stringify({
@@ -237,6 +258,37 @@ test("parseJsonlTail reads backward and returns only bounded tail from large fil
     assert.strictEqual(result.events.length, 10);
     assert.strictEqual(result.events[0].summary, "line_4990");
     assert.strictEqual(result.events[9].summary, "line_4999");
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("parseJsonlTail extracts MiMo text from raw PTY output and redacts stdin without filtering the message", () => {
+  const dir = tmpDir();
+  try {
+    const filePath = join(dir, "pty.jsonl");
+    const textEvent = {
+      type: "text",
+      timestamp: 1700000001000,
+      sessionID: "ses_test",
+      part: {
+        type: "text",
+        text: "PowerShell wrapper forwards stdin safely.\n完成报告：测试通过。",
+      },
+    };
+    const content =
+      "\u001b[2J\u001b[H" +
+      JSON.stringify({ type: "step_start", timestamp: 1700000000000, part: { type: "step-start" } }) +
+      JSON.stringify(textEvent) +
+      JSON.stringify({ type: "step_finish", timestamp: 1700000002000, part: { type: "step-finish", reason: "stop" } });
+    writeFileSync(filePath, content, "utf-8");
+
+    const result = parseJsonlTail(filePath, 10, 8000);
+    assert.strictEqual(result.events.length, 1);
+    assert.strictEqual(result.events[0].kind, "message");
+    assert.ok(result.events[0].summary.includes("[stdin]"));
+    assert.ok(result.events[0].summary.includes("完成报告"));
+    assert.ok(!result.events[0].summary.includes("content filtered"));
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

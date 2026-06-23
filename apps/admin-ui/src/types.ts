@@ -117,6 +117,7 @@ export type FullTaskResult = {
 export type LiveEvent = {
   timestamp: string;
   event_type: string;
+  kind: 'message' | 'tool' | 'event';
   tool?: string;
   status?: string;
   summary: string;

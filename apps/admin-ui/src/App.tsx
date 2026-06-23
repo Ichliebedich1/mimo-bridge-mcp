@@ -1287,6 +1287,7 @@ function LiveViewerPanel({ taskId, onClose }: { taskId: string; onClose: () => v
   const [data, setData] = useState<LiveTaskView | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [expanded, setExpanded] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -1319,15 +1320,20 @@ function LiveViewerPanel({ taskId, onClose }: { taskId: string; onClose: () => v
 
   return (
     <div className="modal-backdrop" role="presentation" onClick={onClose}>
-      <section className="live-viewer-dialog" aria-modal="true" role="dialog" aria-labelledby="live-viewer-title" onClick={(e) => e.stopPropagation()}>
+      <section className={'live-viewer-dialog ' + (expanded ? 'expanded' : '')} aria-modal="true" role="dialog" aria-labelledby="live-viewer-title" onClick={(e) => e.stopPropagation()}>
         <div className="live-viewer-header">
           <div>
             <span className="eyebrow">只读实时查看</span>
             <h2 id="live-viewer-title">运行事件 · {taskId}</h2>
           </div>
-          <button className="button ghost" onClick={onClose} type="button">
-            关闭
-          </button>
+          <div className="live-viewer-actions">
+            <button className="button ghost" aria-pressed={expanded} onClick={() => setExpanded((value) => !value)} type="button">
+              {expanded ? '还原' : '放大'}
+            </button>
+            <button className="button ghost" onClick={onClose} type="button">
+              关闭
+            </button>
+          </div>
         </div>
 
         {data && (
@@ -1346,13 +1352,26 @@ function LiveViewerPanel({ taskId, onClose }: { taskId: string; onClose: () => v
             <div className="lane-empty">暂无运行事件。</div>
           )}
           {!loading && !error && data && data.events.map((event, index) => (
-            <div className="live-event-row" key={index}>
-              <span className="live-event-time">{formatEventTime(event.timestamp)}</span>
-              <span className={'live-event-type'}>{event.event_type}</span>
-              {event.tool && <span className="live-event-tool">{event.tool}</span>}
-              {event.status && <span className="live-event-status">{event.status}</span>}
-              <span className="live-event-summary">{event.summary}</span>
-            </div>
+            event.kind === 'message' ? (
+              <article className={'live-event-card ' + event.kind} key={index}>
+                <div className="live-event-card-header">
+                  <span className="live-event-time">{formatEventTime(event.timestamp)}</span>
+                  <span className={'live-event-kind ' + event.kind}>{liveEventLabel(event)}</span>
+                </div>
+                <pre className="live-event-summary">{event.summary}</pre>
+              </article>
+            ) : (
+              <details className={'live-event-card collapsed ' + event.kind} key={index}>
+                <summary className="live-event-collapsed-summary">
+                  <span className="live-event-time">{formatEventTime(event.timestamp)}</span>
+                  <span className={'live-event-kind ' + event.kind}>{liveEventLabel(event)}</span>
+                  {event.tool && <span className="live-event-tool">{event.tool}</span>}
+                  {event.status && <span className="live-event-status">{event.status}</span>}
+                  <span className="live-event-preview">{liveEventPreview(event)}</span>
+                </summary>
+                <pre className="live-event-summary">{event.summary}</pre>
+              </details>
+            )
           ))}
         </div>
 
@@ -1489,6 +1508,18 @@ function formatEventTime(isoString: string): string {
   const date = new Date(isoString);
   if (Number.isNaN(date.getTime())) return isoString;
   return date.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+}
+
+function liveEventLabel(event: LiveEvent): string {
+  if (event.kind === 'message') return 'MiMo 回复';
+  if (event.kind === 'tool') return '工具调用';
+  return '事件';
+}
+
+function liveEventPreview(event: LiveEvent): string {
+  const firstLine = event.summary.split(/\r?\n/).map((line) => line.trim()).find(Boolean) ?? event.event_type;
+  const maxLength = 120;
+  return firstLine.length > maxLength ? firstLine.slice(0, maxLength) + '…' : firstLine;
 }
 
 function errorMessage(error: unknown): string {

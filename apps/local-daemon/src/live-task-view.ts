@@ -1,9 +1,12 @@
-import { openSync, fstatSync, readSync, closeSync, existsSync } from "node:fs";
+import { closeSync, existsSync, fstatSync, openSync, readSync } from "node:fs";
+import { basename } from "node:path";
 import type { TaskStore } from "../../../src/services/task-store.js";
+import { createEventParser } from "../../../src/services/event-parser.js";
 
 export interface LiveEvent {
   timestamp: string;
   event_type: string;
+  kind: "message" | "tool" | "event";
   tool?: string;
   status?: string;
   summary: string;
@@ -30,7 +33,6 @@ const CHUNK_SIZE = 8192;
 const BLOCKED_SUMMARY_PATTERNS: RegExp[] = [
   /[A-Z]:\\[^\s"']*/i,
   /\/(?:home|tmp|var|usr|opt)\/[^\s"']*/i,
-  /stdin|session_id|sessionID/i,
 ];
 
 export function parseLiveParams(params: URLSearchParams): {
@@ -58,7 +60,7 @@ export function readLiveTaskView(
 ): LiveTaskView | { error: string } {
   const task = taskStore.getTask(taskId);
   if (!task) {
-    return { error: "任务不存在" };
+    return { error: "task not found" };
   }
 
   const isLive = task.status === "running";
@@ -152,11 +154,13 @@ function readTailEvents(
       content = firstCompleteLine >= 0 ? content.slice(firstCompleteLine + 1) : "";
     }
 
-    const lines = content.split(/\r?\n/).filter((line) => line.trim().length > 0);
+    const parser = createEventParser();
+    parser.parse(content);
+    const result = parser.flush();
 
     const parsed: LiveEvent[] = [];
-    for (const line of lines) {
-      const event = parseJsonlLine(line);
+    for (const record of result.events) {
+      const event = parseLiveEventRecord(record as unknown);
       if (event) {
         parsed.push(event);
       }
@@ -195,25 +199,35 @@ export function parseJsonlLine(line: string): LiveEvent | null {
     return null;
   }
 
+  return parseLiveEventRecord(parsed);
+}
+
+function parseLiveEventRecord(parsed: unknown): LiveEvent | null {
   if (!isRecord(parsed)) {
+    return null;
+  }
+  if (isLowValueMimoStep(parsed)) {
     return null;
   }
 
   const rawType = typeof parsed.type === "string" ? parsed.type : "unknown";
   const timestamp = extractTimestamp(parsed);
   const summary = sanitizeLiveText(extractSummary(parsed));
+  const kind = classifyEvent(parsed);
 
   if (containsBlockedContent(summary)) {
     return {
       timestamp,
       event_type: sanitizeEventType(rawType),
-      summary: "(内容已过滤)",
+      kind,
+      summary: "(content filtered)",
     };
   }
 
   const event: LiveEvent = {
     timestamp,
     event_type: sanitizeEventType(rawType),
+    kind,
     summary: truncateSummary(summary),
   };
 
@@ -248,6 +262,10 @@ function extractSummary(record: Record<string, unknown>): string {
   if (typeof record.summary === "string") return record.summary;
   if (typeof record.message === "string") return record.message;
 
+  if (isToolEvent(record)) {
+    return extractToolSummary(record);
+  }
+
   if (isRecord(record.part)) {
     const part = record.part;
     if (isRecord(part.state)) {
@@ -266,12 +284,117 @@ function extractSummary(record: Record<string, unknown>): string {
   return "[event]";
 }
 
-function extractTool(record: Record<string, unknown>): string | undefined {
-  if (isRecord(record.part) && typeof record.part.tool === "string") {
-    return sanitizeField(record.part.tool, 48);
+function extractToolSummary(record: Record<string, unknown>): string {
+  const part = isRecord(record.part) ? record.part : {};
+  const state = isRecord(part.state) ? part.state : {};
+  const chunks: string[] = [];
+  const toolName = extractToolName(record);
+  let hasNarrativeSummary = false;
+
+  if (typeof state.title === "string") {
+    chunks.push(state.title);
+    hasNarrativeSummary = true;
+  } else if (isRecord(state.input) && typeof state.input.description === "string") {
+    chunks.push(state.input.description);
+    hasNarrativeSummary = true;
   }
-  if (typeof record.tool === "string") return sanitizeField(record.tool, 48);
-  if (typeof record.tool_name === "string") return sanitizeField(record.tool_name, 48);
+
+  const inputSummary = hasNarrativeSummary ? "" : summarizeToolInput(state.input);
+  if (inputSummary) {
+    chunks.push("input: " + inputSummary);
+  }
+
+  const output = extractToolOutput(state);
+  const outputSummary = hasNarrativeSummary && !isShellTool(toolName) ? "" : summarizeToolOutput(toolName, output);
+  if (outputSummary) {
+    chunks.push("output: " + outputSummary);
+  }
+
+  return chunks.length > 0 ? chunks.join("\n") : "[" + (toolName ?? "tool") + "]";
+}
+
+function extractToolOutput(state: Record<string, unknown>): string | undefined {
+  if (typeof state.output === "string") return state.output;
+  if (typeof state.error === "string") return state.error;
+  if (isRecord(state.metadata) && typeof state.metadata.output === "string") return state.metadata.output;
+  return undefined;
+}
+
+function summarizeToolInput(input: unknown): string {
+  if (typeof input === "string") {
+    return truncateInline(input, 300);
+  }
+  if (!isRecord(input)) {
+    return "";
+  }
+
+  const preferredKeys = [
+    "command",
+    "filePath",
+    "path",
+    "pattern",
+    "include",
+    "glob",
+    "query",
+    "description",
+    "oldString",
+    "newString",
+  ];
+  const parts: string[] = [];
+
+  for (const key of preferredKeys) {
+    if (!(key in input)) continue;
+    const value = input[key];
+    if (typeof value === "string") {
+      if (key === "filePath" || key === "path") {
+        parts.push(`${key}=${safeBasename(value)}`);
+      } else if (key === "oldString" || key === "newString") {
+        parts.push(`${key}=${value.length} chars`);
+      } else {
+        parts.push(`${key}=${truncateInline(value, 220)}`);
+      }
+    } else if (value !== undefined) {
+      parts.push(`${key}=${truncateInline(JSON.stringify(value) ?? String(value), 220)}`);
+    }
+  }
+
+  if (parts.length > 0) {
+    return parts.join("; ");
+  }
+
+  return truncateInline(JSON.stringify(input) ?? String(input), 300);
+}
+
+function summarizeToolOutput(toolName: string | undefined, output: string | undefined): string {
+  if (!output) {
+    return "";
+  }
+
+  const normalizedTool = (toolName ?? "").toLowerCase();
+  if ((normalizedTool === "read" || normalizedTool === "file_read") && output.includes("<content>")) {
+    return `file content omitted (${output.length} chars)`;
+  }
+
+  const text = output.replace(/\r/g, "");
+  return truncateBlock(text, normalizedTool === "bash" || normalizedTool === "shell" ? 1600 : 700);
+}
+
+function isShellTool(toolName: string | undefined): boolean {
+  const normalized = (toolName ?? "").toLowerCase();
+  return normalized === "bash" || normalized === "shell" || normalized === "powershell" || normalized === "cmd";
+}
+
+function extractTool(record: Record<string, unknown>): string | undefined {
+  const toolName = extractToolName(record);
+  return toolName ? sanitizeField(toolName, 48) : undefined;
+}
+
+function extractToolName(record: Record<string, unknown>): string | undefined {
+  if (isRecord(record.part) && typeof record.part.tool === "string") {
+    return record.part.tool;
+  }
+  if (typeof record.tool === "string") return record.tool;
+  if (typeof record.tool_name === "string") return record.tool_name;
   return undefined;
 }
 
@@ -292,9 +415,9 @@ function sanitizeEventType(type: string): string {
 }
 
 function truncateSummary(summary: string): string {
-  const MAX_SUMMARY = 1000;
-  if (summary.length <= MAX_SUMMARY) return summary;
-  return summary.slice(0, MAX_SUMMARY) + "…";
+  const maxSummary = 2000;
+  if (summary.length <= maxSummary) return summary;
+  return summary.slice(0, maxSummary) + "\n[truncated]";
 }
 
 function containsBlockedContent(summary: string): boolean {
@@ -312,6 +435,41 @@ function sanitizeLiveText(value: string): string {
     .replace(/\b(?:secret[_-]?)?token[_:-]?[A-Za-z0-9_.-]+\b/gi, "[redacted-token]")
     .replace(/\bpassword\b\s*[:=]\s*\S+/gi, "password=[redacted]")
     .trim();
+}
+
+function classifyEvent(record: Record<string, unknown>): LiveEvent["kind"] {
+  if (isToolEvent(record)) return "tool";
+  if (record.type === "text") return "message";
+  if (isRecord(record.part) && record.part.type === "text") return "message";
+  return "event";
+}
+
+function isToolEvent(record: Record<string, unknown>): boolean {
+  if (extractToolName(record) !== undefined) return true;
+  return record.type === "tool_use" && isRecord(record.part) && isRecord(record.part.state);
+}
+
+function isLowValueMimoStep(record: Record<string, unknown>): boolean {
+  if (!isRecord(record.part)) return false;
+  return record.part.type === "step-start" || record.part.type === "step-finish";
+}
+
+function safeBasename(value: string): string {
+  const normalized = value.replace(/\\/g, "/");
+  const name = basename(normalized);
+  return name || "[local path]";
+}
+
+function truncateInline(value: string, maxLen: number): string {
+  const compact = value.replace(/\s+/g, " ").trim();
+  if (compact.length <= maxLen) return compact;
+  return compact.slice(0, maxLen) + " [truncated]";
+}
+
+function truncateBlock(value: string, maxLen: number): string {
+  const trimmed = value.trim();
+  if (trimmed.length <= maxLen) return trimmed;
+  return trimmed.slice(0, maxLen) + "\n[truncated]";
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

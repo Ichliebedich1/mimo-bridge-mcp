@@ -224,7 +224,7 @@ export async function fetchFullTask(taskId: string): Promise<FullTaskResult> {
   };
 }
 
-export async function fetchLiveTask(taskId: string, maxEvents = 40, maxChars = 8000): Promise<LiveTaskView> {
+export async function fetchLiveTask(taskId: string, maxEvents = 80, maxChars = 16000): Promise<LiveTaskView> {
   const params = new URLSearchParams({
     max_events: String(maxEvents),
     max_chars: String(maxChars),

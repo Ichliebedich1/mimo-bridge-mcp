@@ -1130,8 +1130,8 @@ textarea:focus {
 }
 
 .live-viewer-dialog {
-  width: min(960px, 100%);
-  max-height: 80vh;
+  width: min(1120px, 100%);
+  max-height: 88vh;
   display: flex;
   flex-direction: column;
   border: 1px solid rgba(255, 255, 255, 0.7);
@@ -1139,6 +1139,13 @@ textarea:focus {
   padding: 26px;
   background: #ffffff;
   box-shadow: 0 28px 80px rgba(15, 23, 42, 0.28);
+}
+
+.live-viewer-dialog.expanded {
+  width: calc(100vw - 48px);
+  height: calc(100vh - 48px);
+  max-height: calc(100vh - 48px);
+  border-radius: 20px;
 }
 
 .live-viewer-header {
@@ -1155,6 +1162,13 @@ textarea:focus {
   letter-spacing: -0.02em;
 }
 
+.live-viewer-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
 .live-viewer-meta {
   display: flex;
   align-items: center;
@@ -1168,25 +1182,88 @@ textarea:focus {
   flex: 1;
   overflow-y: auto;
   min-height: 200px;
-  max-height: 50vh;
+  max-height: 62vh;
   border: 1px solid var(--line);
   border-radius: 18px;
   background: #f8fafc;
   padding: 12px;
 }
 
-.live-event-row {
-  display: grid;
-  grid-template-columns: 80px auto auto auto 1fr;
-  gap: 10px;
-  align-items: baseline;
-  padding: 8px 10px;
-  border-bottom: 1px solid var(--line);
+.live-viewer-dialog.expanded .live-viewer-events {
+  max-height: none;
+}
+
+.live-event-card {
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: #ffffff;
+  padding: 12px 14px;
+  margin-bottom: 10px;
   font-size: 13px;
 }
 
-.live-event-row:last-child {
-  border-bottom: 0;
+.live-event-card:last-child {
+  margin-bottom: 0;
+}
+
+.live-event-card.message {
+  border-color: rgba(37, 99, 235, 0.22);
+  background: #f8fbff;
+}
+
+.live-event-card.tool,
+.live-event-card.event {
+  border-color: rgba(124, 58, 237, 0.22);
+  background: #fbf8ff;
+}
+
+.live-event-card.collapsed {
+  padding: 0;
+  overflow: hidden;
+}
+
+.live-event-card.collapsed[open] {
+  padding-bottom: 12px;
+}
+
+.live-event-collapsed-summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  cursor: pointer;
+  color: var(--ink);
+  list-style: none;
+}
+
+.live-event-collapsed-summary::-webkit-details-marker {
+  display: none;
+}
+
+.live-event-collapsed-summary::before {
+  content: "▶";
+  color: var(--muted);
+  font-size: 10px;
+  transform: translateY(-1px);
+}
+
+.live-event-card[open] > .live-event-collapsed-summary::before {
+  content: "▼";
+}
+
+.live-event-card.collapsed .live-event-summary {
+  margin: 0 12px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+}
+
+.live-event-card-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
 }
 
 .live-event-time {
@@ -1196,32 +1273,64 @@ textarea:focus {
   white-space: nowrap;
 }
 
+.live-event-kind,
+.live-event-type,
+.live-event-tool,
+.live-event-status {
+  border-radius: 999px;
+  padding: 2px 8px;
+  font-size: 12px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.live-event-kind.message {
+  color: var(--blue);
+  background: rgba(37, 99, 235, 0.09);
+}
+
+.live-event-kind.tool {
+  color: var(--purple);
+  background: rgba(124, 58, 237, 0.09);
+}
+
+.live-event-kind.event {
+  color: var(--muted);
+  background: rgba(100, 116, 139, 0.12);
+}
+
 .live-event-type {
   color: var(--blue);
-  font-weight: 800;
-  font-size: 12px;
-  white-space: nowrap;
+  background: rgba(37, 99, 235, 0.06);
 }
 
 .live-event-tool {
   color: var(--purple);
-  font-size: 12px;
-  font-weight: 700;
-  white-space: nowrap;
+  background: rgba(124, 58, 237, 0.08);
 }
 
 .live-event-status {
   color: var(--amber);
-  font-size: 12px;
-  font-weight: 700;
+  background: rgba(217, 119, 6, 0.08);
+}
+
+.live-event-preview {
+  min-width: 160px;
+  flex: 1;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .live-event-summary {
+  margin: 0;
   color: var(--ink);
   overflow-wrap: anywhere;
   white-space: pre-wrap;
   line-height: 1.55;
+  font-family: Consolas, "SFMono-Regular", "Courier New", monospace;
+  font-size: 12px;
 }
 
 .live-viewer-footer {
