@@ -63,6 +63,9 @@ This file is the project-local long-term memory. Update it after each meaningful
 
 ## Latest Notes
 
+- Cross-project Session Manager repair completed on 2026-06-23. User issue: MiMo sessions created by Codex/MiMo Bridge could appear in `Mimo Code 会话管理` but fail to open after their Bridge Worktree was merged/cleaned. MiMo task `task_0a88377ff37d` implemented the main fix in the external repo; Codex reviewed via low-token Review Package, escalated to focused target-repo diff because `use_worktree=false` reported no changed_files, added one missing session_id-scan fallback test/fix, rebuilt `release/MiMo-Code-Session-Manager.exe`, accepted the Bridge task, and committed target repo `09f70d03 fix: fallback for cleaned Bridge worktree sessions`.
+- Local Bridge config now includes `C:\Users\86172\Desktop\MiMo Code project\Mimo Code 会话管理` in `%LOCALAPPDATA%\MiMoBridge\config.json` allowedRoots so MiMo can work on that external project. This is local machine state, not a Git-tracked code change.
+
 - Live viewer enhancement completed and locally verified: `/api/tasks/:id/live` now shows more MiMo-visible runtime text from `part.text`, `state.output`, `state.metadata.output`, and `state.error` in the existing `summary` field. Local paths/session/stdin/token/password values are sanitized; summary budget is raised from 200 to 1000 chars; admin UI live viewer is wider and preserves multiline text. Boundary: this cannot show hidden model chain-of-thought, only text already emitted into MiMo JSONL logs.
 
 - Win11 support is treated as the same Windows x64 release line as Win10 because both are NT 10.x and the current stack is Node/PowerShell/localhost.

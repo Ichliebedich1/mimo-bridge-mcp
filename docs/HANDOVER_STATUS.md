@@ -18,6 +18,7 @@ Let Codex split and review work while MiMo performs bounded coding tasks through
 - Local EXE install was repaired after a real double-click test exposed a broken installed launcher script. The installed app now starts from `%LOCALAPPDATA%\MiMoBridgeApp`, uses `%LOCALAPPDATA%\MiMoBridge` for data, and reports MCP ready at `http://127.0.0.1:3210/mcp`.
 - Current release target is Windows 10/11 x64.
 - Current generated release artifacts are ignored under `artifacts/`.
+- Cross-project MiMo collaboration test on 2026-06-23 fixed the external `Mimo Code 会话管理` tool. Bridge task `task_0a88377ff37d` was delegated to MiMo, waited with `mimo_wait_task`, reviewed with Review Package first, then Codex escalated to focused diff in the target repo and accepted the task.
 
 ## Completed
 
@@ -37,12 +38,14 @@ Let Codex split and review work while MiMo performs bounded coding tasks through
 - Safe-delete visibility now surfaces backend-derived `can_delete`, `delete_blockers`, and `delete_label` in `/api/tasks` and `/api/tasks/:id`. The admin UI has a `可安全删除` filter and shows delete only when `can_delete` is true.
 - Default Chinese display chain: ReviewPackage has optional `objective_zh` / `mimo_summary_zh` fields; admin UI prefers zh for title/objective/summary with English fallback; future task briefs request Chinese summaries. No external translation API.
 - Real full-flow retest completed: Codex delegated the safe-delete visibility slice through MCP to MiMo, waited with `mimo_wait_task`, reviewed the bounded Review Package first, escalated only to focused diff for changed files, requested one small MiMo fix, merged the Worktree, and marked the task accepted.
+- External Session Manager fallback is complete: `Mimo Code 会话管理` commit `09f70d03 fix: fallback for cleaned Bridge worktree sessions` lets cleaned Bridge Worktree sessions open by falling back from stale `runtime/worktrees/.../task_xxx` directories to the original `config.workspace_path` stored in `runtime/tasks/task_xxx.json`. The EXE at `release/MiMo-Code-Session-Manager.exe` was rebuilt and `python -m unittest -v` passed 14/14.
 
 ## Collaboration Needed
 
 - Codex: keep planning/reviewing and use low-token wait/review rules.
 - MiMo: execute bounded coding tasks inside allowed paths and task Worktrees.
 - Third-party agents: use `PROJECT_MEMORY.md`, `AGENTS.md`, and this handover before touching code.
+- External Session Manager docs: if continuing the local session manager tool, read `C:\Users\86172\Desktop\MiMo Code project\Mimo Code 会话管理\docs\HANDOVER_STATUS.md` and `docs\modules\bridge-session-fallback.md`.
 
 ## Remaining Work
 
@@ -62,9 +65,11 @@ Let Codex split and review work while MiMo performs bounded coding tasks through
 - Codex shell capture can lose direct stdout when launcher commands spawn the daemon; verify daemon health with `launcher.ps1 status -Json`.
 - During the 2026-06-22 full-flow retest, the first `mimo_wait_task(timeout_seconds=600)` call used the MCP SDK default 60s request timeout and failed client-side. A later call with an explicit longer request timeout returned correctly. Treat this as caller usage debt, not a daemon failure.
 - During the 2026-06-23 delegation test, several startup attempts failed before MiMo received a task because PowerShell/inline Node command strings mishandled Chinese paths or special characters. Treat this as invocation-layer debt, not a MiMo execution failure.
+- When delegating to projects outside the Bridge repo, the folder must be present in Bridge `allowedRoots`. This machine now has `C:\Users\86172\Desktop\MiMo Code project\Mimo Code 会话管理` in `%LOCALAPPDATA%\MiMoBridge\config.json`; reproduce that setting on migrated machines before asking MiMo to modify the session manager.
+- Review Package can show `changed_files: []` for `use_worktree=false` cross-project tasks even when the target repo changed. In that case, escalate to focused `git diff` inside the target repo instead of assuming no changes.
 - Clean Windows validation is still the main external blocker before calling the package ready for general use.
 - The local machine install path has been smoke-tested, but a separate clean Windows 10/11 validation pass is still required.
 
 ## Recommended Next Action
 
-Run the release checklist on clean Windows 10/11 x64 machines, then update `PROJECT_MEMORY.md`, `docs/OPEN_TASKS.md`, and this file with the result. For further MiMo collaboration tests, keep using Review Package first and focused diff only when risk flags or review notes require escalation.
+Run the release checklist on clean Windows 10/11 x64 machines, then update `PROJECT_MEMORY.md`, `docs/OPEN_TASKS.md`, and this file with the result. For further MiMo collaboration tests, keep using Review Package first and focused diff only when risk flags, `use_worktree=false`, or review notes require escalation.

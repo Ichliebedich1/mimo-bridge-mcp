@@ -31,6 +31,7 @@
 - Documentation cleanup consolidated old root handoff/project snapshots and the old P5 UI design document into the active documentation set.
 - Safe-delete visibility in the admin UI: backend now returns `can_delete`, `delete_blockers`, and `delete_label`; task list has a `可安全删除` filter; delete action is driven by backend `can_delete`. Verified through real Codex -> MCP -> MiMo -> review -> focused diff -> merge flow and `node --test tests/admin-api.test.mjs`.
 - Default Chinese display chain: ReviewPackage now includes optional `objective_zh` and `mimo_summary_zh` fields; admin UI title/objective/summary prefer zh fields with English fallback; task briefs and Codex handoff prompts request Chinese summaries for future tasks. No external translation API used.
+- Cross-project Session Manager fix: Bridge task `task_0a88377ff37d` delegated to MiMo, waited through `mimo_wait_task`, reviewed first by bounded Review Package, then escalated to focused diff because `use_worktree=false` produced no changed_files. Target repo commit `09f70d03` rebuilt `release/MiMo-Code-Session-Manager.exe` and fixed cleaned Bridge Worktree session fallback.
 
 ## Risks
 
@@ -38,6 +39,8 @@
 - In the Codex shell harness, commands that spawn the daemon can lose direct stdout capture even when the daemon starts successfully; verify with `launcher.ps1 status -Json` until clean-machine double-click testing confirms normal console behavior.
 - Automated browser interaction was not run; Playwright installation timed out.
 - Known Runner integration hang and Windows PTY warning noise remain.
+- Cross-project tasks outside the Bridge repo require explicit `allowedRoots` configuration. This machine includes `C:\Users\86172\Desktop\MiMo Code project\Mimo Code 会话管理` locally, but that setting is not part of Git.
+- `use_worktree=false` Review Packages can miss target-repo changed_files; audit with focused target-repo `git diff` before accepting.
 
 ## Next Steps
 
@@ -47,3 +50,4 @@
 4. Start P6 with the design in `docs/modules/multi-agent-dispatch.md`: Agent Registry, generic `agent_*` tools, path-conflict scheduling, MiMo adapter migration, Reasonix TUI runner, and Reasonix GUI capability probe.
 5. Implement P5.4 before more cross-machine workflow tests, because it removes fragile shell quoting/encoding from agent-to-bridge calls.
 6. When using `mimo_wait_task` from an MCP SDK script, pass request options such as `{ timeout: (timeout_seconds + 20) * 1000 }` to avoid client-side timeout. See `docs/modules/low-token-wait.md` for the 1800/3600s examples.
+7. If continuing the local `Mimo Code 会话管理` tool, start from `C:\Users\86172\Desktop\MiMo Code project\Mimo Code 会话管理\docs\HANDOVER_STATUS.md`.
