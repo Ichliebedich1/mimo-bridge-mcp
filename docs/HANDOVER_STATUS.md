@@ -2,7 +2,7 @@
 
 ## Scope
 
-MiMo Bridge MCP after P0-P5.3 implementation, documentation cleanup, and Windows 10/11 x64 packaging preparation.
+MiMo Bridge MCP after P0-P5.4 implementation, TokenBudget real-event hookup, documentation cleanup, and Windows 10/11 x64 packaging preparation.
 
 ## Task Goal
 
@@ -14,12 +14,14 @@ Let Codex split and review work while MiMo performs bounded coding tasks through
 - Committed Bridge baseline before this handoff-doc refresh: `master...origin/master [ahead 1]`.
 - Latest committed Bridge HEAD before this handoff-doc refresh: `01d734f docs: record session manager fallback collaboration`.
 - This handoff-doc refresh may be uncommitted if the user did not ask for a Git commit; always run `git status --short --branch` after context compression.
-- P0-P5.3 implementation is complete locally.
+- P0-P5.4 implementation is complete locally.
 - Shared daemon, HTTP MCP, admin UI, task queue, Worktree review, safe deletion, safe-delete visibility, low-token review, and `mimo_wait_task` are implemented.
 - Windows launcher lifecycle controls, persisted config, desktop shortcut command, opt-in autostart command, portable ZIP build, EXE installer build, installer self-test, and release-validation script are implemented.
 - Local EXE install was repaired after a real double-click test exposed a broken installed launcher script. The installed app now starts from `%LOCALAPPDATA%\MiMoBridgeApp`, uses `%LOCALAPPDATA%\MiMoBridge` for data, and reports MCP ready at `http://127.0.0.1:3210/mcp`.
 - Current release target is Windows 10/11 x64.
 - Current generated release artifacts are ignored under `artifacts/`.
+- P5.4 Safe Agent Invocation is implemented and merged. Use `scripts/mimo-bridge-client.mjs` / `.ps1` for scripted bridge calls instead of ad hoc inline Node or PowerShell JSON.
+- TokenBudgetManager now records real MiMo JSONL `part.tokens` and `part.cost` events when runner tasks complete. A zero value after daemon restart/reset means no completed task has been recorded in the current runtime.
 - Cross-project MiMo collaboration test on 2026-06-23 fixed the external `Mimo Code 会话管理` tool. Bridge task `task_0a88377ff37d` was delegated to MiMo, waited with `mimo_wait_task`, reviewed with Review Package first, then Codex escalated to focused diff in the target repo and accepted the task.
 - External Session Manager committed baseline before this handoff-doc refresh: `master...origin/master [ahead 2]`, latest docs commit `f3fc5efd docs: add session manager handover`, previous code commit `09f70d03 fix: fallback for cleaned Bridge worktree sessions`.
 
@@ -42,6 +44,8 @@ Let Codex split and review work while MiMo performs bounded coding tasks through
 - Default Chinese display chain: ReviewPackage has optional `objective_zh` / `mimo_summary_zh` fields; admin UI prefers zh for title/objective/summary with English fallback; future task briefs request Chinese summaries. No external translation API.
 - Real full-flow retest completed: Codex delegated the safe-delete visibility slice through MCP to MiMo, waited with `mimo_wait_task`, reviewed the bounded Review Package first, escalated only to focused diff for changed files, requested one small MiMo fix, merged the Worktree, and marked the task accepted.
 - External Session Manager fallback is complete: `Mimo Code 会话管理` code commit `09f70d03 fix: fallback for cleaned Bridge worktree sessions` lets cleaned Bridge Worktree sessions open by falling back from stale `runtime/worktrees/.../task_xxx` directories to the original `config.workspace_path` stored in `runtime/tasks/task_xxx.json`. Docs commit `f3fc5efd docs: add session manager handover` records the handoff. The EXE at `release/MiMo-Code-Session-Manager.exe` was rebuilt and `python -m unittest -v` passed 14/14.
+- P5.4 Safe Agent Invocation is complete: MiMo produced the first cut through task `task_2de8918c60dd`; Codex fixed stale MCP client exit handling, added stronger tests, merged the Worktree, and accepted the task. Verified with `node --test tests/mimo-bridge-client.test.mjs`, `npm.cmd run build`, and real daemon `health/review/wait` smoke.
+- TokenBudgetManager real-event hookup is complete: `event-parser` extracts token usage from MiMo `step_finish` events, `mimo-runner` records usage at task completion, and the admin UI text no longer says token events are unconnected. Verified with `node --test tests/event-parser.test.mjs tests/token-budget.test.mjs`, root/local-daemon/admin-ui builds, and a fake-MiMo runner smoke.
 
 ## Collaboration Needed
 
@@ -52,12 +56,11 @@ Let Codex split and review work while MiMo performs bounded coding tasks through
 
 ## Remaining Work
 
-1. Run `docs/RELEASE_VALIDATION.md` on clean Windows 10/11 x64 machines.
+1. Run and record `docs/RELEASE_VALIDATION.md` on clean Windows 10/11 x64 machines. The user has tried the installer on a company computer, but the formal checklist still needs written evidence.
 2. Validate double-click installer, portable ZIP, reboot/logon, no system Node, port conflict, first-run config, Codex MCP connection, real MiMo task, autostart opt-in, and uninstall behavior.
 3. Audit active Worktree cancellation cleanup.
-4. Connect `TokenBudgetManager` to real MiMo token events.
-5. Improve MCP SDK client examples/documentation so `mimo_wait_task` calls pass a request timeout longer than `timeout_seconds`; otherwise the client can time out before daemon-side waiting returns. Documented in `docs/modules/low-token-wait.md` with 1800/3600s daemon-side wait examples and SDK request timeout guidance.
-6. Implement P5.4 safe agent invocation wrapper from `docs/modules/safe-agent-invocation.md` to avoid Windows shell quoting and Chinese-path encoding failures during Codex/MiMo delegation.
+4. Design and implement P6 multi-agent dispatch for MiMo plus Reasonix.
+5. Add planned admin UI actions for opening a task folder and opening the current task session window through backend-safe localhost routes, using the external Session Manager fallback/path-safety principles.
 
 ## Risks / Blockers
 
@@ -66,8 +69,8 @@ Let Codex split and review work while MiMo performs bounded coding tasks through
 - `tests/runner-integration.test.mjs` hangs on Windows and is excluded from normal regression.
 - Windows PTY tests can print `AttachConsole failed` and `TimeoutNaNWarning`; judge by exit code and regression result.
 - Codex shell capture can lose direct stdout when launcher commands spawn the daemon; verify daemon health with `launcher.ps1 status -Json`.
-- During the 2026-06-22 full-flow retest, the first `mimo_wait_task(timeout_seconds=600)` call used the MCP SDK default 60s request timeout and failed client-side. A later call with an explicit longer request timeout returned correctly. Treat this as caller usage debt, not a daemon failure.
-- During the 2026-06-23 delegation test, several startup attempts failed before MiMo received a task because PowerShell/inline Node command strings mishandled Chinese paths or special characters. Treat this as invocation-layer debt, not a MiMo execution failure.
+- During the 2026-06-22 full-flow retest, the first `mimo_wait_task(timeout_seconds=600)` call used the MCP SDK default 60s request timeout and failed client-side. P5.4's safe client now sets the request timeout longer than `timeout_seconds`; any custom SDK caller outside the safe client must still do the same.
+- During the 2026-06-23 delegation test, several startup attempts failed before MiMo received a task because PowerShell/inline Node command strings mishandled Chinese paths or special characters. P5.4 mitigates this with a UTF-8 JSON file/stdin client wrapper; do not regress to inline JSON shell commands.
 - When delegating to projects outside the Bridge repo, the folder must be present in Bridge `allowedRoots`. This machine now has `C:\Users\86172\Desktop\MiMo Code project\Mimo Code 会话管理` in `%LOCALAPPDATA%\MiMoBridge\config.json`; reproduce that setting on migrated machines before asking MiMo to modify the session manager.
 - Review Package can show `changed_files: []` for `use_worktree=false` cross-project tasks even when the target repo changed. In that case, escalate to focused `git diff` inside the target repo instead of assuming no changes.
 - Clean Windows validation is still the main external blocker before calling the package ready for general use.
@@ -77,4 +80,4 @@ Let Codex split and review work while MiMo performs bounded coding tasks through
 
 After context compression, read `PROJECT_MEMORY.md` first, then this file, then `docs/OPEN_TASKS.md`. If the next task concerns the local Session Manager, also read `C:\Users\86172\Desktop\MiMo Code project\Mimo Code 会话管理\docs\HANDOVER_STATUS.md` and `docs\modules\bridge-session-fallback.md`.
 
-Next engineering action: run the release checklist on clean Windows 10/11 x64 machines, then update `PROJECT_MEMORY.md`, `docs/OPEN_TASKS.md`, and this file with the result. For further MiMo collaboration tests, keep using Review Package first and focused diff only when risk flags, `use_worktree=false`, or review notes require escalation.
+Next engineering action: run the release checklist on clean Windows 10/11 x64 machines, then update `PROJECT_MEMORY.md`, `docs/OPEN_TASKS.md`, and this file with the result. For further scripted MiMo collaboration, use `scripts/mimo-bridge-client.mjs`/`.ps1`, keep using Review Package first, and escalate to focused diff only when risk flags, `use_worktree=false`, or review notes require it.

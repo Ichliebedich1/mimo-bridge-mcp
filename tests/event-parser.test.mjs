@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert";
-import { createEventParser, isTerminalMimoEvent } from "../dist/services/event-parser.js";
+import { createEventParser, extractTokenUsage, isTerminalMimoEvent } from "../dist/services/event-parser.js";
 
 describe("event-parser", () => {
   it("should keep running after tool-call steps and finish only on a terminal step", () => {
@@ -225,5 +225,61 @@ describe("event-parser", () => {
     const questions = parser.extractQuestions(result);
 
     assert.ok(questions.length > 0);
+  });
+
+  it("should extract token usage and MiMo-reported cost from step finish events", () => {
+    const parser = createEventParser();
+
+    const jsonl = [
+      JSON.stringify({
+        type: "step_finish",
+        timestamp: Date.now(),
+        sessionID: "ses_tokens",
+        part: {
+          id: "prt_1",
+          messageID: "msg_1",
+          sessionID: "ses_tokens",
+          type: "step-finish",
+          reason: "tool-calls",
+          tokens: {
+            total: 120,
+            input: 80,
+            output: 20,
+            reasoning: 5,
+            cache: { write: 5, read: 10 },
+          },
+          cost: 0.012,
+        },
+      }),
+      JSON.stringify({
+        type: "step_finish",
+        timestamp: Date.now(),
+        sessionID: "ses_tokens",
+        part: {
+          id: "prt_2",
+          messageID: "msg_2",
+          sessionID: "ses_tokens",
+          type: "step-finish",
+          reason: "stop",
+          tokens: {
+            total: 50,
+            input: 30,
+            output: 10,
+            reasoning: 2,
+            cache: { write: 3, read: 5 },
+          },
+          cost: 0.004,
+        },
+      }),
+    ].join("\n") + "\n";
+
+    const parsed = parser.parse(jsonl);
+    const usage = extractTokenUsage(parsed);
+
+    assert.strictEqual(usage.events_count, 2);
+    assert.strictEqual(usage.input_tokens, 110);
+    assert.strictEqual(usage.output_tokens, 37);
+    assert.strictEqual(usage.total_tokens, 170);
+    assert.strictEqual(usage.estimated_cost, 0.016);
   });
 });

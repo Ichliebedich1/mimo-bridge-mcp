@@ -3,7 +3,8 @@ import { execFileSync } from "node:child_process";
 import { platform } from "node:os";
 import * as pty from "node-pty";
 import type { TaskState, TaskResult } from "../types.js";
-import { createEventParser, isTerminalMimoEvent } from "./event-parser.js";
+import { createEventParser, extractTokenUsage, isTerminalMimoEvent } from "./event-parser.js";
+import { globalTokenBudget } from "./token-budget.js";
 
 export interface RunnerOptions {
   mimoNodePath: string;
@@ -62,6 +63,7 @@ export function runMimoTask(
     const summary = parser.getSummary(parsed);
     const questions = parser.extractQuestions(parsed);
     const issues = parser.extractIssues(parsed);
+    recordMimoTokenUsage(task, parsed);
 
     if (!parsed.sessionId) {
       onError("MiMo 未返回 sessionID，任务失败");
@@ -134,6 +136,23 @@ export function runMimoTask(
   });
 
   return handle;
+}
+
+function recordMimoTokenUsage(task: TaskState, parsed: ReturnType<ReturnType<typeof createEventParser>["flush"]>): void {
+  const usage = extractTokenUsage(parsed);
+  if (usage.events_count === 0 || usage.total_tokens <= 0) {
+    return;
+  }
+
+  globalTokenBudget.recordUsage(
+    usage.input_tokens,
+    usage.output_tokens,
+    `${task.task_id} round ${task.current_round}`,
+    {
+      totalTokens: usage.total_tokens,
+      estimatedCost: usage.estimated_cost ?? undefined,
+    }
+  );
 }
 
 function buildMimoArgs(task: TaskState, runtimeDir: string): string[] {

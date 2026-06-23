@@ -18,7 +18,9 @@ This file is the project-local long-term memory. Update it after each meaningful
 - P5.3 portable ZIP exists through npm.cmd run package:portable.
 - P5.3 EXE installer is implemented through npm.cmd run package:installer.
 - The installer is per-user: default app files go under LOCALAPPDATA\\MiMoBridgeApp; user data stays under LOCALAPPDATA\\MiMoBridge.
-- Local package:installer build succeeds and produces the portable ZIP plus EXE installer. Clean Windows 10/11 x64 validation is still required.
+- Local package:installer build succeeds and produces the portable ZIP plus EXE installer. The user has also tried installing on a company computer, but the formal clean Windows 10/11 x64 release checklist is not fully recorded yet.
+- P5.4 Safe Agent Invocation is implemented through `scripts/mimo-bridge-client.mjs` and `scripts/mimo-bridge-client.ps1`.
+- TokenBudgetManager is connected to real MiMo JSONL `part.tokens` / `part.cost` events through the runner for newly completed tasks.
 
 ## Must-Preserve Architecture
 
@@ -33,11 +35,10 @@ This file is the project-local long-term memory. Update it after each meaningful
 
 - tests/runner-integration.test.mjs hangs on Windows and is excluded from normal regression.
 - Windows PTY tests can print AttachConsole failed and TimeoutNaNWarning; treat as noise only when tests exit 0.
-- TokenBudgetManager is not connected to real MiMo token events.
 - Active Worktree cancellation cleanup needs a focused audit.
 - Clean-machine double-click, reboot/logon, no-system-Node, port-conflict, and uninstall validation are pending.
 - MCP SDK callers must pass a request timeout longer than `mimo_wait_task.timeout_seconds`; otherwise the client can time out even though daemon-side low-token waiting is working. Documented in `docs/modules/low-token-wait.md` with 1800/3600s examples.
-- Agent-to-bridge calls are still vulnerable to Windows shell quoting/encoding differences when agents hand-build PowerShell or inline Node commands. P5.4 should add a safe client wrapper; see `docs/modules/safe-agent-invocation.md`.
+- Ad hoc inline Node/PowerShell agent-to-bridge calls should be replaced by the P5.4 safe client wrapper. Do not regress to command-line JSON construction.
 
 ## Next Handoff Checklist
 
@@ -81,7 +82,9 @@ This file is the project-local long-term memory. Update it after each meaningful
 - Installer repair after local double-click test: the EXE had installed files but generated installed launcher environment variables across multiple lines, making the app look missing/broken. Fixed `scripts/installer/install.ps1` to write explicit one-line installed launcher variables and fixed the EXE stub to default plain double-click installs to `-Quiet`.
 - Current local installed app path: `%LOCALAPPDATA%\MiMoBridgeApp`; current data path: `%LOCALAPPDATA%\MiMoBridge`. After repair install, installed daemon started from bundled `node.exe`, `/api/health` returned ok, MCP status ready, MiMo configured, queue empty.
 - Planned P6 is multi-agent dispatch, not provider replacement. Codex should be able to assign work to MiMo and Reasonix concurrently by explicit `agent_id`. Keep existing `mimo_*` tools compatible while adding generic `agent_*` tools. Reasonix TUI is the likely first executable adapter; Reasonix GUI needs a capability probe before any automation commitment.
-- P5.4 safe agent invocation is now designed but not implemented. It should provide a UTF-8 JSON-file/stdin client wrapper so Codex, MiMo, and third-party agents do not pass Chinese paths or large JSON through fragile shell command strings.
+- P5.4 safe agent invocation is implemented. `scripts/mimo-bridge-client.mjs` supports `health`, `start`, `wait`, `start-and-wait`, and `review`; input comes from UTF-8 JSON file or stdin; wait uses MCP SDK with request timeout greater than `timeout_seconds`; CLI output is compact JSON and exits explicitly to avoid stale client processes. `scripts/mimo-bridge-client.ps1` is a thin launcher that locates Node and forwards arguments without constructing JSON.
+- TokenBudgetManager now records real MiMo token usage at runner completion by summing `part.tokens` from JSONL events and using MiMo-provided `part.cost` when available. UI copy was updated so a zero value means no completed task has been recorded since daemon start/reset, not "not connected."
+- Admin UI future planning: add backend-safe actions similar to the Session Manager tool for opening a task folder and opening a read-only/current session window. This is only planned; keep it behind localhost-only daemon routes and avoid exposing arbitrary path opens.
 - Safe-delete visibility is implemented and merged via real Codex -> MCP -> MiMo -> Review Package -> focused diff -> merge flow. `/api/tasks` and `/api/tasks/:id` now return `can_delete`, `delete_blockers`, and `delete_label`; the admin UI has a `可安全删除` filter and only shows delete when backend-derived `can_delete` is true.
 - Default Chinese display chain: `ReviewPackage` type has optional `objective_zh` and `mimo_summary_zh` fields. When objective or summary contains Chinese characters, the zh field is populated (same content); otherwise zh is omitted. Admin UI `detailToUiTask` prefers zh fields for title/objective/summary with English fallback. Task brief `prompt-builder.ts` adds a "语言要求" section requesting Chinese summaries. Codex handoff prompt also requests Chinese. No external translation API or dependency introduced.
 - Latest safe-delete verification: `npm.cmd run build`, `cd apps/local-daemon; npm.cmd run build`, `cd apps/admin-ui; npm.cmd run build`, and `node --test tests/admin-api.test.mjs` passed. Daemon was restarted with `launcher.ps1 restart`; `/api/health` was ready and historical accepted/no-Worktree tasks returned `can_delete: true`, `delete_label: "可安全删除"`.

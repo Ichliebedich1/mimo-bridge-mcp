@@ -6,7 +6,7 @@ Give Codex and the browser one shared localhost runtime and a review-first manag
 
 ## Current Status
 
-Implemented. The daemon serves Streamable HTTP MCP, fixed REST APIs, the built React UI, persisted configuration, safe-delete metadata, and a bounded read-only live-run viewer at port 3210. It is currently running and healthy.
+Implemented. The daemon serves Streamable HTTP MCP, fixed REST APIs, the built React UI, persisted configuration, safe-delete metadata, TokenBudget status from real MiMo token events, and a bounded read-only live-run viewer at port 3210. It is currently running and healthy.
 
 ## Entry Files
 
@@ -40,7 +40,9 @@ P5.2 must manage this daemon's lifecycle and open this UI. It must not introduce
 
 ## Pending Work
 
-One-click launcher and real token events.
+- Add backend-safe admin UI actions for opening a task folder and opening the current task session window.
+- Use the external Mimo Code Session Manager design as reference: resolve stale Bridge Worktree paths back to original workspace metadata where possible, never expose arbitrary path-open endpoints, and keep the live viewer read-only.
+- Keep one-click launcher behavior aligned with the existing localhost daemon; do not add a second backend.
 
 ## Test Method
 

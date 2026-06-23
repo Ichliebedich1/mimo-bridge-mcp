@@ -2,13 +2,11 @@
 
 ## Pending
 
-- Run docs/RELEASE_VALIDATION.md on clean Windows 10/11 x64 machines: reboot/logon, no system Node, port conflict, first-run errors, and real user double-click flow.
+- Run and record docs/RELEASE_VALIDATION.md on clean Windows 10/11 x64 machines: reboot/logon, no system Node, port conflict, first-run errors, and real user double-click flow. The user has tried the installer on a company computer, but the formal checklist still needs written evidence.
 
 - Design and implement P6 multi-agent dispatch so Codex can assign separate tasks to MiMo and Reasonix instead of choosing only one active provider.
-- Implement P5.4 safe agent invocation wrapper from docs/modules/safe-agent-invocation.md so agents stop using ad hoc PowerShell/inline Node calls that can corrupt Chinese paths or special characters on some Windows machines.
 - Audit active Worktree cancellation cleanup.
-- Connect `TokenBudgetManager` to real MiMo token events.
-- Document or wrap MCP SDK calls so `mimo_wait_task` request timeout is explicitly longer than `timeout_seconds`; default SDK timeout can fire before daemon-side waiting returns. Documented in `docs/modules/low-token-wait.md` with 1800/3600s examples; real remaining work is ensuring all SDK callers adopt the documented pattern.
+- Add admin UI actions for "open task folder" and "open current session window" using backend-safe localhost routes, borrowing the fallback/path-safety design from the external Mimo Code Session Manager. This is planning only; avoid arbitrary file-open routes and do not add a control surface to the read-only live viewer.
 
 ## Completed
 
@@ -32,6 +30,8 @@
 - Safe-delete visibility in the admin UI: backend now returns `can_delete`, `delete_blockers`, and `delete_label`; task list has a `可安全删除` filter; delete action is driven by backend `can_delete`. Verified through real Codex -> MCP -> MiMo -> review -> focused diff -> merge flow and `node --test tests/admin-api.test.mjs`.
 - Default Chinese display chain: ReviewPackage now includes optional `objective_zh` and `mimo_summary_zh` fields; admin UI title/objective/summary prefer zh fields with English fallback; task briefs and Codex handoff prompts request Chinese summaries for future tasks. No external translation API used.
 - Cross-project Session Manager fix: Bridge task `task_0a88377ff37d` delegated to MiMo, waited through `mimo_wait_task`, reviewed first by bounded Review Package, then escalated to focused diff because `use_worktree=false` produced no changed_files. Target repo code commit `09f70d03` rebuilt `release/MiMo-Code-Session-Manager.exe` and fixed cleaned Bridge Worktree session fallback. Target repo docs commit `f3fc5efd` added Session Manager handover docs.
+- P5.4 Safe Agent Invocation: `scripts/mimo-bridge-client.mjs` and `scripts/mimo-bridge-client.ps1` are implemented. The client supports `health`, `start`, `wait`, `start-and-wait`, and `review`, reads UTF-8 JSON from file/stdin, uses REST where possible, uses MCP SDK for `mimo_wait_task` with request timeout greater than `timeout_seconds`, emits compact JSON, and exits cleanly to avoid stale one-off clients. Verified with `node --test tests/mimo-bridge-client.test.mjs`, `npm.cmd run build`, and real daemon `health/review/wait` smoke.
+- TokenBudgetManager real MiMo token events: runner completion now sums MiMo JSONL `part.tokens`, records MiMo `part.cost` when available, and updates the admin UI copy. Verified with `node --test tests/event-parser.test.mjs tests/token-budget.test.mjs` and a fake-MiMo runner smoke showing 50 input / 50 output / 100 total / $0.001.
 
 ## Risks
 
@@ -48,6 +48,6 @@
 2. Validate the launcher and installer on clean Windows 10/11 x64 machines and after reboot/logon.
 3. Keep portable ZIP and EXE installer validation in the release checklist.
 4. Start P6 with the design in `docs/modules/multi-agent-dispatch.md`: Agent Registry, generic `agent_*` tools, path-conflict scheduling, MiMo adapter migration, Reasonix TUI runner, and Reasonix GUI capability probe.
-5. Implement P5.4 before more cross-machine workflow tests, because it removes fragile shell quoting/encoding from agent-to-bridge calls.
-6. When using `mimo_wait_task` from an MCP SDK script, pass request options such as `{ timeout: (timeout_seconds + 20) * 1000 }` to avoid client-side timeout. See `docs/modules/low-token-wait.md` for the 1800/3600s examples.
+5. Use `scripts/mimo-bridge-client.mjs` or `.ps1` for scripted agent-to-bridge calls; do not return to inline JSON in PowerShell.
+6. When using `mimo_wait_task` from an MCP SDK script outside the safe client, pass request options such as `{ timeout: (timeout_seconds + 20) * 1000 }` to avoid client-side timeout. See `docs/modules/low-token-wait.md` for the 1800/3600s examples.
 7. If continuing the local `Mimo Code 会话管理` tool, start from `C:\Users\86172\Desktop\MiMo Code project\Mimo Code 会话管理\docs\HANDOVER_STATUS.md` and `C:\Users\86172\Desktop\MiMo Code project\Mimo Code 会话管理\docs\modules\bridge-session-fallback.md`.

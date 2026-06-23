@@ -5,6 +5,11 @@ export interface TokenUsage {
   estimated_cost: number;
 }
 
+export interface TokenUsageRecordOptions {
+  totalTokens?: number;
+  estimatedCost?: number;
+}
+
 export interface TokenBudgetConfig {
   max_input_tokens: number;
   max_output_tokens: number;
@@ -58,17 +63,27 @@ export class TokenBudgetManager {
     return [...this.history];
   }
 
-  recordUsage(inputTokens: number, outputTokens: number, context: string = ""): TokenBudgetStatus {
-    const cost = this.estimateCost(inputTokens, outputTokens);
+  recordUsage(
+    inputTokens: number,
+    outputTokens: number,
+    context: string = "",
+    options: TokenUsageRecordOptions = {}
+  ): TokenBudgetStatus {
+    const safeInputTokens = Math.max(0, Math.floor(inputTokens));
+    const safeOutputTokens = Math.max(0, Math.floor(outputTokens));
+    const totalTokens = Math.max(0, Math.floor(options.totalTokens ?? safeInputTokens + safeOutputTokens));
+    const cost = typeof options.estimatedCost === "number"
+      ? Math.max(0, options.estimatedCost)
+      : this.estimateCost(safeInputTokens, safeOutputTokens);
 
-    this.usage.input_tokens += inputTokens;
-    this.usage.output_tokens += outputTokens;
-    this.usage.total_tokens += inputTokens + outputTokens;
+    this.usage.input_tokens += safeInputTokens;
+    this.usage.output_tokens += safeOutputTokens;
+    this.usage.total_tokens += totalTokens;
     this.usage.estimated_cost += cost;
 
     this.history.push({
       timestamp: Date.now(),
-      usage: { input_tokens: inputTokens, output_tokens: outputTokens, total_tokens: inputTokens + outputTokens, estimated_cost: cost },
+      usage: { input_tokens: safeInputTokens, output_tokens: safeOutputTokens, total_tokens: totalTokens, estimated_cost: cost },
       context,
     });
 

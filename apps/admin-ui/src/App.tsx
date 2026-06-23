@@ -308,7 +308,7 @@ function App() {
   function confirmTokenReset() {
     setConfirmAction({
       title: '确认重置 Token 预算？',
-      body: '会调用 POST /api/token-budget/reset。当前真实 MiMo token 事件链路可能尚未完全接入，所以 0 不代表真实成本为 0。',
+      body: '会调用 POST /api/token-budget/reset。重置后会从 0 重新累计后续完成的 MiMo 任务 token。',
       confirmLabel: '确认重置',
       tone: 'danger',
       onConfirm: () =>
@@ -1069,14 +1069,14 @@ function TokenPage({ tokenStatus, onReset, actionBusy }: { tokenStatus: unknown;
   return (
     <div className="page-grid">
       <section className="panel wide token-panel">
-        <PanelHeader title="Token 预算" helper="真实 MiMo token 事件接入前，不把 0 当作真实成本。" />
+        <PanelHeader title="Token 预算" helper="来自 MiMo JSONL 事件中的 tokens/cost，按当前守护进程运行期累计。" />
         <div className="token-empty">
           <div className="orb">◌</div>
-          <h2>{token.connected ? 'Token API 已连接' : '统计尚未接入'}</h2>
+          <h2>{token.connected ? 'Token API 已连接' : '统计暂不可用'}</h2>
           <p>
             {token.connected
-              ? '当前显示来自本地守护进程的 token-budget 状态；真实 MiMo token 事件链路仍可能需要后端继续接入。'
-              : 'TokenBudgetManager.recordUsage() 尚未接入 MiMo 事件或 MCP 返回链路，因此不能把 0 当成真实成本。'}
+              ? '当前显示来自本地守护进程的 token-budget 状态；完成新的 MiMo 任务后会自动累计真实 token 和 cost。'
+              : '暂时无法读取本地守护进程的 token-budget 状态。'}
           </p>
           <div className="token-grid">
             <MetricCard label="输入 Token" value={token.input} tone="neutral" helper={token.helper} />
@@ -1457,7 +1457,7 @@ function readTokenStatus(tokenStatus: unknown): {
       output: '—',
       cost: '—',
       helper: '等待真实数据',
-      costHelper: '不伪造成 ¥0',
+      costHelper: '等待 API 数据',
     };
   }
   const used = isRecord(tokenStatus.used) ? tokenStatus.used : null;
@@ -1469,8 +1469,8 @@ function readTokenStatus(tokenStatus: unknown): {
     input,
     output,
     cost,
-    helper: input === '0' || output === '0' ? 'API 已连接；真实事件可能未接入' : '来自 API',
-    costHelper: cost === '$0.0000' ? 'API 已连接；真实成本可能未接入' : '来自 API',
+    helper: input === '0' || output === '0' ? 'API 已连接；暂无完成任务 token' : '来自 MiMo 事件',
+    costHelper: cost === '$0.0000' ? 'API 已连接；暂无完成任务成本' : '来自 MiMo 事件',
   };
 }
 

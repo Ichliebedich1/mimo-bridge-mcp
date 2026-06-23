@@ -62,6 +62,24 @@ describe("token-budget", () => {
     assert.ok(status.used.estimated_cost > 0);
   });
 
+  it("should record MiMo-provided total tokens and cost when available", () => {
+    const manager = new TokenBudgetManager();
+    const status = manager.recordUsage(100, 40, "mimo task", {
+      totalTokens: 250,
+      estimatedCost: 0.023,
+    });
+
+    assert.strictEqual(status.used.input_tokens, 100);
+    assert.strictEqual(status.used.output_tokens, 40);
+    assert.strictEqual(status.used.total_tokens, 250);
+    assert.strictEqual(status.used.estimated_cost, 0.023);
+
+    const history = manager.getHistory();
+    assert.strictEqual(history.length, 1);
+    assert.strictEqual(history[0].usage.total_tokens, 250);
+    assert.strictEqual(history[0].usage.estimated_cost, 0.023);
+  });
+
   it("should accumulate token usage", () => {
     const manager = new TokenBudgetManager();
 

@@ -6,55 +6,54 @@ Make Codex, MiMo, and third-party agents call MiMo Bridge through one safe clien
 
 ## Problem
 
-Recent real runs exposed a repeated Windows compatibility issue:
+Real delegation runs exposed a repeated Windows compatibility issue:
 
 - Chinese workspace paths can be corrupted when passed through a PowerShell pipeline or command-line string.
 - Inline Node commands are fragile when JSON contains quotes, backslashes, greater-than signs, less-than signs, or newlines.
 - Different machines may use different console code pages, PowerShell versions, Node versions, and PATH order.
-- Some machines will not reproduce the issue, so a fix must adapt at runtime instead of assuming one shell behavior.
+- Some machines will not reproduce the issue, so the fix must adapt at runtime instead of assuming one shell behavior.
 
 These failures happen before MiMo receives the task. They should not count as MiMo execution failures.
 
-## Design
+## Implementation
 
-Add a first-class client wrapper:
+P5.4 adds a first-class client wrapper:
 
-- `scripts/mimo-bridge-client.mjs` — Node.js CLI client
-- `scripts/mimo-bridge-client.ps1` — thin PowerShell launcher
+- `scripts/mimo-bridge-client.mjs`: Node.js CLI client.
+- `scripts/mimo-bridge-client.ps1`: thin PowerShell launcher.
 
-The wrapper becomes the only documented way for agents to start, wait for, and review MiMo tasks from scripts.
+The wrapper is the documented way for agents to start, wait for, and review MiMo tasks from scripts.
 
 ## Input Rules
 
-- Accept JSON from a UTF-8 file (`--json <path>`) or stdin.
+- Accept JSON from a UTF-8 file with `--json <path>` or from stdin.
 - Do not require large JSON payloads on the command line.
 - Do not require the workspace path to be embedded in a shell string.
 - Default `workspace_path` to `process.cwd()` when omitted.
 - Allow explicit `workspace_path` in the JSON body for advanced callers.
 - Treat all input and output as UTF-8.
 
-## Runtime Adaptation
+The PowerShell wrapper locates Node, forwards arguments, and when stdin is piped without `--json`, writes that stdin to a temporary UTF-8 JSON file before forwarding `--json <temp>`. It does not construct task JSON or embed workspace paths in command strings.
 
-The wrapper probes the current machine and chooses the safest route:
+## Runtime Behavior
 
 1. Read base URL from `MIMO_BRIDGE_URL`, then fallback to `http://127.0.0.1:3210`.
 2. Check `/api/health`.
-3. Prefer REST JSON endpoints for start, health, and review because they avoid MCP SDK request-timeout defaults.
-4. Use MCP SDK only for MCP-only operations such as `mimo_wait_task`, and always set request timeout greater than `timeout_seconds`.
-5. If REST is unavailable, return an actionable error that says whether the daemon is down, the port is wrong, or the response is malformed.
+3. Prefer REST JSON endpoints for `health`, `start`, and `review` because they avoid MCP SDK request-timeout defaults.
+4. Use MCP SDK only for `mimo_wait_task`, and set request timeout greater than `timeout_seconds`.
+5. Return actionable daemon-down, wrong-port, timeout, or malformed-response errors.
 6. Never fall back to inline JSON in PowerShell.
+7. CLI output is compact JSON and the process exits explicitly, avoiding stale one-off clients after wait completes.
 
 ## Commands
 
-```
+```powershell
 node scripts/mimo-bridge-client.mjs health
 node scripts/mimo-bridge-client.mjs start --json .\runtime\client-requests\task.json
 node scripts/mimo-bridge-client.mjs wait --task-id task_xxx --timeout-seconds 1800
 node scripts/mimo-bridge-client.mjs start-and-wait --json .\runtime\client-requests\task.json --timeout-seconds 1800
 node scripts/mimo-bridge-client.mjs review --task-id task_xxx --detail-level review --max-chars 8000
 ```
-
-The PowerShell wrapper only locates Node and forwards arguments. It does not build JSON strings.
 
 ## Output Rules
 
@@ -65,7 +64,7 @@ The PowerShell wrapper only locates Node and forwards arguments. It does not bui
 ## Safety Rules
 
 - Do not expose arbitrary file reads.
-- Do not bypass existing allowedRoots.
+- Do not bypass existing `allowedRoots`.
 - Do not weaken Worktree isolation.
 - Do not merge or finish tasks automatically.
 - Do not treat launcher/client quoting failures as MiMo task failures.
@@ -78,13 +77,29 @@ The PowerShell wrapper only locates Node and forwards arguments. It does not bui
 - JSON payload containing greater-than signs, less-than signs, quotes, backslashes, and newlines.
 - Missing daemon produces an actionable error.
 - Structured JSON output always contains `ok` and `operation` fields.
-- start-and-wait returns error when daemon is unreachable.
+- `wait` uses an SDK request timeout greater than `timeout_seconds`.
+- `start-and-wait` returns as soon as the wait operation reports completion.
+- `start-and-wait` returns a structured error when the daemon is unreachable.
 - Output stays bounded and does not include full diff/log/source by default.
+- The PowerShell wrapper does not use `ConvertTo-Json`, `JSON.stringify`, or hard-coded task fields.
 
 ## Current Status
 
-Implemented. Run tests with:
+Implemented and merged in P5.4. MiMo produced the first implementation through task `task_2de8918c60dd`; Codex reviewed it, fixed stale MCP client exit handling, strengthened tests, merged the Worktree, and accepted the task.
 
-```
+Run tests with:
+
+```powershell
 node --test tests/mimo-bridge-client.test.mjs
 ```
+
+Additional verification:
+
+```powershell
+npm.cmd run build
+node scripts/mimo-bridge-client.mjs health
+node scripts/mimo-bridge-client.mjs review --task-id <task_id> --max-chars 3000
+node scripts/mimo-bridge-client.mjs wait --task-id <completed_task_id> --timeout-seconds 5 --max-chars 3000
+```
+
+Important: do not go back to inline Node or PowerShell JSON construction for scripted delegation. Use this client wrapper so Chinese paths, quotes, newlines, and MCP wait timeouts are handled consistently.

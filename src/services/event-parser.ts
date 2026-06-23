@@ -21,6 +21,14 @@ export interface ParsedResult {
   rawLines: string[];
 }
 
+export interface MimoTokenUsageSummary {
+  input_tokens: number;
+  output_tokens: number;
+  total_tokens: number;
+  estimated_cost: number | null;
+  events_count: number;
+}
+
 function findJsonObjectEnd(input: string, start: number): number | null {
   let depth = 0;
   let inString = false;
@@ -192,4 +200,50 @@ export function createEventParser(): {
   }
 
   return { parse, flush, getSummary, extractQuestions, extractIssues };
+}
+
+export function extractTokenUsage(result: ParsedResult): MimoTokenUsageSummary {
+  let inputTokens = 0;
+  let outputTokens = 0;
+  let totalTokens = 0;
+  let estimatedCost = 0;
+  let hasCost = false;
+  let eventsCount = 0;
+
+  for (const event of result.events) {
+    const tokens = event.part?.tokens;
+    if (!tokens) {
+      continue;
+    }
+
+    const input = finiteNumber(tokens.input);
+    const output = finiteNumber(tokens.output);
+    const reasoning = finiteNumber(tokens.reasoning);
+    const total = finiteNumber(tokens.total);
+    const cacheRead = finiteNumber(tokens.cache?.read);
+    const cacheWrite = finiteNumber(tokens.cache?.write);
+
+    inputTokens += input;
+    outputTokens += output + reasoning;
+    totalTokens += total > 0 ? total : input + output + reasoning + cacheRead + cacheWrite;
+
+    const cost = finiteNumber(event.part?.cost);
+    if (cost > 0) {
+      estimatedCost += cost;
+      hasCost = true;
+    }
+    eventsCount++;
+  }
+
+  return {
+    input_tokens: inputTokens,
+    output_tokens: outputTokens,
+    total_tokens: totalTokens,
+    estimated_cost: hasCost ? estimatedCost : null,
+    events_count: eventsCount,
+  };
+}
+
+function finiteNumber(value: unknown): number {
+  return typeof value === "number" && Number.isFinite(value) ? value : 0;
 }
