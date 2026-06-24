@@ -147,3 +147,37 @@ test("agent registry reports missing Reasonix command", async () => {
   assert.strictEqual(reasonix.status, "missing");
   assert.match(reasonix.error, /does not exist/);
 });
+
+test("agent registry treats Reasonix GUI as viewer-only companion", async () => {
+  const tempDir = mkdtempSync(join(tmpdir(), "reasonix-gui-agent-"));
+  const fakeGui = join(tempDir, "reasonix-desktop.exe");
+  writeFileSync(fakeGui, "", "utf-8");
+
+  try {
+    const registry = createAgentRegistry({
+      agents: [
+        {
+          id: "reasonix-gui",
+          kind: "reasonix-gui",
+          display_name: "Reasonix GUI",
+          enabled: true,
+          command: fakeGui,
+          home_dir: join(tempDir, "ReasonixData"),
+        },
+      ],
+      mcpConfig: null,
+      mimoVersion: null,
+    });
+
+    const result = await registry.listAgents();
+    const gui = result.agents.find((agent) => agent.id === "reasonix-gui");
+    assert.ok(gui);
+    assert.strictEqual(gui.status, "ready");
+    assert.strictEqual(gui.capabilities.start_task, false);
+    assert.strictEqual(gui.capabilities.reply_task, false);
+    assert.strictEqual(gui.capabilities.live_view, true);
+    assert.strictEqual(gui.capabilities.worktree, false);
+  } finally {
+    rmSync(tempDir, { recursive: true, force: true });
+  }
+});

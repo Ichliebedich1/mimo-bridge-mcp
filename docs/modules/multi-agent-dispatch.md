@@ -22,7 +22,7 @@ Reasonix should eventually reach the same project role as MiMo:
 
 ## Current Status
 
-P6.0-P6.16 are implemented locally. The runtime now has an Agent Registry, Reasonix TUI probe, Reasonix one-shot runner, generic low-token task get/wait/reply tools, generic lifecycle/status tools for cancel/finish/merge/delete/queue/token, safe client Agent commands including replies/recovery/listing/token status, Reasonix session mapping through `agent_session_path`, Admin UI agent selector/badge/reply support, agent-aware queue scheduling, Reasonix live/session parsing for the read-only live viewer, safe local folder opening, explicit Reasonix token/cost extraction when session fields exist, bounded generic task listing/recovery, and generic Review Package summary fields. Existing `mimo_*` MCP tools remain compatible.
+P6.0-P6.17 are implemented locally. The runtime now has an Agent Registry, Reasonix TUI probe, Reasonix one-shot runner, generic low-token task get/wait/reply tools, generic lifecycle/status tools for cancel/finish/merge/delete/queue/token, safe client Agent commands including replies/recovery/listing/token status, Reasonix session mapping through `agent_session_path`, Admin UI agent selector/badge/reply support, agent-aware queue scheduling, Reasonix live/session parsing for the read-only live viewer, safe local folder opening, safe Reasonix GUI companion opening, explicit Reasonix token/cost extraction when session fields exist, bounded generic task listing/recovery, and generic Review Package summary fields. Existing `mimo_*` MCP tools remain compatible.
 
 Observed local Reasonix installation on this machine:
 
@@ -66,7 +66,7 @@ Reasonix TUI task
   -> writes Reasonix session JSONL under Reasonix home/project sessions
   -> Bridge records session_path
   -> Reasonix GUI can show the same session if it reads the same Reasonix home
-  -> Bridge may add "open Reasonix GUI/session" later as a safe local action
+  -> Bridge can open Reasonix GUI with the same REASONIX_HOME as a safe local companion action
 ```
 
 This route avoids brittle GUI click automation while still moving toward shared TUI/GUI session records.
@@ -355,7 +355,34 @@ Status:
 - First safe local-open slice is implemented.
 - Admin UI task detail includes "打开任务文件夹" and Reasonix-only "打开会话文件夹".
 - REST route: `POST /api/tasks/:id/open` with `action=task_folder|session_folder`.
-- Direct Reasonix GUI-to-specific-session opening remains future work until a stable command/deep link is confirmed.
+- Reasonix GUI companion opening is implemented with `action=reasonix_gui`; direct GUI-to-specific-session opening remains future work until a stable command/deep link is confirmed.
+
+### P6.17 Reasonix GUI Companion Opening
+
+Goal: let the user open Reasonix GUI from a Reasonix TUI task without exposing arbitrary command/path execution.
+
+Tasks:
+
+- Extend the fixed Admin UI open route with `action=reasonix_gui`.
+- Accept only Reasonix TUI tasks for this action.
+- Prefer an explicit configured `reasonix-gui` agent command when present.
+- Otherwise infer `...\ReasonixDesktop\reasonix-desktop.exe` from the configured Reasonix TUI `home_dir` or command.
+- Start the GUI with the same `REASONIX_HOME` so GUI and TUI share session/project storage.
+- Keep GUI as a viewer/manual companion; do not automate clicks or edit GUI metadata.
+
+Acceptance:
+
+- Browser sends only a fixed action, never a local command or raw path.
+- The daemon validates the executable and home directory before launching.
+- The response does not expose raw local paths.
+- `reasonix-gui` appears as viewer-only when configured and cannot be selected as a task runner.
+
+Status:
+
+- Implemented locally.
+- Verified with root/local-daemon/admin-ui builds.
+- Focused tests passed: `node --test tests\task-open-actions.test.mjs tests\admin-api.test.mjs tests\agent-registry.test.mjs` 43/43.
+- Boundary: `reasonix --help` currently exposes no stable GUI session-open argument, so this opens the shared GUI but does not focus a specific session.
 
 ### P6.8 Token/Cost Integration
 
@@ -541,7 +568,7 @@ Status:
 
 - Does Reasonix session JSONL contain stable task/session IDs and token/cost fields?
 - What is the safest non-interactive permission mode for `reasonix run` under Bridge control?
-- Can Reasonix GUI open a specific session path by command/deep link, or only by reading shared session metadata?
+- Can Reasonix GUI open a specific session path by command/deep link, or only by reading shared session metadata? Current evidence: only shared-home/manual viewing is confirmed.
 - Should Reasonix use a dedicated Bridge-managed `REASONIX_HOME` or the user's existing Reasonix home by default?
 
 ## Recommended First Implementation Slice

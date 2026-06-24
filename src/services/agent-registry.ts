@@ -62,6 +62,9 @@ function probeAgent(agent: AgentConfig, options: AgentRegistryOptions): AgentPro
   if (agent.kind === "reasonix-tui") {
     return probeReasonixTui(agent, options.env ?? process.env);
   }
+  if (agent.kind === "reasonix-gui") {
+    return probeReasonixGui(agent);
+  }
   return baseProbe(agent, "error", `Unsupported agent kind: ${agent.kind}`);
 }
 
@@ -126,6 +129,44 @@ function probeReasonixTui(agent: AgentConfig, env: NodeJS.ProcessEnv): AgentProb
   }
 
   return result;
+}
+
+function probeReasonixGui(agent: AgentConfig): AgentProbeResult {
+  const result = baseProbe(agent, "not_configured", "Reasonix GUI command is not configured.");
+  result.capabilities = reasonixGuiCapabilities(false);
+  result.command_configured = Boolean(agent.command);
+  result.home_configured = Boolean(agent.home_dir);
+
+  if (!agent.command) {
+    return result;
+  }
+  if (!existsSync(agent.command)) {
+    result.status = "missing";
+    result.error = "Reasonix GUI command does not exist.";
+    return result;
+  }
+
+  result.status = "ready";
+  result.error = null;
+  result.capabilities = reasonixGuiCapabilities(true);
+  result.sessions = {
+    configured: Boolean(agent.home_dir),
+    count: null,
+    bytes: null,
+  };
+  return result;
+}
+
+function reasonixGuiCapabilities(ready: boolean): AgentCapabilityMap {
+  return {
+    start_task: false,
+    wait_task: false,
+    review_package: false,
+    live_view: ready,
+    reply_task: false,
+    token_usage: false,
+    worktree: false,
+  };
 }
 
 function execText(command: string, args: string[], env: NodeJS.ProcessEnv, timeout: number): string {

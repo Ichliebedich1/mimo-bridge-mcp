@@ -56,7 +56,7 @@ const AgentWorktreeBodySchema = WorktreeBodySchema.extend({
 });
 
 const OpenTaskBodySchema = z.object({
-  action: z.enum(["task_folder", "session_folder"]),
+  action: z.enum(["task_folder", "session_folder", "reasonix_gui"]),
 });
 
 const TaskQuerySchema = z.object({

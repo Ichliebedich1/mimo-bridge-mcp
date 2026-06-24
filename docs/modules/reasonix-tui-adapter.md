@@ -10,7 +10,7 @@ P6 should first adapt Reasonix TUI, not Reasonix GUI. The TUI adapter should run
 
 ## Current Status
 
-P6.0-P6.16 Agent discovery, Reasonix one-shot execution, generic low-token task get/wait/reply, generic task lifecycle/status tools, safe client Agent commands including replies and token status, Reasonix session mapping, first Admin UI integration, agent-aware queue/path-conflict scheduling, Reasonix live/session parsing, safe session-folder opening, explicit token/cost extraction, and generic Review Package summary fields are implemented locally.
+P6.0-P6.17 Agent discovery, Reasonix one-shot execution, generic low-token task get/wait/reply, generic task lifecycle/status tools, safe client Agent commands including replies and token status, Reasonix session mapping, first Admin UI integration, agent-aware queue/path-conflict scheduling, Reasonix live/session parsing, safe session-folder opening, safe Reasonix GUI companion opening, explicit token/cost extraction, and generic Review Package summary fields are implemented locally.
 
 Implemented:
 
@@ -54,10 +54,11 @@ Implemented:
 - Generic Review Package summary: new Review Packages include `agent_summary` / `agent_summary_zh`; legacy `mimo_summary` / `mimo_summary_zh` stay as aliases for old clients.
 - Generic lifecycle parity: Reasonix tasks can now be cancelled, accepted/abandoned, merged/discarded, deleted, and inspected in the queue through `agent_*` tools instead of borrowing `mimo_*` tool names. Optional `agent_id` guards reject mismatched tasks before mutating state.
 - Safe scripted invocation: `scripts/mimo-bridge-client.mjs` now exposes `agent-list`, `agent-start`, `agent-wait`, `agent-reply`, `agent-start-and-wait`, `agent-review`, `agent-cancel`, `agent-finish`, `agent-merge`, `agent-discard`, `agent-delete`, `agent-queue`, and `agent-token-status`, preserving UTF-8 JSON file/stdin handling for Reasonix tasks and follow-up messages.
+- Safe GUI companion opening: Admin UI can call `POST /api/tasks/:id/open` with `action=reasonix_gui` for Reasonix TUI tasks. The daemon launches an explicit `reasonix-gui` agent command when configured, otherwise infers `...\ReasonixDesktop\reasonix-desktop.exe` from Reasonix TUI `home_dir`/command. It sets the same `REASONIX_HOME`, does not accept browser-supplied paths or commands, and does not return raw local paths.
 
 Not implemented yet:
 
-- Direct Reasonix GUI shared-session opening/viewing.
+- Direct Reasonix GUI deep-linking to a specific session.
 - Real-world validation against more Reasonix token/cost field variants if future versions change the session JSONL shape.
 - Wider real-world validation against multiple Reasonix session JSONL variants beyond the observed `role/content/tool_calls` shape.
 
@@ -220,7 +221,7 @@ Only after session mapping:
 - Avoid editing GUI tab metadata unless the format is documented and stable.
 - Do not automate GUI clicks as core execution.
 
-Status: first local-open slice is implemented for task folders and Reasonix session folders. Direct Reasonix GUI launch to a specific session is not implemented yet.
+Status: safe local-open is implemented for task folders, Reasonix session folders, and Reasonix GUI companion launch. Direct Reasonix GUI launch to a specific session is not implemented because current `reasonix --help` exposes no stable GUI session-open argument.
 
 ## Collaboration Needed
 

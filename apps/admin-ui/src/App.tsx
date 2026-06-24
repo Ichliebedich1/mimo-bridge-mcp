@@ -23,6 +23,7 @@ import {
   type AgentStatusResponse,
   type HealthResponse,
   type QueueStatusResponse,
+  type TaskOpenAction,
 } from './api';
 import { CODEX_NEW_THREAD_URL, copyCodexReviewPrompt, resolveCodexHandoffUrl } from './codex-handoff.mjs';
 import type {
@@ -227,8 +228,8 @@ function App() {
     });
   }
 
-  async function handleOpenTaskTarget(taskId: string, action: 'task_folder' | 'session_folder') {
-    const label = action === 'session_folder' ? '会话文件夹' : '任务文件夹';
+  async function handleOpenTaskTarget(taskId: string, action: TaskOpenAction) {
+    const label = action === 'reasonix_gui' ? 'Reasonix GUI' : action === 'session_folder' ? '会话文件夹' : '任务文件夹';
     await runAction('正在打开' + label + '…', label + '已请求打开。', () => openTaskTarget(taskId, action));
   }
 
@@ -781,7 +782,7 @@ function TaskDetailPage({
   onLoadDiff: (taskId: string, filePath: string) => Promise<FocusedTaskResult>;
   onLoadLogs: (taskId: string) => Promise<TaskLogsResult>;
   onLoadFull: (taskId: string) => Promise<FullTaskResult>;
-  onOpenTaskTarget: (taskId: string, action: 'task_folder' | 'session_folder') => Promise<void>;
+  onOpenTaskTarget: (taskId: string, action: TaskOpenAction) => Promise<void>;
   onRefresh: () => Promise<void>;
 }) {
   const [selectedFile, setSelectedFile] = useState<ChangedFile | null>(task.changedFiles[0] ?? null);
@@ -1029,9 +1030,14 @@ function TaskDetailPage({
               打开任务文件夹
             </button>
             {task.agent === 'reasonix-tui' && (
-              <button className="button soft" disabled={Boolean(actionBusy)} onClick={() => void onOpenTaskTarget(task.id, 'session_folder')} type="button">
-                打开会话文件夹
-              </button>
+              <>
+                <button className="button soft" disabled={Boolean(actionBusy)} onClick={() => void onOpenTaskTarget(task.id, 'session_folder')} type="button">
+                  打开会话文件夹
+                </button>
+                <button className="button soft" disabled={Boolean(actionBusy)} onClick={() => void onOpenTaskTarget(task.id, 'reasonix_gui')} type="button">
+                  打开 Reasonix GUI
+                </button>
+              </>
             )}
             <span className="action-helper">由本地 daemon 按任务记录解析路径；浏览器不会传任意本地路径。</span>
             <button className="button primary" disabled={!canReview || hasBlocker || !task.hasWorktree || Boolean(actionBusy)} onClick={() => onMergeAndAccept(task.id)} type="button">

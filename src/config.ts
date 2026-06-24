@@ -110,6 +110,17 @@ function loadAgentConfigsFromEnv(): AgentConfig[] {
       max_steps: parseOptionalInt(process.env.REASONIX_MAX_STEPS),
     });
   }
+  const reasonixGuiCommand = process.env.REASONIX_GUI_COMMAND;
+  if (reasonixGuiCommand) {
+    agents.push({
+      id: "reasonix-gui",
+      kind: "reasonix-gui",
+      display_name: "Reasonix GUI",
+      enabled: process.env.REASONIX_GUI_ENABLED !== "false",
+      command: reasonixGuiCommand,
+      home_dir: process.env.REASONIX_HOME,
+    });
+  }
   return agents;
 }
 

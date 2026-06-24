@@ -158,6 +158,108 @@ test("resolveOpenTarget opens Reasonix session folder only under configured home
   }
 });
 
+test("resolveOpenTarget infers Reasonix GUI from TUI home for Reasonix tasks", () => {
+  const root = tmpDir();
+  try {
+    const repo = join(root, "repo");
+    const runtime = join(root, "runtime");
+    const reasonixRoot = join(root, "Reasonix");
+    const reasonixHome = join(reasonixRoot, "ReasonixData");
+    const guiDir = join(reasonixRoot, "ReasonixDesktop");
+    const guiPath = join(guiDir, "reasonix-desktop.exe");
+    mkdirSync(repo, { recursive: true });
+    mkdirSync(reasonixHome, { recursive: true });
+    mkdirSync(guiDir, { recursive: true });
+    writeFileSync(guiPath, "", "utf-8");
+    const store = new TaskStore(runtime);
+    const task = store.createTask({
+      objective: "open gui",
+      workspace_path: repo,
+      editable_paths: [],
+      readonly_paths: [],
+      acceptance_criteria: [],
+      max_rounds: 1,
+      runtime_timeout_seconds: 60,
+    }, { agent: "reasonix-tui" });
+
+    const resolved = resolveOpenTarget(
+      daemonConfig(root, [{ id: "reasonix-tui", kind: "reasonix-tui", display_name: "Reasonix TUI", enabled: true, home_dir: reasonixHome }]),
+      task,
+      "reasonix_gui"
+    );
+    assert.ok(!("error" in resolved));
+    assert.strictEqual(resolved.kind, "reasonix_gui");
+    assert.strictEqual(resolved.path, resolve(guiPath));
+    assert.strictEqual(resolved.env.REASONIX_HOME, resolve(reasonixHome));
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("resolveOpenTarget prefers explicit Reasonix GUI agent command", () => {
+  const root = tmpDir();
+  try {
+    const repo = join(root, "repo");
+    const runtime = join(root, "runtime");
+    const reasonixHome = join(root, "ReasonixData");
+    const explicitGuiDir = join(root, "ExplicitGui");
+    const explicitGui = join(explicitGuiDir, "reasonix-desktop.exe");
+    mkdirSync(repo, { recursive: true });
+    mkdirSync(reasonixHome, { recursive: true });
+    mkdirSync(explicitGuiDir, { recursive: true });
+    writeFileSync(explicitGui, "", "utf-8");
+    const store = new TaskStore(runtime);
+    const task = store.createTask({
+      objective: "open explicit gui",
+      workspace_path: repo,
+      editable_paths: [],
+      readonly_paths: [],
+      acceptance_criteria: [],
+      max_rounds: 1,
+      runtime_timeout_seconds: 60,
+    }, { agent: "reasonix-tui" });
+
+    const resolved = resolveOpenTarget(
+      daemonConfig(root, [
+        { id: "reasonix-tui", kind: "reasonix-tui", display_name: "Reasonix TUI", enabled: true, home_dir: reasonixHome },
+        { id: "reasonix-gui", kind: "reasonix-gui", display_name: "Reasonix GUI", enabled: true, command: explicitGui, home_dir: reasonixHome },
+      ]),
+      task,
+      "reasonix_gui"
+    );
+    assert.ok(!("error" in resolved));
+    assert.strictEqual(resolved.kind, "reasonix_gui");
+    assert.strictEqual(resolved.path, resolve(explicitGui));
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("resolveOpenTarget rejects Reasonix GUI action for non-Reasonix tasks", () => {
+  const root = tmpDir();
+  try {
+    const repo = join(root, "repo");
+    const runtime = join(root, "runtime");
+    mkdirSync(repo, { recursive: true });
+    const store = new TaskStore(runtime);
+    const task = store.createTask({
+      objective: "blocked gui",
+      workspace_path: repo,
+      editable_paths: [],
+      readonly_paths: [],
+      acceptance_criteria: [],
+      max_rounds: 1,
+      runtime_timeout_seconds: 60,
+    });
+
+    const resolved = resolveOpenTarget(daemonConfig(root), task, "reasonix_gui");
+    assert.ok("error" in resolved);
+    assert.match(resolved.error, /Reasonix TUI tasks/);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test("createOpenTaskTargetHandler opens resolved target without returning local path", async () => {
   const root = tmpDir();
   try {
@@ -187,6 +289,55 @@ test("createOpenTaskTargetHandler opens resolved target without returning local 
     assert.strictEqual(opened.length, 1);
     assert.strictEqual(result.opened, true);
     assert.strictEqual(JSON.stringify(result).includes(repo), false);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("createOpenTaskTargetHandler opens Reasonix GUI without returning executable path", async () => {
+  const root = tmpDir();
+  try {
+    const repo = join(root, "repo");
+    const runtime = join(root, "runtime");
+    const reasonixRoot = join(root, "Reasonix");
+    const reasonixHome = join(reasonixRoot, "ReasonixData");
+    const guiDir = join(reasonixRoot, "ReasonixDesktop");
+    const guiPath = join(guiDir, "reasonix-desktop.exe");
+    mkdirSync(repo, { recursive: true });
+    mkdirSync(reasonixHome, { recursive: true });
+    mkdirSync(guiDir, { recursive: true });
+    writeFileSync(guiPath, "", "utf-8");
+    const store = new TaskStore(runtime);
+    const task = store.createTask({
+      objective: "open gui handler",
+      workspace_path: repo,
+      editable_paths: [],
+      readonly_paths: [],
+      acceptance_criteria: [],
+      max_rounds: 1,
+      runtime_timeout_seconds: 60,
+    }, { agent: "reasonix-tui" });
+    const opened = [];
+    const handler = createOpenTaskTargetHandler(
+      daemonConfig(root, [{ id: "reasonix-tui", kind: "reasonix-tui", display_name: "Reasonix TUI", enabled: true, home_dir: reasonixHome }]),
+      store,
+      {
+        openExecutable: (command, args, options) => {
+          opened.push({ command, args, options });
+          return { ok: true };
+        },
+      }
+    );
+
+    const result = await handler.handler({ task_id: task.task_id, action: "reasonix_gui" });
+    assert.ok(!("error" in result));
+    assert.strictEqual(opened.length, 1);
+    assert.strictEqual(opened[0].command, resolve(guiPath));
+    assert.deepStrictEqual(opened[0].args, []);
+    assert.strictEqual(opened[0].options.env.REASONIX_HOME, resolve(reasonixHome));
+    assert.strictEqual(result.opened, true);
+    assert.strictEqual(result.target_kind, "reasonix_gui");
+    assert.strictEqual(JSON.stringify(result).includes(root), false);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }

@@ -316,7 +316,9 @@ export async function worktreeTask(taskId: string, action: 'merge' | 'discard'):
   return unwrap(await postJson<TaskActionResult>('/api/tasks/' + encodeURIComponent(taskId) + '/worktree', { action }));
 }
 
-export async function openTaskTarget(taskId: string, action: 'task_folder' | 'session_folder'): Promise<TaskActionResult> {
+export type TaskOpenAction = 'task_folder' | 'session_folder' | 'reasonix_gui';
+
+export async function openTaskTarget(taskId: string, action: TaskOpenAction): Promise<TaskActionResult> {
   return unwrap(await postJson<TaskActionResult>('/api/tasks/' + encodeURIComponent(taskId) + '/open', { action }));
 }
 
