@@ -785,6 +785,43 @@ test("agent-queue command fetches filtered queue", async () => {
   }
 });
 
+test("agent-token-status command fetches shared token budget without reset", async () => {
+  const calls = [];
+  const mock = await startMockServer((req, res) => {
+    calls.push({ method: req.method, url: req.url });
+    if (req.method === "GET" && req.url === "/api/token-budget") {
+      res.writeHead(200, { "content-type": "application/json" });
+      res.end(JSON.stringify({
+        ok: true,
+        data: {
+          status: "ok",
+          used: { input_tokens: 10, output_tokens: 5, total_tokens: 15, cost_usd: 0.001 },
+          remaining: { input_tokens: 999990, output_tokens: 999995, total_tokens: 999985, cost_usd: 99.999 },
+          utilization: { input_tokens: 0.001, output_tokens: 0.0005, total_tokens: 0.0015, cost_usd: 0.001 },
+          warnings: [],
+          exceeded: false,
+          report: "Token budget ok",
+        },
+      }));
+      return;
+    }
+    res.writeHead(404).end("{}");
+  });
+
+  try {
+    const result = await runClient(["agent-token-status"], { env: { MIMO_BRIDGE_URL: mock.baseUrl } });
+    assert.equal(result.code, 0);
+    const out = JSON.parse(result.stdout);
+    assert.equal(out.ok, true);
+    assert.equal(out.operation, "agent-token-status");
+    assert.equal(out.status, "ok");
+    assert.equal(out.used.total_tokens, 15);
+    assert.deepEqual(calls, [{ method: "GET", url: "/api/token-budget" }]);
+  } finally {
+    await closeServer(mock.server);
+  }
+});
+
 test("agent-tasks command fetches bounded filtered task list", async () => {
   const mock = await startMockServer((req, res) => {
     if (req.method === "GET" && req.url === "/api/agent-tasks?limit=5&agent_id=reasonix-tui") {

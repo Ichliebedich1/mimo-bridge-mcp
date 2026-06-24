@@ -477,6 +477,19 @@ async function agentQueueOperation({ args, baseUrl }) {
   }));
 }
 
+async function tokenStatusOperation({ baseUrl, operation = "token-status" }) {
+  const response = await fetchJson(baseUrl, "/api/token-budget");
+  return normalizeRestEnvelope(operation, response, (data) => ({
+    status: data.status,
+    used: data.used,
+    remaining: data.remaining,
+    utilization: data.utilization,
+    warnings: data.warnings,
+    exceeded: data.exceeded,
+    report: data.report,
+  }));
+}
+
 async function agentTasksOperation({ args, baseUrl }) {
   const params = new URLSearchParams({
     limit: String(args.limit || 10),
@@ -590,6 +603,7 @@ function helpOperation() {
       "node scripts/mimo-bridge-client.mjs agent-merge --agent-id reasonix-tui --task-id task_xxx --action merge",
       "node scripts/mimo-bridge-client.mjs agent-delete --agent-id reasonix-tui --task-id task_xxx",
       "node scripts/mimo-bridge-client.mjs agent-queue --agent-id reasonix-tui",
+      "node scripts/mimo-bridge-client.mjs agent-token-status",
     ],
   });
 }
@@ -665,6 +679,10 @@ export async function run(argv = process.argv.slice(2), options = {}) {
       return agentLifecycleOperation({ args, baseUrl, operation: "agent-delete", pathSuffix: "", method: "DELETE" });
     case "agent-queue":
       return agentQueueOperation({ args, baseUrl, stdin });
+    case "token-status":
+      return tokenStatusOperation({ baseUrl, operation: "token-status" });
+    case "agent-token-status":
+      return tokenStatusOperation({ baseUrl, operation: "agent-token-status" });
     case "":
     case "help":
     case "--help":

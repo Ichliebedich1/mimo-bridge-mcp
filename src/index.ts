@@ -96,6 +96,7 @@ async function main() {
     };
   });
 
+  registerJsonTool(server, "agent_token_status", "Show shared agent token budget status", tokenStatus);
   registerJsonTool(server, "mimo_token_status", "Show token budget status", tokenStatus);
   registerJsonTool(server, "mimo_delete_task", "Delete a terminal task after its Worktree is gone", deleteTask);
 

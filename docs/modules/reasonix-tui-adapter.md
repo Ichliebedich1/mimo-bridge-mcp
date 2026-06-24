@@ -10,7 +10,7 @@ P6 should first adapt Reasonix TUI, not Reasonix GUI. The TUI adapter should run
 
 ## Current Status
 
-P6.0-P6.11 Agent discovery, Reasonix one-shot execution, generic low-token task get/wait/reply, generic task lifecycle tools, safe client Agent commands including replies, Reasonix session mapping, first Admin UI integration, agent-aware queue/path-conflict scheduling, Reasonix live/session parsing, safe session-folder opening, and explicit token/cost extraction are implemented locally.
+P6.0-P6.15 Agent discovery, Reasonix one-shot execution, generic low-token task get/wait/reply, generic task lifecycle/status tools, safe client Agent commands including replies and token status, Reasonix session mapping, first Admin UI integration, agent-aware queue/path-conflict scheduling, Reasonix live/session parsing, safe session-folder opening, and explicit token/cost extraction are implemented locally.
 
 Implemented:
 
@@ -50,8 +50,9 @@ Implemented:
 - Safe local open first slice: Admin UI can call `POST /api/tasks/:id/open` to open a task folder or Reasonix session folder. The daemon resolves paths from stored task state, validates Worktree/workspace/Reasonix-home boundaries, and does not return raw local paths to the browser.
 - Token/cost extraction: Reasonix session parser extracts explicit `tokens`, `usage`, `token_usage`, `prompt_tokens`, `completion_tokens`, `total_tokens`, and `cost` fields when present. The runner records them into TokenBudget only when `total_tokens > 0`; no fields means no record.
 - Token capability visibility: ready Reasonix TUI reports `capabilities.token_usage=true`, and the Admin UI Token page explains that MiMo and Reasonix both contribute only real logged token/cost values.
+- Generic token status: MCP `agent_token_status` and safe client `agent-token-status` read the shared TokenBudget without using MiMo-only command names. `mimo_token_status` remains compatible.
 - Generic lifecycle parity: Reasonix tasks can now be cancelled, accepted/abandoned, merged/discarded, deleted, and inspected in the queue through `agent_*` tools instead of borrowing `mimo_*` tool names. Optional `agent_id` guards reject mismatched tasks before mutating state.
-- Safe scripted invocation: `scripts/mimo-bridge-client.mjs` now exposes `agent-list`, `agent-start`, `agent-wait`, `agent-reply`, `agent-start-and-wait`, `agent-review`, `agent-cancel`, `agent-finish`, `agent-merge`, `agent-discard`, `agent-delete`, and `agent-queue`, preserving UTF-8 JSON file/stdin handling for Reasonix tasks and follow-up messages.
+- Safe scripted invocation: `scripts/mimo-bridge-client.mjs` now exposes `agent-list`, `agent-start`, `agent-wait`, `agent-reply`, `agent-start-and-wait`, `agent-review`, `agent-cancel`, `agent-finish`, `agent-merge`, `agent-discard`, `agent-delete`, `agent-queue`, and `agent-token-status`, preserving UTF-8 JSON file/stdin handling for Reasonix tasks and follow-up messages.
 
 Not implemented yet:
 
@@ -148,6 +149,7 @@ type AgentRunner = {
 - `agent_merge_task`
 - `agent_queue_status`
 - `agent_delete_task`
+- `agent_token_status`
 
 Existing `mimo_*` tools stay and route to the generic layer with `agent_id="mimo"`.
 

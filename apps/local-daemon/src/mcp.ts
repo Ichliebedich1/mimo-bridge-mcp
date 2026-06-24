@@ -115,6 +115,7 @@ function createMcpServer(context: ToolContext): McpServer {
     };
   });
 
+  registerJsonTool(server, "agent_token_status", "Show shared agent token budget status", context.tools.tokenStatus);
   registerJsonTool(server, "mimo_token_status", "Show token budget status", context.tools.tokenStatus);
   registerJsonTool(server, "mimo_delete_task", "Delete a terminal task after its Worktree is gone", context.tools.deleteTask);
 
