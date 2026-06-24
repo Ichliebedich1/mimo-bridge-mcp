@@ -1172,13 +1172,13 @@ function TokenPage({ tokenStatus, onReset, actionBusy }: { tokenStatus: unknown;
   return (
     <div className="page-grid">
       <section className="panel wide token-panel">
-        <PanelHeader title="Token 预算" helper="来自 MiMo JSONL 事件中的 tokens/cost，按当前守护进程运行期累计。" />
+        <PanelHeader title="Token 预算" helper="来自 MiMo 事件和 Reasonix 会话 JSONL 中的真实 tokens/cost，按当前守护进程运行期累计。" />
         <div className="token-empty">
           <div className="orb">◌</div>
           <h2>{token.connected ? 'Token API 已连接' : '统计暂不可用'}</h2>
           <p>
             {token.connected
-              ? '当前显示来自本地守护进程的 token-budget 状态；完成新的 MiMo 任务后会自动累计真实 token 和 cost。'
+              ? '当前显示来自本地守护进程的 token-budget 状态；完成新的 MiMo 或 Reasonix 任务后，会自动累计日志中明确提供的真实 token 和 cost。'
               : '暂时无法读取本地守护进程的 token-budget 状态。'}
           </p>
           <div className="token-grid">
@@ -1615,8 +1615,8 @@ function readTokenStatus(tokenStatus: unknown): {
     input,
     output,
     cost,
-    helper: input === '0' || output === '0' ? 'API 已连接；暂无完成任务 token' : '来自 MiMo 事件',
-    costHelper: cost === '$0.0000' ? 'API 已连接；暂无完成任务成本' : '来自 MiMo 事件',
+    helper: input === '0' || output === '0' ? 'API 已连接；暂无完成任务 token' : '来自真实 Agent 事件',
+    costHelper: cost === '$0.0000' ? 'API 已连接；暂无完成任务成本' : '来自真实 Agent 事件',
   };
 }
 

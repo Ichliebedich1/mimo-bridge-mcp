@@ -207,7 +207,7 @@ function reasonixCapabilities(ready: boolean): AgentCapabilityMap {
     review_package: ready,
     live_view: ready,
     reply_task: ready,
-    token_usage: false,
+    token_usage: ready,
     worktree: true,
   };
 }

@@ -11,8 +11,8 @@ Let Codex split and review work while MiMo performs bounded coding tasks through
 ## Current Progress
 
 - Branch: `master`.
-- Latest local phase: P6.13 generic Agent pending-review recovery is implemented and deployed. MCP `agent_pending_reviews`, REST `GET /api/agent-pending-reviews?agent_id=...&limit=...&max_chars=...`, and safe client `agent-recover` let Codex recover completed Reasonix tasks after interrupted waits without full logs/diff/source. P6.12 bounded `agent_list_tasks` / `agent-tasks` remains implemented.
-- P6.13 verification: root build, local-daemon build, admin-ui build, and `node --test tests\pending-reviews.test.mjs tests\mimo-bridge-client.test.mjs tests\admin-api.test.mjs tests\stdio-protocol.test.mjs` passed 65/65. Live daemon smoke passed for `agent-recover --agent-id reasonix-tui --limit 5 --max-chars 8000`.
+- Latest local phase: P6.14 token capability/UI copy fix is implemented. Ready Reasonix TUI now reports `capabilities.token_usage=true`, matching the existing Reasonix session JSONL token/cost extraction path. The Admin UI Token page now describes MiMo and Reasonix as contributors only when real logged token/cost data exists.
+- P6.14 verification: root build, local-daemon build, admin-ui build, and `node --test tests\agent-registry.test.mjs tests\agent-start-task.test.mjs tests\token-budget.test.mjs` passed 24/24 when run after builds. P6.13 generic Agent pending-review recovery remains implemented and deployed.
 - Committed Bridge baseline before this handoff-doc refresh: `master...origin/master [ahead 1]`.
 - Latest committed Bridge HEAD before this handoff-doc refresh: `01d734f docs: record session manager fallback collaboration`.
 - This handoff-doc refresh may be uncommitted if the user did not ask for a Git commit; always run `git status --short --branch` after context compression.

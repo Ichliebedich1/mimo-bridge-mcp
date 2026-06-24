@@ -111,6 +111,7 @@ process.exit(2);
     assert.strictEqual(reasonix.capabilities.wait_task, true);
     assert.strictEqual(reasonix.capabilities.review_package, true);
     assert.strictEqual(reasonix.capabilities.reply_task, true);
+    assert.strictEqual(reasonix.capabilities.token_usage, true);
     assert.strictEqual(reasonix.default_model, "deepseek");
     assert.strictEqual(reasonix.sessions.configured, true);
     assert.strictEqual(reasonix.sessions.count, 2);

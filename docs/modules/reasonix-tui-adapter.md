@@ -49,6 +49,7 @@ Implemented:
 - Live viewer integration: `/api/tasks/:id/live` merges Bridge runtime JSONL events with Reasonix session events for `reasonix-tui` tasks and still returns session events when the Bridge round log is missing.
 - Safe local open first slice: Admin UI can call `POST /api/tasks/:id/open` to open a task folder or Reasonix session folder. The daemon resolves paths from stored task state, validates Worktree/workspace/Reasonix-home boundaries, and does not return raw local paths to the browser.
 - Token/cost extraction: Reasonix session parser extracts explicit `tokens`, `usage`, `token_usage`, `prompt_tokens`, `completion_tokens`, `total_tokens`, and `cost` fields when present. The runner records them into TokenBudget only when `total_tokens > 0`; no fields means no record.
+- Token capability visibility: ready Reasonix TUI reports `capabilities.token_usage=true`, and the Admin UI Token page explains that MiMo and Reasonix both contribute only real logged token/cost values.
 - Generic lifecycle parity: Reasonix tasks can now be cancelled, accepted/abandoned, merged/discarded, deleted, and inspected in the queue through `agent_*` tools instead of borrowing `mimo_*` tool names. Optional `agent_id` guards reject mismatched tasks before mutating state.
 - Safe scripted invocation: `scripts/mimo-bridge-client.mjs` now exposes `agent-list`, `agent-start`, `agent-wait`, `agent-reply`, `agent-start-and-wait`, `agent-review`, `agent-cancel`, `agent-finish`, `agent-merge`, `agent-discard`, `agent-delete`, and `agent-queue`, preserving UTF-8 JSON file/stdin handling for Reasonix tasks and follow-up messages.
 
@@ -266,6 +267,7 @@ Integration smoke:
 - `/api/tasks/:id/live` can include Reasonix session events without exposing `agent_session_path`.
 - `POST /api/tasks/:id/open` opens only backend-resolved task/session folders and never accepts arbitrary browser paths.
 - Reasonix token extraction records only explicit session JSONL token/cost fields and does not estimate usage from text.
+- `/api/agents` reports `token_usage=true` for ready Reasonix TUI because Bridge records explicit session JSONL token/cost fields when they exist.
 - `agent_list_tasks` / safe client `agent-tasks` lists recent Reasonix tasks with sanitized and truncated summaries, risk flags, review recommendation, Worktree state, and safe-delete metadata. It must not expose raw Reasonix session paths, raw logs, full source, or full diffs.
 - A real Reasonix probe reports configured/missing without crashing.
 - A real one-shot Reasonix task runs only after the probe and fake-runner tests pass; current local smoke succeeded with `max_steps=20`.
