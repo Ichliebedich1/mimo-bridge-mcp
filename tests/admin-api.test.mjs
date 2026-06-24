@@ -203,6 +203,36 @@ function createContext() {
           return { task_id: input.task_id, agent: input.agent_id ?? "reasonix-tui", status: "running" };
         },
       },
+      agentCancelTask: {
+        handler: async (input) => {
+          calls.push(["agentCancelTask", input]);
+          return { task_id: input.task_id, agent: input.agent_id ?? "reasonix-tui", status: "cancelled" };
+        },
+      },
+      agentFinishTask: {
+        handler: async (input) => {
+          calls.push(["agentFinishTask", input]);
+          return { task_id: input.task_id, agent: input.agent_id ?? "reasonix-tui", status: input.status };
+        },
+      },
+      agentMergeTask: {
+        handler: async (input) => {
+          calls.push(["agentMergeTask", input]);
+          return { task_id: input.task_id, agent: input.agent_id ?? "reasonix-tui", action: input.action, status: "merged" };
+        },
+      },
+      agentDeleteTask: {
+        handler: async (input) => {
+          calls.push(["agentDeleteTask", input]);
+          return { task_id: input.task_id, agent: input.agent_id ?? "reasonix-tui", status: "deleted" };
+        },
+      },
+      agentQueueStatus: {
+        handler: async (input) => {
+          calls.push(["agentQueueStatus", input]);
+          return { running: 0, queued: 1, queue: [{ taskId: "task_agent", agentId: input.agent_id ?? "reasonix-tui" }] };
+        },
+      },
       getTask: {
         handler: async (input) => {
           calls.push(["getTask", input]);
@@ -461,6 +491,30 @@ test("admin API maps agent task replies to agentReplyTask", async () => {
     assert.ok(captured);
     assert.strictEqual(captured[1].message, "continue");
     assert.strictEqual(captured[1].priority, 4);
+  } finally {
+    fixture.cleanup();
+  }
+});
+
+test("admin API maps generic agent lifecycle routes to agent handlers", async () => {
+  const fixture = createContext();
+  try {
+    const taskPath = `/api/agent-tasks/${fixture.taskId}`;
+    await callApi(fixture.context, "POST", `${taskPath}/cancel`, { agent_id: "reasonix-tui" });
+    await callApi(fixture.context, "POST", `${taskPath}/finish`, { agent_id: "reasonix-tui", status: "accepted" });
+    await callApi(fixture.context, "POST", `${taskPath}/worktree`, { agent_id: "reasonix-tui", action: "merge" });
+    await callApi(fixture.context, "DELETE", `${taskPath}?agent_id=reasonix-tui`);
+    await callApi(fixture.context, "GET", "/api/agent-queue?agent_id=reasonix-tui");
+
+    const names = fixture.calls.map((call) => call[0]);
+    assert.ok(names.includes("agentCancelTask"));
+    assert.ok(names.includes("agentFinishTask"));
+    assert.ok(names.includes("agentMergeTask"));
+    assert.ok(names.includes("agentDeleteTask"));
+    assert.ok(names.includes("agentQueueStatus"));
+    assert.strictEqual(fixture.calls.find(([name]) => name === "agentFinishTask")[1].status, "accepted");
+    assert.strictEqual(fixture.calls.find(([name]) => name === "agentMergeTask")[1].action, "merge");
+    assert.strictEqual(fixture.calls.find(([name]) => name === "agentQueueStatus")[1].agent_id, "reasonix-tui");
   } finally {
     fixture.cleanup();
   }

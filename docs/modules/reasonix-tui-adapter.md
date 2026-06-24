@@ -10,7 +10,7 @@ P6 should first adapt Reasonix TUI, not Reasonix GUI. The TUI adapter should run
 
 ## Current Status
 
-P6.0-P6.8 Agent discovery, Reasonix one-shot execution, generic low-token task get/wait/reply, Reasonix session mapping, first Admin UI integration, agent-aware queue/path-conflict scheduling, Reasonix live/session parsing, safe session-folder opening, and explicit token/cost extraction are implemented locally.
+P6.0-P6.9 Agent discovery, Reasonix one-shot execution, generic low-token task get/wait/reply, generic task lifecycle tools, Reasonix session mapping, first Admin UI integration, agent-aware queue/path-conflict scheduling, Reasonix live/session parsing, safe session-folder opening, and explicit token/cost extraction are implemented locally.
 
 Implemented:
 
@@ -28,10 +28,17 @@ Implemented:
 - `src/tools/agent-get-task.ts`.
 - `src/tools/agent-wait-task.ts`.
 - `src/tools/agent-reply-task.ts`.
+- `src/tools/agent-cancel-task.ts`.
+- `src/tools/agent-finish-task.ts`.
+- `src/tools/agent-merge-task.ts`.
+- `src/tools/agent-delete-task.ts`.
+- `src/tools/agent-queue-status.ts`.
 - MCP tool `agent_start_task`.
 - MCP tools `agent_get_task`, `agent_wait_task`, and `agent_reply_task`.
+- MCP tools `agent_cancel_task`, `agent_finish_task`, `agent_merge_task`, `agent_delete_task`, and `agent_queue_status`.
 - REST route `POST /api/agent-tasks`.
 - REST routes `GET /api/agent-tasks/:task_id`, `POST /api/agent-tasks/:task_id/wait`, and `POST /api/agent-tasks/:task_id/replies`.
+- REST routes `POST /api/agent-tasks/:task_id/cancel`, `POST /api/agent-tasks/:task_id/finish`, `POST /api/agent-tasks/:task_id/worktree`, `DELETE /api/agent-tasks/:task_id`, and `GET /api/agent-queue`.
 - Fake Reasonix one-shot Worktree Review Package test.
 - Controlled real Reasonix smoke task `task_f8b579217015` succeeded with `max_steps=20`, changed only `notes/result.txt`, had `risk_flags: []`, and its temporary Worktree was discarded afterward.
 - Reasonix session mapping: after a TUI run, Bridge scans only configured `REASONIX_HOME\projects` for in-window `.jsonl` session files, skips `.trash`, prefers task/workspace matches, and persists the best match as `agent_session_path`. Browser API responses sanitize this path.
@@ -42,6 +49,7 @@ Implemented:
 - Live viewer integration: `/api/tasks/:id/live` merges Bridge runtime JSONL events with Reasonix session events for `reasonix-tui` tasks and still returns session events when the Bridge round log is missing.
 - Safe local open first slice: Admin UI can call `POST /api/tasks/:id/open` to open a task folder or Reasonix session folder. The daemon resolves paths from stored task state, validates Worktree/workspace/Reasonix-home boundaries, and does not return raw local paths to the browser.
 - Token/cost extraction: Reasonix session parser extracts explicit `tokens`, `usage`, `token_usage`, `prompt_tokens`, `completion_tokens`, `total_tokens`, and `cost` fields when present. The runner records them into TokenBudget only when `total_tokens > 0`; no fields means no record.
+- Generic lifecycle parity: Reasonix tasks can now be cancelled, accepted/abandoned, merged/discarded, deleted, and inspected in the queue through `agent_*` tools instead of borrowing `mimo_*` tool names. Optional `agent_id` guards reject mismatched tasks before mutating state.
 
 Not implemented yet:
 

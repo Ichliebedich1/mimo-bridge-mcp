@@ -84,29 +84,37 @@ function createMcpServer(context: ToolContext): McpServer {
     version: "0.1.0-ui1",
   });
 
-  registerJsonTool(server, "mimo_start_task", "创建并后台启动 MiMo 任务", context.tools.startTask);
-  registerJsonTool(server, "mimo_get_task", "按 token 预算查询任务", context.tools.getTask);
-  registerJsonTool(server, "mimo_wait_task", "低 Token 等待任务状态变化，完成后返回受限审查摘要", context.tools.waitTask);
-  registerJsonTool(server, "mimo_reply_task", "继续已有 MiMo 会话，发送回复消息", context.tools.replyTask);
-  registerJsonTool(server, "mimo_cancel_task", "终止运行中的 MiMo 任务或取消队列中的任务", context.tools.cancelTask);
-  registerJsonTool(server, "mimo_finish_task", "标记任务为验收通过或放弃", context.tools.finishTask);
-  registerJsonTool(server, "mimo_list_tasks", "列出最近的任务及状态", context.tools.listTasks);
-  registerJsonTool(server, "mimo_pending_reviews", "低上下文恢复入口：列出已经完成、正在等待 Codex 审查的 MiMo 任务", context.tools.pendingReviews);
-  registerJsonTool(server, "mimo_merge_task", "合并或丢弃任务的 Worktree 修改", context.tools.mergeTask);
-  registerJsonTool(server, "agent_list", "列出可用执行 Agent，包括 MiMo 和 Reasonix TUI 探测状态", context.tools.agentList);
-  registerJsonTool(server, "agent_start_task", "使用指定 Agent 创建并后台启动任务；P6 当前支持 mimo 与 reasonix-tui one-shot", context.tools.agentStartTask);
-  registerJsonTool(server, "agent_reply_task", "继续指定 Agent 任务；Reasonix TUI 使用记录的 session JSONL 恢复", context.tools.agentReplyTask);
-  registerJsonTool(server, "agent_get_task", "按 agent_id 可选校验查询任意 Agent 任务，默认返回低上下文 Review Package", context.tools.agentGetTask);
-  registerJsonTool(server, "agent_wait_task", "低 Token 等待任意 Agent 任务完成，完成后返回受限审查摘要", context.tools.agentWaitTask);
-  server.tool("mimo_queue_status", "查询任务队列状态", {}, async () => {
+  registerJsonTool(server, "mimo_start_task", "Create and start a MiMo task", context.tools.startTask);
+  registerJsonTool(server, "mimo_get_task", "Read a MiMo task with bounded detail levels", context.tools.getTask);
+  registerJsonTool(server, "mimo_wait_task", "Low-token wait for a MiMo task", context.tools.waitTask);
+  registerJsonTool(server, "mimo_reply_task", "Reply to an existing MiMo task", context.tools.replyTask);
+  registerJsonTool(server, "mimo_cancel_task", "Cancel a queued or running MiMo task", context.tools.cancelTask);
+  registerJsonTool(server, "mimo_finish_task", "Mark a MiMo task as accepted or abandoned", context.tools.finishTask);
+  registerJsonTool(server, "mimo_list_tasks", "List recent tasks", context.tools.listTasks);
+  registerJsonTool(server, "mimo_pending_reviews", "List completed tasks waiting for Codex review", context.tools.pendingReviews);
+  registerJsonTool(server, "mimo_merge_task", "Merge or discard a task Worktree", context.tools.mergeTask);
+
+  registerJsonTool(server, "agent_list", "List configured execution agents", context.tools.agentList);
+  registerJsonTool(server, "agent_start_task", "Create and start a task with a selected agent", context.tools.agentStartTask);
+  registerJsonTool(server, "agent_reply_task", "Reply to a task owned by a selected agent", context.tools.agentReplyTask);
+  registerJsonTool(server, "agent_get_task", "Read any agent task with bounded detail levels", context.tools.agentGetTask);
+  registerJsonTool(server, "agent_wait_task", "Low-token wait for any agent task", context.tools.agentWaitTask);
+  registerJsonTool(server, "agent_cancel_task", "Cancel a queued or running task for any supported agent", context.tools.agentCancelTask);
+  registerJsonTool(server, "agent_finish_task", "Mark any supported agent task as accepted or abandoned", context.tools.agentFinishTask);
+  registerJsonTool(server, "agent_merge_task", "Merge or discard any supported agent task Worktree", context.tools.agentMergeTask);
+  registerJsonTool(server, "agent_delete_task", "Delete a terminal agent task after its Worktree is gone", context.tools.agentDeleteTask);
+  registerJsonTool(server, "agent_queue_status", "Show the shared task queue, optionally filtered by agent_id", context.tools.agentQueueStatus);
+
+  server.tool("mimo_queue_status", "Show the shared task queue", {}, async () => {
     const startTask = context.tools.startTask;
     const result = "getQueueStatus" in startTask ? startTask.getQueueStatus() : { running: 0, queued: 0, queue: [] };
     return {
       content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
     };
   });
-  registerJsonTool(server, "mimo_token_status", "查询 Token 预算使用情况", context.tools.tokenStatus);
-  registerJsonTool(server, "mimo_delete_task", "永久删除已结束且没有 Worktree 的任务及其运行时文件", context.tools.deleteTask);
+
+  registerJsonTool(server, "mimo_token_status", "Show token budget status", context.tools.tokenStatus);
+  registerJsonTool(server, "mimo_delete_task", "Delete a terminal task after its Worktree is gone", context.tools.deleteTask);
 
   return server;
 }

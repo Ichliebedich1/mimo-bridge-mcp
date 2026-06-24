@@ -43,6 +43,18 @@ const WorktreeBodySchema = z.object({
   action: z.enum(["merge", "discard"]),
 });
 
+const AgentActionBodySchema = z.object({
+  agent_id: z.string().min(1).optional(),
+});
+
+const AgentFinishBodySchema = FinishBodySchema.extend({
+  agent_id: z.string().min(1).optional(),
+});
+
+const AgentWorktreeBodySchema = WorktreeBodySchema.extend({
+  agent_id: z.string().min(1).optional(),
+});
+
 const OpenTaskBodySchema = z.object({
   action: z.enum(["task_folder", "session_folder"]),
 });
@@ -154,6 +166,46 @@ export async function handleAdminApi(
         sendJson(res, toolStatusCode(data), wrapToolResult(data));
         return true;
       }
+
+      if (req.method === "POST" && action === "cancel") {
+        const body = AgentActionBodySchema.parse(await readJsonBody(req));
+        const data = await context.tools.agentCancelTask.handler({
+          task_id: taskId,
+          ...body,
+        });
+        sendJson(res, toolStatusCode(data), wrapToolResult(data));
+        return true;
+      }
+
+      if (req.method === "POST" && action === "finish") {
+        const body = AgentFinishBodySchema.parse(await readJsonBody(req));
+        const data = await context.tools.agentFinishTask.handler({
+          task_id: taskId,
+          ...body,
+        });
+        sendJson(res, toolStatusCode(data), wrapToolResult(data));
+        return true;
+      }
+
+      if (req.method === "POST" && action === "worktree") {
+        const body = AgentWorktreeBodySchema.parse(await readJsonBody(req));
+        const data = await context.tools.agentMergeTask.handler({
+          task_id: taskId,
+          ...body,
+        });
+        sendJson(res, toolStatusCode(data), wrapToolResult(data));
+        return true;
+      }
+
+      if (req.method === "DELETE" && action === "") {
+        const agentId = url.searchParams.get("agent_id") ?? undefined;
+        const data = await context.tools.agentDeleteTask.handler({
+          task_id: taskId,
+          agent_id: agentId,
+        });
+        sendJson(res, toolStatusCode(data), wrapToolResult(data));
+        return true;
+      }
     }
 
     const taskMatch = /^\/api\/tasks\/([^/]+)(?:\/([^/]+))?$/.exec(url.pathname);
@@ -239,6 +291,14 @@ export async function handleAdminApi(
       const startTask = context.tools.startTask;
       const data = "getQueueStatus" in startTask ? startTask.getQueueStatus() : { running: 0, queued: 0, queue: [] };
       sendJson(res, 200, ok(data));
+      return true;
+    }
+
+    if (req.method === "GET" && url.pathname === "/api/agent-queue") {
+      const data = await context.tools.agentQueueStatus.handler({
+        agent_id: url.searchParams.get("agent_id") ?? undefined,
+      });
+      sendJson(res, toolStatusCode(data), wrapToolResult(data));
       return true;
     }
 

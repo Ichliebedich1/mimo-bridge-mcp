@@ -16,6 +16,11 @@ import { createAgentStartTaskHandler } from "../../../src/tools/agent-start-task
 import { createAgentReplyTaskHandler } from "../../../src/tools/agent-reply-task.js";
 import { createAgentGetTaskHandler } from "../../../src/tools/agent-get-task.js";
 import { createAgentWaitTaskHandler } from "../../../src/tools/agent-wait-task.js";
+import { createAgentCancelTaskHandler } from "../../../src/tools/agent-cancel-task.js";
+import { createAgentFinishTaskHandler } from "../../../src/tools/agent-finish-task.js";
+import { createAgentMergeTaskHandler } from "../../../src/tools/agent-merge-task.js";
+import { createAgentDeleteTaskHandler } from "../../../src/tools/agent-delete-task.js";
+import { createAgentQueueStatusHandler } from "../../../src/tools/agent-queue-status.js";
 import type { DaemonConfig } from "./daemon-config.js";
 
 type UnavailableHandler = {
@@ -33,6 +38,11 @@ export interface ToolContext {
     agentReplyTask: ReturnType<typeof createAgentReplyTaskHandler> | UnavailableHandler;
     agentGetTask: ReturnType<typeof createAgentGetTaskHandler>;
     agentWaitTask: ReturnType<typeof createAgentWaitTaskHandler>;
+    agentCancelTask: ReturnType<typeof createAgentCancelTaskHandler>;
+    agentFinishTask: ReturnType<typeof createAgentFinishTaskHandler>;
+    agentMergeTask: ReturnType<typeof createAgentMergeTaskHandler>;
+    agentDeleteTask: ReturnType<typeof createAgentDeleteTaskHandler>;
+    agentQueueStatus: ReturnType<typeof createAgentQueueStatusHandler>;
     getTask: ReturnType<typeof createGetTaskHandler>;
     waitTask: ReturnType<typeof createWaitTaskHandler>;
     pendingReviews: ReturnType<typeof createPendingReviewsHandler>;
@@ -67,18 +77,27 @@ export function createToolContext(config: DaemonConfig): ToolContext {
   const tokenStatus = createTokenStatusHandler();
   const deleteTask = createDeleteTaskHandler(taskStore);
 
-  const unavailable = createUnavailableHandler(config.configError ?? "MiMo 配置不可用");
+  const unavailable = createUnavailableHandler(config.configError ?? "MiMo configuration is unavailable.");
+  const startTask = config.mcpConfig ? createStartTaskHandler(config.mcpConfig, taskStore) : unavailable;
+  const agentQueueStatus = createAgentQueueStatusHandler({
+    getQueueStatus: () => ("getQueueStatus" in startTask ? startTask.getQueueStatus() : { running: 0, queued: 0, queue: [] }),
+  });
 
   return {
     taskStore,
     degraded: config.mcpConfig === null,
     configError: config.configError,
     tools: {
-      startTask: config.mcpConfig ? createStartTaskHandler(config.mcpConfig, taskStore) : unavailable,
+      startTask,
       agentStartTask: config.mcpConfig ? createAgentStartTaskHandler(config.mcpConfig, config.agents, taskStore) : unavailable,
       agentReplyTask: config.mcpConfig ? createAgentReplyTaskHandler(config.mcpConfig, config.agents, taskStore) : unavailable,
       agentGetTask,
       agentWaitTask,
+      agentCancelTask: createAgentCancelTaskHandler(taskStore),
+      agentFinishTask: createAgentFinishTaskHandler(taskStore),
+      agentMergeTask: createAgentMergeTaskHandler(taskStore, { runtimeDir: config.runtimeDir }),
+      agentDeleteTask: createAgentDeleteTaskHandler(taskStore),
+      agentQueueStatus,
       getTask,
       waitTask,
       pendingReviews,
@@ -102,7 +121,7 @@ function createUnavailableHandler(error: string): UnavailableHandler {
     },
     handler: async () => ({
       error,
-      details: "请设置 MIMO_NODE_PATH、MIMO_ENTRY_PATH 和 MIMO_ALLOWED_ROOTS 后重启本地守护进程。",
+      details: "Configure MIMO_NODE_PATH, MIMO_ENTRY_PATH, and MIMO_ALLOWED_ROOTS, then restart the local daemon.",
     }),
   };
 }

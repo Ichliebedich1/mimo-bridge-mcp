@@ -22,7 +22,7 @@ Reasonix should eventually reach the same project role as MiMo:
 
 ## Current Status
 
-P6.0-P6.8 are partially implemented. The runtime now has an Agent Registry, Reasonix TUI probe, Reasonix one-shot runner, generic low-token task get/wait/reply tools, Reasonix session mapping through `agent_session_path`, a first Admin UI agent selector/badge/reply pass, an agent-aware queue that permits safe parallelism only for different agents editing non-overlapping paths, Reasonix live/session parsing for the read-only live viewer, safe local folder opening, and explicit Reasonix token/cost extraction when session fields exist. Existing `mimo_*` MCP tools remain compatible.
+P6.0-P6.9 are partially implemented. The runtime now has an Agent Registry, Reasonix TUI probe, Reasonix one-shot runner, generic low-token task get/wait/reply tools, generic lifecycle tools for cancel/finish/merge/delete/queue, Reasonix session mapping through `agent_session_path`, a first Admin UI agent selector/badge/reply pass, an agent-aware queue that permits safe parallelism only for different agents editing non-overlapping paths, Reasonix live/session parsing for the read-only live viewer, safe local folder opening, and explicit Reasonix token/cost extraction when session fields exist. Existing `mimo_*` MCP tools remain compatible.
 
 Observed local Reasonix installation on this machine:
 
@@ -376,6 +376,32 @@ Status:
 - Implemented for explicit session JSONL token fields.
 - `reasonix-event-parser` recognizes `tokens`, `usage`, `token_usage`, `prompt_tokens`, `completion_tokens`, `total_tokens`, and `cost`.
 - `ReasonixTuiRunner` records usage only when `total_tokens > 0`; sessions without explicit usage fields remain unknown/no record.
+
+### P6.9 Generic Agent Lifecycle Tools
+
+Goal: Reasonix tasks should not need to borrow `mimo_*` tool names for normal lifecycle management.
+
+Tasks:
+
+- Add `agent_cancel_task`, `agent_finish_task`, `agent_merge_task`, `agent_delete_task`, and `agent_queue_status`.
+- Register those tools in STDIO MCP and HTTP MCP.
+- Add REST routes under `/api/agent-tasks/:id` for cancel, finish, worktree merge/discard, and delete.
+- Add `GET /api/agent-queue` with optional `agent_id` filtering.
+- Keep existing `mimo_*` tools unchanged for compatibility.
+- Reject mismatched `agent_id` before mutating task state.
+
+Acceptance:
+
+- Codex can manage Reasonix task lifecycle through `agent_*` tools.
+- A task cannot be accidentally cancelled/accepted/deleted through the wrong `agent_id`.
+- Queue status can be filtered by agent without exposing full task logs or source.
+
+Status:
+
+- Implemented locally.
+- Verified with root/local-daemon/admin-ui builds.
+- Focused tests: `node --test tests\agent-lifecycle-task.test.mjs tests\agent-get-wait-task.test.mjs tests\admin-api.test.mjs tests\stdio-protocol.test.mjs` passed 43/43.
+- P6 regression: `node --test tests\agent-start-task.test.mjs tests\agent-reply-task.test.mjs tests\task-queue.test.mjs tests\reasonix-event-parser.test.mjs tests\live-task-view.test.mjs tests\token-budget.test.mjs` passed 75/75. Windows node-pty `AttachConsole failed` output is known noise when exit code is 0.
 
 ## Test Plan
 
