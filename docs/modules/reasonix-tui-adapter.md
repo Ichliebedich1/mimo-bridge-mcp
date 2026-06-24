@@ -10,7 +10,7 @@ P6 should first adapt Reasonix TUI, not Reasonix GUI. The TUI adapter should run
 
 ## Current Status
 
-P6.0/P6.1 Agent discovery is implemented locally.
+P6.0-P6.2 Agent discovery, Reasonix one-shot execution, and generic low-token task get/wait are implemented locally.
 
 Implemented:
 
@@ -24,17 +24,21 @@ Implemented:
 - STDIO env config for `REASONIX_COMMAND`, `REASONIX_HOME`, `REASONIX_DEFAULT_MODEL`, `REASONIX_MODELS`, and `REASONIX_MAX_STEPS`.
 - `src/services/reasonix-tui-runner.ts`.
 - `src/tools/agent-start-task.ts`.
+- `src/tools/agent-get-task.ts`.
+- `src/tools/agent-wait-task.ts`.
 - MCP tool `agent_start_task`.
+- MCP tools `agent_get_task` and `agent_wait_task`.
 - REST route `POST /api/agent-tasks`.
+- REST routes `GET /api/agent-tasks/:task_id` and `POST /api/agent-tasks/:task_id/wait`.
 - Fake Reasonix one-shot Worktree Review Package test.
+- Controlled real Reasonix smoke task `task_f8b579217015` succeeded with `max_steps=20`, changed only `notes/result.txt`, had `risk_flags: []`, and its temporary Worktree was discarded afterward.
 
 Not implemented yet:
 
-- `agent_start_task`.
 - Reasonix session mapping.
 - Agent-aware queue/path conflict scheduling.
 - Admin UI agent selector.
- - Controlled real Reasonix execution smoke.
+- Reasonix continue/reply support.
 
 Local discovery on this machine:
 
@@ -56,7 +60,8 @@ Local discovery on this machine:
   - sessions dir configured under `D:\DeepSeek-Reasonix\ReasonixData\sessions`
   - permission mode: `ask`
   - sandbox available: `false`
-  - fake-runner P6.2 supports one-shot execution through `agent_start_task`; real Reasonix execution smoke is still pending.
+  - fake-runner P6.2 supports one-shot execution through `agent_start_task`.
+  - real Reasonix smoke succeeded when `max_steps=20`; `max_steps=5` was insufficient and caused a false failure.
 
 ## Entry Files Added
 
@@ -68,8 +73,6 @@ Local discovery on this machine:
 - `src/services/agent-runner.ts`
 - `src/services/reasonix-event-parser.ts`
 - `src/services/reasonix-session-store.ts`
-- `src/tools/agent-get-task.ts`
-- `src/tools/agent-wait-task.ts`
 - `src/tools/agent-reply-task.ts`
 
 ## Existing Files To Modify
@@ -163,7 +166,7 @@ Bridge should:
 - Mark status `review` on exit code 0 and `failed` otherwise.
 - Build a Review Package from git diff and bounded Reasonix output.
 
-Status: fake-runner implementation complete. It reuses existing `createStartTaskHandler` for allowedRoots, dynamic task scope, Worktree creation, queueing, and Review Package generation. Real Reasonix execution still needs a controlled smoke on a disposable repo before UI exposure.
+Status: fake-runner implementation and controlled real smoke are complete. The runner reuses existing `createStartTaskHandler` for allowedRoots, dynamic task scope, Worktree creation, queueing, and Review Package generation. Use `max_steps=20` or higher for realistic tasks; `max_steps=5` can stop Reasonix before it finishes otherwise valid work.
 
 ### Phase 3: Session Record Mapping
 
@@ -204,8 +207,8 @@ Only after session mapping:
 
 ## Pending Work
 
-- Run controlled real Reasonix one-shot smoke on a disposable repo.
 - Confirm exact Reasonix session JSONL shape with local fixture files.
+- Implement Reasonix session mapping and persist `agent_session_path`.
 - Decide whether Bridge uses the user's existing `REASONIX_HOME` or a Bridge-managed Reasonix home.
 - Decide default Reasonix model for Bridge tasks.
 - Decide safe permission mode for non-interactive Reasonix execution.
@@ -233,8 +236,10 @@ Integration smoke:
 
 - `agent_list` returns MiMo and Reasonix TUI status.
 - A fake Reasonix runner completes one task and produces a Review Package.
+- `agent_get_task` returns a bounded Review Package for Reasonix tasks without full diff/log/source.
+- `agent_wait_task` waits locally and returns bounded review evidence or a minimal timeout response.
 - A real Reasonix probe reports configured/missing without crashing.
-- A real one-shot Reasonix task runs only after the probe and fake-runner tests pass.
+- A real one-shot Reasonix task runs only after the probe and fake-runner tests pass; current local smoke succeeded with `max_steps=20`.
 
 Normal regression:
 

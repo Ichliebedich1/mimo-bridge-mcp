@@ -13,6 +13,8 @@ import { createPendingReviewsHandler } from "../../../src/tools/pending-reviews.
 import { createAgentRegistry } from "../../../src/services/agent-registry.js";
 import { createAgentListHandler } from "../../../src/tools/agent-list.js";
 import { createAgentStartTaskHandler } from "../../../src/tools/agent-start-task.js";
+import { createAgentGetTaskHandler } from "../../../src/tools/agent-get-task.js";
+import { createAgentWaitTaskHandler } from "../../../src/tools/agent-wait-task.js";
 import type { DaemonConfig } from "./daemon-config.js";
 
 type UnavailableHandler = {
@@ -27,6 +29,8 @@ export interface ToolContext {
   tools: {
     startTask: ReturnType<typeof createStartTaskHandler> | UnavailableHandler;
     agentStartTask: ReturnType<typeof createAgentStartTaskHandler> | UnavailableHandler;
+    agentGetTask: ReturnType<typeof createAgentGetTaskHandler>;
+    agentWaitTask: ReturnType<typeof createAgentWaitTaskHandler>;
     getTask: ReturnType<typeof createGetTaskHandler>;
     waitTask: ReturnType<typeof createWaitTaskHandler>;
     pendingReviews: ReturnType<typeof createPendingReviewsHandler>;
@@ -52,6 +56,8 @@ export function createToolContext(config: DaemonConfig): ToolContext {
     mimoVersion: config.mimoVersion,
   });
   const agentList = createAgentListHandler(agentRegistry);
+  const agentGetTask = createAgentGetTaskHandler(taskStore);
+  const agentWaitTask = createAgentWaitTaskHandler(taskStore);
   const cancelTask = createCancelTaskHandler(taskStore);
   const finishTask = createFinishTaskHandler(taskStore);
   const listTasks = createListTasksHandler(taskStore);
@@ -68,6 +74,8 @@ export function createToolContext(config: DaemonConfig): ToolContext {
     tools: {
       startTask: config.mcpConfig ? createStartTaskHandler(config.mcpConfig, taskStore) : unavailable,
       agentStartTask: config.mcpConfig ? createAgentStartTaskHandler(config.mcpConfig, config.agents, taskStore) : unavailable,
+      agentGetTask,
+      agentWaitTask,
       getTask,
       waitTask,
       pendingReviews,

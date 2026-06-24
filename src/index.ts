@@ -17,6 +17,8 @@ import { createPendingReviewsHandler } from "./tools/pending-reviews.js";
 import { createAgentRegistry } from "./services/agent-registry.js";
 import { createAgentListHandler } from "./tools/agent-list.js";
 import { createAgentStartTaskHandler } from "./tools/agent-start-task.js";
+import { createAgentGetTaskHandler } from "./tools/agent-get-task.js";
+import { createAgentWaitTaskHandler } from "./tools/agent-wait-task.js";
 
 async function main() {
   const config = loadConfig();
@@ -38,6 +40,8 @@ async function main() {
   });
   const agentList = createAgentListHandler(agentRegistry);
   const agentStartTask = createAgentStartTaskHandler(config, config.agents, taskStore);
+  const agentGetTask = createAgentGetTaskHandler(taskStore);
+  const agentWaitTask = createAgentWaitTaskHandler(taskStore);
   const replyTask = createReplyTaskHandler(config, taskStore);
   const cancelTask = createCancelTaskHandler(taskStore);
   const finishTask = createFinishTaskHandler(taskStore);
@@ -184,6 +188,30 @@ async function main() {
     agentStartTask.schema.shape,
     async (params) => {
       const result = await agentStartTask.handler(params);
+      return {
+        content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+      };
+    }
+  );
+
+  server.tool(
+    "agent_get_task",
+    "按 agent_id 可选校验查询任意 Agent 任务，默认返回低上下文 Review Package",
+    agentGetTask.schema.shape,
+    async (params) => {
+      const result = await agentGetTask.handler(params);
+      return {
+        content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+      };
+    }
+  );
+
+  server.tool(
+    "agent_wait_task",
+    "低 Token 等待任意 Agent 任务完成，完成后返回受限审查摘要",
+    agentWaitTask.schema.shape,
+    async (params) => {
+      const result = await agentWaitTask.handler(params);
       return {
         content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
       };

@@ -53,6 +53,13 @@ const TaskQuerySchema = z.object({
   diff_paths: z.array(z.string()).default([]),
 });
 
+const WaitBodySchema = z.object({
+  agent_id: z.string().min(1).optional(),
+  timeout_seconds: z.number().int().min(1).max(3600).default(1800),
+  detail_level: z.enum(["summary", "review"]).default("review"),
+  max_chars: z.number().int().min(1000).max(20000).default(8000),
+});
+
 export async function handleAdminApi(
   req: IncomingMessage,
   res: ServerResponse,
@@ -104,6 +111,34 @@ export async function handleAdminApi(
       const data = await context.tools.agentStartTask.handler(body);
       sendJson(res, toolStatusCode(data), wrapToolResult(data));
       return true;
+    }
+
+    const agentTaskMatch = /^\/api\/agent-tasks\/([^/]+)(?:\/([^/]+))?$/.exec(url.pathname);
+    if (agentTaskMatch) {
+      const taskId = decodeURIComponent(agentTaskMatch[1]);
+      const action = agentTaskMatch[2] ?? "";
+
+      if (req.method === "GET" && action === "") {
+        const query = TaskQuerySchema.parse(parseTaskQuery(url.searchParams));
+        const agentId = url.searchParams.get("agent_id") ?? undefined;
+        const data = await context.tools.agentGetTask.handler({
+          task_id: taskId,
+          agent_id: agentId,
+          ...query,
+        });
+        sendJson(res, toolStatusCode(data), wrapToolResult(augmentTaskResult(data, context)));
+        return true;
+      }
+
+      if (req.method === "POST" && action === "wait") {
+        const body = WaitBodySchema.parse(await readJsonBody(req));
+        const data = await context.tools.agentWaitTask.handler({
+          task_id: taskId,
+          ...body,
+        });
+        sendJson(res, toolStatusCode(data), wrapToolResult(augmentTaskResult(data, context)));
+        return true;
+      }
     }
 
     const taskMatch = /^\/api\/tasks\/([^/]+)(?:\/([^/]+))?$/.exec(url.pathname);

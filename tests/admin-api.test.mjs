@@ -138,6 +138,63 @@ function createContext() {
           return { task_id: "task_agent_created", status: "running", agent: input.agent_id };
         },
       },
+      agentGetTask: {
+        handler: async (input) => {
+          calls.push(["agentGetTask", input]);
+          return {
+            task_id: input.task_id,
+            agent: input.agent_id ?? "reasonix-tui",
+            status: "review",
+            detail_level: input.detail_level,
+            task: { config: { workspace_path: "C:\\sensitive\\workspace" } },
+            review_package: {
+              task_id: input.task_id,
+              status: "review",
+              objective: "agent api objective",
+              changed_files: [],
+              changed_files_count: 0,
+              diff_stat: "",
+              changed_lines_summary: [],
+              out_of_bounds_report: { has_changes: false, files: [] },
+              test_result: "",
+              exit_code: 0,
+              mimo_summary: "done",
+              risk_flags: [],
+              review_recommendation: "approve",
+              truncated: false,
+            },
+          };
+        },
+      },
+      agentWaitTask: {
+        handler: async (input) => {
+          calls.push(["agentWaitTask", input]);
+          return {
+            task_id: input.task_id,
+            agent: input.agent_id ?? "reasonix-tui",
+            status: "review",
+            detail_level: input.detail_level,
+            timed_out: false,
+            waited_ms: 10,
+            review_package: {
+              task_id: input.task_id,
+              status: "review",
+              objective: "agent api objective",
+              changed_files: [],
+              changed_files_count: 0,
+              diff_stat: "",
+              changed_lines_summary: [],
+              out_of_bounds_report: { has_changes: false, files: [] },
+              test_result: "",
+              exit_code: 0,
+              mimo_summary: "done",
+              risk_flags: [],
+              review_recommendation: "approve",
+              truncated: false,
+            },
+          };
+        },
+      },
       getTask: {
         handler: async (input) => {
           calls.push(["getTask", input]);
@@ -329,6 +386,49 @@ test("admin API maps POST /api/agent-tasks to agentStartTask", async () => {
     assert.strictEqual(result.body.ok, true);
     const captured = fixture.calls.find(([name]) => name === "agentStartTask");
     assert.ok(captured);
+    assert.strictEqual(captured[1].agent_id, "reasonix-tui");
+  } finally {
+    fixture.cleanup();
+  }
+});
+
+test("admin API exposes agent task review details through generic route", async () => {
+  const fixture = createContext();
+  try {
+    const result = await callApi(fixture.context, "GET", `/api/agent-tasks/${fixture.taskId}?agent_id=reasonix-tui&detail_level=review`);
+    assert.strictEqual(result.statusCode, 200);
+    assert.strictEqual(result.body.ok, true);
+    assert.strictEqual(result.body.data.task_id, fixture.taskId);
+    assert.strictEqual(result.body.data.agent, "reasonix-tui");
+    assert.ok(result.body.data.review_package);
+    assert.strictEqual(JSON.stringify(result.body).includes("workspace_path"), false);
+    assert.strictEqual(JSON.stringify(result.body).includes("sensitive"), false);
+    const captured = fixture.calls.find(([name]) => name === "agentGetTask");
+    assert.ok(captured);
+    assert.strictEqual(captured[1].agent_id, "reasonix-tui");
+  } finally {
+    fixture.cleanup();
+  }
+});
+
+test("admin API exposes low-token wait for generic agent tasks", async () => {
+  const fixture = createContext();
+  try {
+    const result = await callApi(fixture.context, "POST", `/api/agent-tasks/${fixture.taskId}/wait`, {
+      agent_id: "reasonix-tui",
+      timeout_seconds: 30,
+      detail_level: "review",
+      max_chars: 4000,
+    });
+    assert.strictEqual(result.statusCode, 200);
+    assert.strictEqual(result.body.ok, true);
+    assert.strictEqual(result.body.data.task_id, fixture.taskId);
+    assert.strictEqual(result.body.data.agent, "reasonix-tui");
+    assert.strictEqual(result.body.data.timed_out, false);
+    assert.ok(result.body.data.review_package);
+    const captured = fixture.calls.find(([name]) => name === "agentWaitTask");
+    assert.ok(captured);
+    assert.strictEqual(captured[1].timeout_seconds, 30);
     assert.strictEqual(captured[1].agent_id, "reasonix-tui");
   } finally {
     fixture.cleanup();

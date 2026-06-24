@@ -22,7 +22,7 @@ Reasonix should eventually reach the same project role as MiMo:
 
 ## Current Status
 
-Planned. The current runtime is MiMo-first. Tasks, tools, config, queue, review package wording, and admin UI labels still assume MiMo. P6 should add a generic agent layer while keeping every existing `mimo_*` MCP tool compatible.
+P6.0-P6.2 are partially implemented. The runtime now has an Agent Registry, Reasonix TUI probe, Reasonix one-shot runner, and generic low-token task get/wait tools. The admin UI is still MiMo-first and needs an agent selector plus agent badges. Existing `mimo_*` MCP tools remain compatible.
 
 Observed local Reasonix installation on this machine:
 
@@ -251,6 +251,13 @@ Acceptance:
 - `agent_start_task(agent_id="reasonix-tui")` starts a task.
 - `agent_wait_task` returns bounded review evidence.
 - Admin UI shows the Reasonix task and live text.
+
+Status:
+
+- Implemented for one-shot tasks.
+- `agent_get_task` and `agent_wait_task` now reuse bounded Review Package behavior and optional `agent_id` mismatch checks.
+- Controlled real Reasonix smoke succeeded with `max_steps=20`; `max_steps=5` was too low and caused a false failure.
+- Admin UI task creation/agent selector is still pending.
 
 ### P6.3 Agent-Aware Queue
 
