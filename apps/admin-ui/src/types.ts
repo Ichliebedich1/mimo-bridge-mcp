@@ -8,8 +8,12 @@ export type TaskStatus =
   | 'cancelled'
   | 'abandoned';
 
+export type ScopeMode = 'strict' | 'suggested' | 'repo-wide';
+export type IncludeTestsMode = 'auto' | 'always' | 'never';
+
 export type RiskFlag =
   | 'OUT_OF_BOUNDS_CHANGES'
+  | 'OUT_OF_SCOPE_CHANGES'
   | 'TESTS_FAILED'
   | 'TASK_FAILED'
   | 'NON_ZERO_EXIT'
@@ -67,6 +71,9 @@ export type CreateTaskInput = {
   runtime_timeout_seconds: number;
   use_worktree: boolean;
   priority: number;
+  scope_mode: ScopeMode;
+  include_tests: IncludeTestsMode;
+  repo_wide_confirmed: boolean;
 };
 
 export type TaskActionResult = {

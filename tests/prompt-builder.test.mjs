@@ -104,4 +104,67 @@ describe("prompt-builder", () => {
     const content = readFileSync(briefPath, "utf-8");
     assert.ok(content.includes("回复测试"));
   });
+
+  it("should include scope info in brief when config.scope is present", () => {
+    const config = {
+      objective: "实现登录功能",
+      workspace_path: "C:\\test",
+      editable_paths: ["src/login"],
+      readonly_paths: ["src/config.ts"],
+      acceptance_criteria: ["登录成功"],
+      max_rounds: 5,
+      runtime_timeout_seconds: 900,
+      scope: {
+        mode: "strict",
+        source: "user",
+        workspace_path: "C:\\test",
+        effective_editable_paths: ["src/login", "tests/login"],
+        effective_readonly_paths: ["src/config.ts"],
+        requested_editable_paths: ["src/login"],
+        requested_readonly_paths: ["src/config.ts"],
+        include_tests: "auto",
+        repo_wide_confirmed: false,
+        generated_at: new Date().toISOString(),
+      },
+    };
+
+    const brief = buildTaskBrief(config);
+
+    assert.ok(brief.includes("任务安全边界"));
+    assert.ok(brief.includes("Scope Mode"));
+    assert.ok(brief.includes("strict"));
+    assert.ok(brief.includes("src/login"));
+    assert.ok(brief.includes("tests/login"));
+    assert.ok(brief.includes("src/config.ts"));
+    assert.ok(brief.includes("越界修改会被系统拒绝"));
+  });
+
+  it("should indicate suggested mode needs scope expansion request", () => {
+    const config = {
+      objective: "修复 bug",
+      workspace_path: "C:\\test",
+      editable_paths: ["src"],
+      readonly_paths: [],
+      acceptance_criteria: [],
+      max_rounds: 5,
+      runtime_timeout_seconds: 900,
+      scope: {
+        mode: "suggested",
+        source: "auto",
+        workspace_path: "C:\\test",
+        effective_editable_paths: ["src"],
+        effective_readonly_paths: [],
+        requested_editable_paths: [],
+        requested_readonly_paths: [],
+        include_tests: "auto",
+        repo_wide_confirmed: false,
+        generated_at: new Date().toISOString(),
+      },
+    };
+
+    const brief = buildTaskBrief(config);
+
+    assert.ok(brief.includes("suggested"));
+    assert.ok(brief.includes("如需扩大修改范围，请在总结中申请"));
+  });
 });

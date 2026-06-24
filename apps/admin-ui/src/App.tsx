@@ -27,10 +27,12 @@ import type {
   CreateTaskInput,
   FocusedTaskResult,
   FullTaskResult,
+  IncludeTestsMode,
   LiveEvent,
   LiveTaskView,
   QueueItem,
   RiskFlag,
+  ScopeMode,
   Task,
   TaskLogsResult,
   TaskStatus,
@@ -73,6 +75,7 @@ const statusMeta: Record<TaskStatus, { label: string; tone: string; helper: stri
 
 const riskMeta: Record<RiskFlag, { label: string; severity: 'blocker' | 'attention' }> = {
   OUT_OF_BOUNDS_CHANGES: { label: '越界修改', severity: 'blocker' },
+  OUT_OF_SCOPE_CHANGES: { label: '越界修改(Scope)', severity: 'blocker' },
   TESTS_FAILED: { label: '测试失败', severity: 'blocker' },
   TASK_FAILED: { label: '任务失败', severity: 'blocker' },
   NON_ZERO_EXIT: { label: '非零退出', severity: 'blocker' },
@@ -561,6 +564,9 @@ function CreateTaskPage({ actionBusy, onCreate }: { actionBusy: boolean; onCreat
   const [timeoutSeconds, setTimeoutSeconds] = useState(900);
   const [priority, setPriority] = useState(5);
   const [useWorktree, setUseWorktree] = useState(false);
+  const [scopeMode, setScopeMode] = useState<ScopeMode>('strict');
+  const [includeTests, setIncludeTests] = useState<IncludeTestsMode>('auto');
+  const [repoWideConfirmed, setRepoWideConfirmed] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
@@ -584,6 +590,10 @@ function CreateTaskPage({ actionBusy, onCreate }: { actionBusy: boolean; onCreat
       setFormError('运行超时时间必须在 60-3600 秒之间。');
       return;
     }
+    if (scopeMode === 'repo-wide' && !repoWideConfirmed) {
+      setFormError('repo-wide 模式需要勾选确认复选框。');
+      return;
+    }
 
     const input: CreateTaskInput = {
       objective: objective.trim(),
@@ -595,6 +605,9 @@ function CreateTaskPage({ actionBusy, onCreate }: { actionBusy: boolean; onCreat
       runtime_timeout_seconds: timeoutSeconds,
       use_worktree: useWorktree,
       priority,
+      scope_mode: scopeMode,
+      include_tests: includeTests,
+      repo_wide_confirmed: repoWideConfirmed,
     };
 
     setSubmitting(true);
@@ -652,6 +665,36 @@ function CreateTaskPage({ actionBusy, onCreate }: { actionBusy: boolean; onCreat
             <input checked={useWorktree} onChange={(event) => setUseWorktree(event.target.checked)} type="checkbox" />
             <span>使用 Git Worktree（Git 项目建议开启）</span>
           </label>
+          <div className="split-fields">
+            <label>
+              <span>Scope Mode</span>
+              <select value={scopeMode} onChange={(event) => setScopeMode(event.target.value as ScopeMode)}>
+                <option value="strict">strict（默认）</option>
+                <option value="suggested">suggested</option>
+                <option value="repo-wide">repo-wide</option>
+              </select>
+            </label>
+            <label>
+              <span>Include Tests</span>
+              <select value={includeTests} onChange={(event) => setIncludeTests(event.target.value as IncludeTestsMode)}>
+                <option value="auto">auto（默认）</option>
+                <option value="always">always</option>
+                <option value="never">never</option>
+              </select>
+            </label>
+          </div>
+          {scopeMode === 'repo-wide' && (
+            <label className="toggle-row">
+              <input checked={repoWideConfirmed} onChange={(event) => setRepoWideConfirmed(event.target.checked)} type="checkbox" />
+              <span>我确认需要 repo-wide 模式，任务可以修改整个仓库</span>
+            </label>
+          )}
+          {scopeMode === 'strict' && editablePaths.trim() && (
+            <div className="scope-preview">
+              <strong>本次可修改范围预览:</strong>
+              <span>{splitLines(editablePaths).join('，') || '(由系统自动推断)'}</span>
+            </div>
+          )}
           <button className="button primary large" disabled={actionBusy || submitting} type="submit">
             {submitting ? '提交中…' : '开始任务'}
           </button>

@@ -9,6 +9,7 @@ import { globalRunningTasks, type RunningTaskRegistry } from "../services/runnin
 import { globalTaskQueue, type TaskQueue } from "../services/task-queue.js";
 import { GitWorktreeManager } from "../services/git-worktree.js";
 import { refreshReviewPackage } from "../services/review-package.js";
+import { computeTaskScope } from "../services/task-scope.js";
 
 export interface StartTaskDependencies {
   runTask?: typeof runMimoTask;
@@ -26,6 +27,9 @@ export const StartTaskSchema = z.object({
   runtime_timeout_seconds: z.number().int().min(60).max(3600).default(900),
   use_worktree: z.boolean().default(false),
   priority: z.number().int().min(0).max(10).default(5),
+  scope_mode: z.enum(["strict", "suggested", "repo-wide"]).default("strict"),
+  include_tests: z.enum(["auto", "always", "never"]).default("auto"),
+  repo_wide_confirmed: z.boolean().default(false),
 });
 
 export type StartTaskInput = z.infer<typeof StartTaskSchema>;
@@ -145,14 +149,28 @@ export function createStartTaskHandler(
         return { error: timeoutValidation.reason };
       }
 
+      const scopeResult = computeTaskScope({
+        scope_mode: input.scope_mode,
+        include_tests: input.include_tests,
+        repo_wide_confirmed: input.repo_wide_confirmed,
+        editable_paths: input.editable_paths,
+        readonly_paths: input.readonly_paths,
+        workspace_path: input.workspace_path,
+        objective: input.objective,
+      });
+      if (!scopeResult.ok) {
+        return { error: scopeResult.error };
+      }
+
       const task = taskStore.createTask({
         objective: input.objective,
         workspace_path: input.workspace_path,
-        editable_paths: input.editable_paths,
-        readonly_paths: input.readonly_paths,
+        editable_paths: scopeResult.effective_config.editable_paths,
+        readonly_paths: scopeResult.effective_config.readonly_paths,
         acceptance_criteria: input.acceptance_criteria,
         max_rounds: input.max_rounds,
         runtime_timeout_seconds: input.runtime_timeout_seconds,
+        scope: scopeResult.snapshot,
       });
 
       let worktreePath = input.workspace_path;
@@ -192,7 +210,7 @@ export function createStartTaskHandler(
       writeTaskBrief(taskConfig, task.task_id, task.current_round, `${config.runtimeDir}/briefs`);
 
       const taskId = task.task_id;
-      const editablePaths = input.editable_paths;
+      const editablePaths = scopeResult.effective_config.editable_paths;
 
       const startedImmediately = taskQueue.enqueue({
         taskId,

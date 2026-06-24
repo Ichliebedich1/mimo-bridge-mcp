@@ -11,6 +11,27 @@ export function buildTaskBrief(config: TaskConfig): string {
   lines.push(config.objective);
   lines.push("");
 
+  if (config.scope) {
+    const scope = config.scope;
+    lines.push("## 任务安全边界");
+    lines.push("");
+    lines.push(`- **Scope Mode**: ${scope.mode}`);
+    lines.push(`- **Include Tests**: ${scope.include_tests}`);
+    if (scope.mode === "repo-wide") {
+      lines.push(`- **Repo-wide Confirmed**: ${scope.repo_wide_confirmed ? "是" : "否"}`);
+    }
+    lines.push("");
+    lines.push(`有效可编辑路径: ${scope.effective_editable_paths.length > 0 ? scope.effective_editable_paths.join(", ") : "(无)"}`);
+    lines.push(`有效只读路径: ${scope.effective_readonly_paths.length > 0 ? scope.effective_readonly_paths.join(", ") : "(无)"}`);
+    lines.push("");
+    if (scope.mode === "suggested") {
+      lines.push("当前为 suggested 模式。如需扩大修改范围，请在总结中申请，不要直接越界修改。");
+      lines.push("");
+    }
+    lines.push("越界修改会被系统拒绝，risk_flags 会标记 OUT_OF_SCOPE_CHANGES，review_recommendation 会变为 reject。");
+    lines.push("");
+  }
+
   if (config.editable_paths.length > 0) {
     lines.push("## 允许修改的文件范围");
     lines.push("");

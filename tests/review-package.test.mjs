@@ -513,3 +513,72 @@ test("review package omits zh fields when content is English only", async () => 
     rmSync(fixture.root, { recursive: true, force: true });
   }
 });
+
+test("review package includes scope_report when task has scope", async () => {
+  const fixture = createTaskFixture("review-scope-report");
+  try {
+    const task = fixture.store.getTask(fixture.task.task_id);
+    task.status = "review";
+    task.config.scope = {
+      mode: "strict",
+      source: "user",
+      workspace_path: fixture.workspace,
+      effective_editable_paths: ["src"],
+      effective_readonly_paths: ["docs"],
+      requested_editable_paths: ["src"],
+      requested_readonly_paths: ["docs"],
+      include_tests: "auto",
+      repo_wide_confirmed: false,
+      generated_at: new Date().toISOString(),
+    };
+    task.modified_files = ["src/app.ts"];
+    task.test_results = "passed";
+    fixture.store.saveTask(task);
+
+    const getTask = createGetTaskHandler(fixture.store);
+    const result = await getTask.handler({ task_id: task.task_id, detail_level: "review" });
+
+    assert.ok(result.review_package.scope_report);
+    assert.strictEqual(result.review_package.scope_report.mode, "strict");
+    assert.deepStrictEqual(result.review_package.scope_report.effective_editable_paths, ["src"]);
+    assert.deepStrictEqual(result.review_package.scope_report.changed_files_inside_scope, ["src/app.ts"]);
+    assert.deepStrictEqual(result.review_package.scope_report.changed_files_outside_scope, []);
+    assert.strictEqual(result.review_package.scope_report.has_out_of_scope_changes, false);
+  } finally {
+    rmSync(fixture.root, { recursive: true, force: true });
+  }
+});
+
+test("review package flags OUT_OF_SCOPE_CHANGES for files outside effective scope", async () => {
+  const fixture = createTaskFixture("review-out-of-scope");
+  try {
+    const stored = fixture.store.getTask(fixture.task.task_id);
+    stored.status = "review";
+    stored.config.scope = {
+      mode: "strict",
+      source: "user",
+      workspace_path: fixture.workspace,
+      effective_editable_paths: ["src"],
+      effective_readonly_paths: [],
+      requested_editable_paths: ["src"],
+      requested_readonly_paths: [],
+      include_tests: "auto",
+      repo_wide_confirmed: false,
+      generated_at: new Date().toISOString(),
+    };
+    stored.modified_files = ["src/app.ts", "docs/readme.md"];
+    stored.test_results = "passed";
+    fixture.store.saveTask(stored);
+
+    const getTask = createGetTaskHandler(fixture.store);
+    const result = await getTask.handler({ task_id: stored.task_id, detail_level: "review" });
+
+    assert.ok(result.review_package.risk_flags.includes("OUT_OF_SCOPE_CHANGES"));
+    assert.strictEqual(result.review_package.review_recommendation, "reject");
+    assert.deepStrictEqual(result.review_package.scope_report.changed_files_outside_scope, ["docs/readme.md"]);
+    assert.deepStrictEqual(result.review_package.scope_report.changed_files_inside_scope, ["src/app.ts"]);
+    assert.strictEqual(result.review_package.scope_report.has_out_of_scope_changes, true);
+  } finally {
+    rmSync(fixture.root, { recursive: true, force: true });
+  }
+});
