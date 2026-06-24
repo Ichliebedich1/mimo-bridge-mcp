@@ -745,6 +745,45 @@ textarea:focus {
   height: 18px;
 }
 
+.scope-preview {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: #f8fafc;
+  font-size: 13px;
+}
+
+.scope-preview strong {
+  color: #344054;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.scope-preview span {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+select {
+  width: 100%;
+  border: 1px solid #cfd8e6;
+  border-radius: 16px;
+  padding: 12px 13px;
+  background: #ffffff;
+  color: var(--ink);
+  outline: none;
+  font: inherit;
+  cursor: pointer;
+}
+
+select:focus {
+  border-color: #93c5fd;
+  box-shadow: 0 0 0 4px rgba(147, 197, 253, 0.22);
+}
+
 .guidance-panel {
   align-self: start;
 }

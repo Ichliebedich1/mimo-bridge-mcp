@@ -452,6 +452,7 @@ function deriveRiskFlags(task: ListTasksResponse['tasks'][number]): RiskFlag[] {
 function sanitizeRiskFlags(flags: string[]): RiskFlag[] {
   const known = new Set<RiskFlag>([
     'OUT_OF_BOUNDS_CHANGES',
+    'OUT_OF_SCOPE_CHANGES',
     'TESTS_FAILED',
     'TASK_FAILED',
     'NON_ZERO_EXIT',

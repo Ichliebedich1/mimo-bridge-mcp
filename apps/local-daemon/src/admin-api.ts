@@ -16,6 +16,9 @@ const StartTaskBodySchema = z.object({
   runtime_timeout_seconds: z.number().int().min(60).max(3600).default(900),
   use_worktree: z.boolean().default(false),
   priority: z.number().int().min(0).max(10).default(5),
+  scope_mode: z.enum(["strict", "suggested", "repo-wide"]).default("strict"),
+  include_tests: z.enum(["auto", "always", "never"]).default("auto"),
+  repo_wide_confirmed: z.boolean().default(false),
 });
 
 const ReplyBodySchema = z.object({

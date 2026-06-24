@@ -472,3 +472,43 @@ test("admin API detail shows blockers for terminal task with worktree", async ()
     fixture.cleanup();
   }
 });
+
+test("admin API accepts scope_mode, include_tests, and repo_wide_confirmed in POST /api/tasks", async () => {
+  const fixture = createContext();
+  try {
+    const result = await callApi(fixture.context, "POST", "/api/tasks", {
+      objective: "scope test",
+      workspace_path: "C:\\sensitive\\workspace",
+      editable_paths: ["src"],
+      scope_mode: "suggested",
+      include_tests: "always",
+      repo_wide_confirmed: false,
+    });
+    assert.strictEqual(result.statusCode, 200);
+    const captured = fixture.calls.find(([name]) => name === "startTask");
+    assert.ok(captured);
+    assert.strictEqual(captured[1].scope_mode, "suggested");
+    assert.strictEqual(captured[1].include_tests, "always");
+    assert.strictEqual(captured[1].repo_wide_confirmed, false);
+  } finally {
+    fixture.cleanup();
+  }
+});
+
+test("admin API defaults scope fields when not provided", async () => {
+  const fixture = createContext();
+  try {
+    const result = await callApi(fixture.context, "POST", "/api/tasks", {
+      objective: "no scope fields",
+      workspace_path: "C:\\sensitive\\workspace",
+    });
+    assert.strictEqual(result.statusCode, 200);
+    const captured = fixture.calls.find(([name]) => name === "startTask");
+    assert.ok(captured);
+    assert.strictEqual(captured[1].scope_mode, "strict");
+    assert.strictEqual(captured[1].include_tests, "auto");
+    assert.strictEqual(captured[1].repo_wide_confirmed, false);
+  } finally {
+    fixture.cleanup();
+  }
+});

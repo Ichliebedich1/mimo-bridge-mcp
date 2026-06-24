@@ -8,6 +8,22 @@ export type TaskStatus =
   | "cancelled"
   | "abandoned";
 
+export type ScopeMode = "strict" | "suggested" | "repo-wide";
+export type IncludeTestsMode = "auto" | "always" | "never";
+
+export interface TaskScopeSnapshot {
+  mode: ScopeMode;
+  source: "user" | "auto";
+  workspace_path: string;
+  effective_editable_paths: string[];
+  effective_readonly_paths: string[];
+  requested_editable_paths: string[];
+  requested_readonly_paths: string[];
+  include_tests: IncludeTestsMode;
+  repo_wide_confirmed: boolean;
+  generated_at: string;
+}
+
 export interface TaskConfig {
   objective: string;
   workspace_path: string;
@@ -16,6 +32,7 @@ export interface TaskConfig {
   acceptance_criteria: string[];
   max_rounds: number;
   runtime_timeout_seconds: number;
+  scope?: TaskScopeSnapshot;
 }
 
 export interface WorktreeState {
@@ -43,6 +60,17 @@ export interface OutOfBoundsReport {
 
 export type ReviewRecommendation = "approve" | "needs_attention" | "reject" | "wait";
 
+export interface ScopeReport {
+  mode: ScopeMode;
+  source: "user" | "auto";
+  effective_editable_paths: string[];
+  effective_readonly_paths: string[];
+  changed_files_inside_scope: string[];
+  changed_files_outside_scope: string[];
+  has_out_of_scope_changes: boolean;
+  repo_wide_confirmed: boolean;
+}
+
 export interface ReviewPackage {
   task_id: string;
   status: TaskStatus;
@@ -54,6 +82,7 @@ export interface ReviewPackage {
   diff_stat: string;
   changed_lines_summary: ChangedLinesSummary[];
   out_of_bounds_report: OutOfBoundsReport;
+  scope_report?: ScopeReport;
   test_commands: string[];
   test_result: string;
   exit_code: number | null;
@@ -137,6 +166,9 @@ export interface StartTaskInput {
   acceptance_criteria?: string[];
   max_rounds?: number;
   runtime_timeout_seconds?: number;
+  scope_mode?: ScopeMode;
+  include_tests?: IncludeTestsMode;
+  repo_wide_confirmed?: boolean;
 }
 
 export interface GetTaskInput {

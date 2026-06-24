@@ -2,9 +2,10 @@ import { closeSync, existsSync, fstatSync, openSync, readSync, realpathSync, sta
 import { spawnSync } from "node:child_process";
 import { isAbsolute, relative, resolve } from "node:path";
 import { validateEditablePaths } from "./path-guard.js";
-import type { ChangedLinesSummary, ReviewPackage, ReviewRecommendation, TaskState } from "../types.js";
+import type { ChangedLinesSummary, ReviewPackage, ReviewRecommendation, ScopeReport, TaskState } from "../types.js";
 import type { TaskStore } from "./task-store.js";
 import { GitWorktreeManager } from "./git-worktree.js";
+import { checkScopeCompliance } from "./task-scope.js";
 
 const DEFAULT_LOG_TAIL_LINES = 20;
 const DEFAULT_LOG_TAIL_CHARS = 1500;
@@ -226,7 +227,7 @@ function classifyTestResult(testResults: string): string {
 
 function getRecommendation(task: TaskState, riskFlags: string[]): ReviewRecommendation {
   if (task.status === "queued" || task.status === "running" || task.status === "waiting") return "wait";
-  if (riskFlags.includes("OUT_OF_BOUNDS_CHANGES") || riskFlags.includes("TASK_FAILED") || riskFlags.includes("NON_ZERO_EXIT")) {
+  if (riskFlags.includes("OUT_OF_BOUNDS_CHANGES") || riskFlags.includes("OUT_OF_SCOPE_CHANGES") || riskFlags.includes("TASK_FAILED") || riskFlags.includes("NON_ZERO_EXIT")) {
     return "reject";
   }
   if (riskFlags.length > 0) return "needs_attention";
@@ -256,6 +257,13 @@ function fitReviewPackageToBudget(reviewPackage: ReviewPackage, maxChars: number
   while (size() > maxChars && result.editable_paths.length > 0) result.editable_paths.pop();
   while (size() > maxChars && result.test_commands.length > 0) result.test_commands.pop();
   while (size() > maxChars && result.out_of_bounds_report.files.length > 0) result.out_of_bounds_report.files.pop();
+  if (result.scope_report) {
+    while (size() > maxChars && result.scope_report.effective_editable_paths.length > 0) result.scope_report.effective_editable_paths.pop();
+    while (size() > maxChars && result.scope_report.effective_readonly_paths.length > 0) result.scope_report.effective_readonly_paths.pop();
+    while (size() > maxChars && result.scope_report.changed_files_inside_scope.length > 0) result.scope_report.changed_files_inside_scope.pop();
+    while (size() > maxChars && result.scope_report.changed_files_outside_scope.length > 0) result.scope_report.changed_files_outside_scope.pop();
+    if (size() > maxChars) delete result.scope_report;
+  }
 
   const stringFields: Array<keyof Pick<ReviewPackage, "mimo_summary" | "diff_stat" | "objective">> = [
     "mimo_summary",
@@ -345,6 +353,29 @@ export function generateReviewPackage(
     riskFlags.push("NO_CHANGES_AND_NO_TESTS");
   }
 
+  let scopeReport: ScopeReport | undefined;
+  if (task.config.scope) {
+    const scope = task.config.scope;
+    const compliance = checkScopeCompliance(
+      allChangedFiles,
+      scope.effective_editable_paths,
+      scope.workspace_path
+    );
+    scopeReport = {
+      mode: scope.mode,
+      source: scope.source,
+      effective_editable_paths: scope.effective_editable_paths,
+      effective_readonly_paths: scope.effective_readonly_paths,
+      changed_files_inside_scope: compliance.inside,
+      changed_files_outside_scope: compliance.outside,
+      has_out_of_scope_changes: compliance.hasOutOfScope,
+      repo_wide_confirmed: scope.repo_wide_confirmed,
+    };
+    if (compliance.hasOutOfScope) {
+      riskFlags.push("OUT_OF_SCOPE_CHANGES");
+    }
+  }
+
   const objectiveText = truncateText(task.config.objective, 500).text;
   const summaryText = summary.text;
   const hasChinese = /[\u4e00-\u9fff]/.test(objectiveText);
@@ -364,6 +395,7 @@ export function generateReviewPackage(
       has_changes: hasOutOfBoundsChanges,
       files: outOfBoundsFiles,
     },
+    ...(scopeReport ? { scope_report: scopeReport } : {}),
     test_commands: extractTestCommands(task.test_results),
     test_result: testResult,
     exit_code: task.exit_code ?? null,
