@@ -174,6 +174,48 @@ async function startOperation({ args, baseUrl, stdin }) {
   return normalizeRestEnvelope("start", response, (data) => ({ task_id: data.task_id, status: data.status }));
 }
 
+async function agentListOperation({ baseUrl }) {
+  const response = await fetchJson(baseUrl, "/api/agents");
+  return normalizeRestEnvelope("agent-list", response, (data) => ({ agents: data.agents ?? [] }));
+}
+
+function getAgentId(args, input = {}) {
+  return String(args["agent-id"] || args.agent_id || input.agent_id || "");
+}
+
+async function agentStartOperation({ args, baseUrl, stdin }) {
+  let input;
+  try {
+    input = await readJsonInput(args, stdin);
+  } catch (error) {
+    return failure("agent-start", `Invalid JSON input: ${error instanceof Error ? error.message : String(error)}`);
+  }
+
+  if (!input.objective) {
+    return failure("agent-start", "Missing required field: objective");
+  }
+
+  const agentId = getAgentId(args, input);
+  if (!agentId) {
+    return failure("agent-start", "Missing required field: agent_id or --agent-id");
+  }
+
+  const body = {
+    ...input,
+    agent_id: agentId,
+    workspace_path: input.workspace_path || process.cwd(),
+  };
+  const response = await fetchJson(baseUrl, "/api/agent-tasks", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+  return normalizeRestEnvelope("agent-start", response, (data) => ({
+    task_id: data.task_id,
+    status: data.status,
+    agent: data.agent ?? agentId,
+  }));
+}
+
 async function reviewOperation({ args, baseUrl }) {
   const taskId = String(args["task-id"] || args.task_id || "");
   if (!taskId) {
@@ -209,6 +251,30 @@ async function recoverOperation({ args, baseUrl }) {
   }));
 }
 
+async function agentReviewOperation({ args, baseUrl }) {
+  const taskId = String(args["task-id"] || args.task_id || "");
+  if (!taskId) {
+    return failure("agent-review", "Missing required option: --task-id");
+  }
+
+  const params = new URLSearchParams({
+    detail_level: String(args["detail-level"] || args.detail_level || "review"),
+    max_chars: String(args["max-chars"] || args.max_chars || 8000),
+  });
+  const agentId = getAgentId(args);
+  if (agentId) {
+    params.set("agent_id", agentId);
+  }
+  const response = await fetchJson(baseUrl, `/api/agent-tasks/${encodeURIComponent(taskId)}?${params}`);
+  return normalizeRestEnvelope("agent-review", response, (data) => ({
+    task_id: taskId,
+    agent: (data.agent ?? agentId) || undefined,
+    status: data.status,
+    detail_level: data.detail_level,
+    review_package: data.review_package,
+  }));
+}
+
 async function waitOperation({ args, baseUrl, waitForTaskImpl }) {
   const taskId = String(args["task-id"] || args.task_id || "");
   if (!taskId) {
@@ -221,6 +287,24 @@ async function waitOperation({ args, baseUrl, waitForTaskImpl }) {
     detailLevel: String(args["detail-level"] || args.detail_level || "review"),
     maxChars: Number(args["max-chars"] || args.max_chars || 8000),
     operation: "wait",
+  });
+}
+
+async function agentWaitOperation({ args, baseUrl, waitForTaskImpl }) {
+  const taskId = String(args["task-id"] || args.task_id || "");
+  if (!taskId) {
+    return failure("agent-wait", "Missing required option: --task-id");
+  }
+  const agentId = getAgentId(args);
+  return waitForTaskImpl({
+    baseUrl,
+    taskId,
+    agentId,
+    timeoutSeconds: Number(args["timeout-seconds"] || args.timeout_seconds || 1800),
+    detailLevel: String(args["detail-level"] || args.detail_level || "review"),
+    maxChars: Number(args["max-chars"] || args.max_chars || 8000),
+    operation: "agent-wait",
+    toolName: "agent_wait_task",
   });
 }
 
@@ -240,7 +324,63 @@ async function startAndWaitOperation({ args, baseUrl, stdin, waitForTaskImpl }) 
   });
 }
 
-async function waitForTask({ baseUrl, taskId, timeoutSeconds, detailLevel, maxChars, operation }) {
+async function agentStartAndWaitOperation({ args, baseUrl, stdin, waitForTaskImpl }) {
+  const started = await agentStartOperation({ args, baseUrl, stdin });
+  if (started.exitCode !== 0) {
+    return { ...started, body: { ...started.body, operation: "agent-start-and-wait" } };
+  }
+
+  return waitForTaskImpl({
+    baseUrl,
+    taskId: started.body.task_id,
+    agentId: started.body.agent || getAgentId(args),
+    timeoutSeconds: Number(args["timeout-seconds"] || args.timeout_seconds || 1800),
+    detailLevel: String(args["detail-level"] || args.detail_level || "review"),
+    maxChars: Number(args["max-chars"] || args.max_chars || 8000),
+    operation: "agent-start-and-wait",
+    toolName: "agent_wait_task",
+  });
+}
+
+async function agentLifecycleOperation({ args, baseUrl, operation, pathSuffix, method = "POST", body = {} }) {
+  const taskId = String(args["task-id"] || args.task_id || "");
+  if (!taskId) {
+    return failure(operation, "Missing required option: --task-id");
+  }
+  const agentId = getAgentId(args);
+  const query = method === "DELETE" && agentId ? `?agent_id=${encodeURIComponent(agentId)}` : "";
+  const response = await fetchJson(baseUrl, `/api/agent-tasks/${encodeURIComponent(taskId)}${pathSuffix}${query}`, {
+    method,
+    body: method === "DELETE" ? undefined : JSON.stringify({
+      ...body,
+      ...(agentId ? { agent_id: agentId } : {}),
+    }),
+  });
+  return normalizeRestEnvelope(operation, response, (data) => ({
+    task_id: data.task_id ?? taskId,
+    agent: (data.agent ?? agentId) || undefined,
+    status: data.status,
+    action: data.action,
+  }));
+}
+
+async function agentQueueOperation({ args, baseUrl }) {
+  const params = new URLSearchParams();
+  const agentId = getAgentId(args);
+  if (agentId) {
+    params.set("agent_id", agentId);
+  }
+  const query = params.toString() ? `?${params}` : "";
+  const response = await fetchJson(baseUrl, `/api/agent-queue${query}`);
+  return normalizeRestEnvelope("agent-queue", response, (data) => ({
+    running: data.running ?? 0,
+    queued: data.queued ?? 0,
+    queue: data.queue ?? [],
+    agent_id: (data.agent_id ?? agentId) || undefined,
+  }));
+}
+
+async function waitForTask({ baseUrl, taskId, agentId, timeoutSeconds, detailLevel, maxChars, operation, toolName = "mimo_wait_task" }) {
   const transport = new StreamableHTTPClientTransport(new URL("/mcp", baseUrl));
   const client = new Client({ name: "mimo-bridge-client", version: "0.1.0" });
 
@@ -248,9 +388,10 @@ async function waitForTask({ baseUrl, taskId, timeoutSeconds, detailLevel, maxCh
     await client.connect(transport);
     const result = await client.callTool(
       {
-        name: "mimo_wait_task",
+        name: toolName,
         arguments: {
           task_id: taskId,
+          ...(agentId ? { agent_id: agentId } : {}),
           timeout_seconds: timeoutSeconds,
           detail_level: detailLevel,
           max_chars: maxChars,
@@ -267,6 +408,7 @@ async function waitForTask({ baseUrl, taskId, timeoutSeconds, detailLevel, maxCh
 
     return success(operation, {
       task_id: data.task_id || taskId,
+      agent: (data.agent ?? agentId) || undefined,
       status: data.status,
       timed_out: Boolean(data.timed_out),
       waited_ms: data.waited_ms ?? 0,
@@ -303,6 +445,15 @@ function helpOperation() {
       "node scripts/mimo-bridge-client.mjs start-and-wait --json .\\runtime\\client-requests\\task.json --timeout-seconds 1800",
       "node scripts/mimo-bridge-client.mjs review --task-id task_xxx --detail-level review --max-chars 8000",
       "node scripts/mimo-bridge-client.mjs recover --limit 10 --max-chars 8000",
+      "node scripts/mimo-bridge-client.mjs agent-list",
+      "node scripts/mimo-bridge-client.mjs agent-start --agent-id reasonix-tui --json .\\runtime\\client-requests\\task.json",
+      "node scripts/mimo-bridge-client.mjs agent-wait --agent-id reasonix-tui --task-id task_xxx --timeout-seconds 1800",
+      "node scripts/mimo-bridge-client.mjs agent-start-and-wait --agent-id reasonix-tui --json .\\runtime\\client-requests\\task.json --timeout-seconds 1800",
+      "node scripts/mimo-bridge-client.mjs agent-review --agent-id reasonix-tui --task-id task_xxx --detail-level review --max-chars 8000",
+      "node scripts/mimo-bridge-client.mjs agent-finish --agent-id reasonix-tui --task-id task_xxx --status accepted",
+      "node scripts/mimo-bridge-client.mjs agent-merge --agent-id reasonix-tui --task-id task_xxx --action merge",
+      "node scripts/mimo-bridge-client.mjs agent-delete --agent-id reasonix-tui --task-id task_xxx",
+      "node scripts/mimo-bridge-client.mjs agent-queue --agent-id reasonix-tui",
     ],
   });
 }
@@ -318,15 +469,56 @@ export async function run(argv = process.argv.slice(2), options = {}) {
       return healthOperation({ args, baseUrl, stdin });
     case "start":
       return startOperation({ args, baseUrl, stdin });
+    case "agent-list":
+    case "agents":
+      return agentListOperation({ args, baseUrl, stdin });
+    case "agent-start":
+      return agentStartOperation({ args, baseUrl, stdin });
     case "wait":
       return waitOperation({ args, baseUrl, stdin, waitForTaskImpl });
+    case "agent-wait":
+      return agentWaitOperation({ args, baseUrl, stdin, waitForTaskImpl });
     case "start-and-wait":
       return startAndWaitOperation({ args, baseUrl, stdin, waitForTaskImpl });
+    case "agent-start-and-wait":
+      return agentStartAndWaitOperation({ args, baseUrl, stdin, waitForTaskImpl });
     case "review":
       return reviewOperation({ args, baseUrl, stdin });
+    case "agent-review":
+      return agentReviewOperation({ args, baseUrl, stdin });
     case "recover":
     case "pending-reviews":
       return recoverOperation({ args, baseUrl, stdin });
+    case "agent-cancel":
+      return agentLifecycleOperation({ args, baseUrl, operation: "agent-cancel", pathSuffix: "/cancel" });
+    case "agent-finish":
+      return agentLifecycleOperation({
+        args,
+        baseUrl,
+        operation: "agent-finish",
+        pathSuffix: "/finish",
+        body: { status: String(args.status || "accepted") },
+      });
+    case "agent-merge":
+      return agentLifecycleOperation({
+        args,
+        baseUrl,
+        operation: "agent-merge",
+        pathSuffix: "/worktree",
+        body: { action: String(args.action || "merge") },
+      });
+    case "agent-discard":
+      return agentLifecycleOperation({
+        args,
+        baseUrl,
+        operation: "agent-discard",
+        pathSuffix: "/worktree",
+        body: { action: "discard" },
+      });
+    case "agent-delete":
+      return agentLifecycleOperation({ args, baseUrl, operation: "agent-delete", pathSuffix: "", method: "DELETE" });
+    case "agent-queue":
+      return agentQueueOperation({ args, baseUrl, stdin });
     case "":
     case "help":
     case "--help":

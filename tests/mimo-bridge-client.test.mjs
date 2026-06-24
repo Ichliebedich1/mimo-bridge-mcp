@@ -197,6 +197,109 @@ test("start command rejects missing objective with structured JSON", async () =>
   assert.match(out.error, /objective/);
 });
 
+test("agent-list command fetches configured agents", async () => {
+  const mock = await startMockServer((req, res) => {
+    if (req.method === "GET" && req.url === "/api/agents") {
+      res.writeHead(200, { "content-type": "application/json" });
+      res.end(JSON.stringify({
+        ok: true,
+        data: {
+          agents: [
+            { id: "mimo", status: "ready" },
+            { id: "reasonix-tui", status: "ready" },
+          ],
+        },
+      }));
+      return;
+    }
+    res.writeHead(404).end("{}");
+  });
+
+  try {
+    const result = await runClient(["agent-list"], { env: { MIMO_BRIDGE_URL: mock.baseUrl } });
+    assert.equal(result.code, 0);
+    const out = JSON.parse(result.stdout);
+    assert.equal(out.ok, true);
+    assert.equal(out.operation, "agent-list");
+    assert.equal(out.agents.length, 2);
+  } finally {
+    await closeServer(mock.server);
+  }
+});
+
+test("agent-start command posts to generic agent task route", async () => {
+  let receivedBody = null;
+  const mock = await startMockServer((req, res) => {
+    if (req.method === "POST" && req.url === "/api/agent-tasks") {
+      const chunks = [];
+      req.on("data", (data) => chunks.push(data));
+      req.on("end", () => {
+        receivedBody = JSON.parse(Buffer.concat(chunks).toString("utf8"));
+        res.writeHead(200, { "content-type": "application/json" });
+        res.end(JSON.stringify({ ok: true, data: { task_id: "task_agent", status: "running", agent: "reasonix-tui" } }));
+      });
+      return;
+    }
+    res.writeHead(404).end("{}");
+  });
+
+  try {
+    const result = await runClient(["agent-start", "--agent-id", "reasonix-tui"], {
+      stdin: JSON.stringify({ objective: "agent objective" }),
+      env: { MIMO_BRIDGE_URL: mock.baseUrl },
+    });
+    assert.equal(result.code, 0);
+    const out = JSON.parse(result.stdout);
+    assert.equal(out.operation, "agent-start");
+    assert.equal(out.task_id, "task_agent");
+    assert.equal(out.agent, "reasonix-tui");
+    assert.equal(receivedBody.agent_id, "reasonix-tui");
+    assert.equal(receivedBody.objective, "agent objective");
+    assert.equal(receivedBody.workspace_path, process.cwd());
+  } finally {
+    await closeServer(mock.server);
+  }
+});
+
+test("agent-start command can read agent_id from JSON file", async () => {
+  const tmpDir = mkdtempSync(join(tmpdir(), "agent-client-"));
+  const jsonFile = join(tmpDir, "task.json");
+  writeFileSync(jsonFile, JSON.stringify({ objective: "json agent task", agent_id: "reasonix-tui" }), "utf8");
+
+  let receivedBody = null;
+  const mock = await startMockServer((req, res) => {
+    if (req.method === "POST" && req.url === "/api/agent-tasks") {
+      const chunks = [];
+      req.on("data", (data) => chunks.push(data));
+      req.on("end", () => {
+        receivedBody = JSON.parse(Buffer.concat(chunks).toString("utf8"));
+        res.writeHead(200, { "content-type": "application/json" });
+        res.end(JSON.stringify({ ok: true, data: { task_id: "task_json_agent", status: "running", agent: "reasonix-tui" } }));
+      });
+      return;
+    }
+    res.writeHead(404).end("{}");
+  });
+
+  try {
+    const result = await runClient(["agent-start", "--json", jsonFile], { env: { MIMO_BRIDGE_URL: mock.baseUrl } });
+    assert.equal(result.code, 0);
+    assert.equal(receivedBody.agent_id, "reasonix-tui");
+  } finally {
+    await closeServer(mock.server);
+    rmSync(tmpDir, { recursive: true, force: true });
+  }
+});
+
+test("agent-start command rejects missing agent id", async () => {
+  const result = await runClient(["agent-start"], { stdin: JSON.stringify({ objective: "missing agent" }) });
+  assert.equal(result.code, 1);
+  const out = JSON.parse(result.stdout);
+  assert.equal(out.ok, false);
+  assert.equal(out.operation, "agent-start");
+  assert.match(out.error, /agent_id|agent-id/);
+});
+
 test("review command fetches bounded review mode by default", async () => {
   const mock = await startMockServer((req, res) => {
     if (req.url.startsWith("/api/tasks/task_rev")) {
@@ -231,6 +334,46 @@ test("review command fetches bounded review mode by default", async () => {
     assert.equal(serialized.includes("raw_log_path"), false);
     assert.equal(serialized.includes("stderr_log_path"), false);
     assert.equal(serialized.includes("worktree_path"), false);
+  } finally {
+    await closeServer(mock.server);
+  }
+});
+
+test("agent-review command fetches bounded generic review without local paths", async () => {
+  const mock = await startMockServer((req, res) => {
+    if (req.url.startsWith("/api/agent-tasks/task_agent_rev")) {
+      const url = new URL(req.url, "http://localhost");
+      assert.equal(url.searchParams.get("agent_id"), "reasonix-tui");
+      assert.equal(url.searchParams.get("detail_level"), "review");
+      assert.equal(url.searchParams.get("max_chars"), "8000");
+      res.writeHead(200, { "content-type": "application/json" });
+      res.end(JSON.stringify({
+        ok: true,
+        data: {
+          task_id: "task_agent_rev",
+          agent: "reasonix-tui",
+          detail_level: "review",
+          status: "review",
+          agent_session_path: "C:\\sensitive\\session.jsonl",
+          review_package: { objective: "done", mimo_summary: "completed" },
+        },
+      }));
+      return;
+    }
+    res.writeHead(404).end("{}");
+  });
+
+  try {
+    const result = await runClient(["agent-review", "--agent-id", "reasonix-tui", "--task-id", "task_agent_rev"], {
+      env: { MIMO_BRIDGE_URL: mock.baseUrl },
+    });
+    assert.equal(result.code, 0);
+    const out = JSON.parse(result.stdout);
+    assert.equal(out.ok, true);
+    assert.equal(out.operation, "agent-review");
+    assert.equal(out.task_id, "task_agent_rev");
+    assert.equal(out.agent, "reasonix-tui");
+    assert.equal(JSON.stringify(out).includes("sensitive"), false);
   } finally {
     await closeServer(mock.server);
   }
@@ -331,6 +474,32 @@ test("wait command can use injected waiter and returns bounded review package", 
   assert.equal(result.body.review_package.objective, "done");
 });
 
+test("agent-wait command uses generic wait tool with agent guard", async () => {
+  const result = await run(["agent-wait", "--agent-id", "reasonix-tui", "--task-id", "task_agent_wait", "--timeout-seconds", "30"], {
+    waitForTask: async ({ taskId, agentId, timeoutSeconds, operation, toolName }) => ({
+      exitCode: 0,
+      body: {
+        ok: true,
+        operation,
+        task_id: taskId,
+        agent: agentId,
+        tool_name: toolName,
+        status: "review",
+        timed_out: false,
+        waited_ms: 5,
+        observed_timeout_seconds: timeoutSeconds,
+        review_package: { task_id: taskId, status: "review" },
+      },
+    }),
+  });
+
+  assert.equal(result.exitCode, 0);
+  assert.equal(result.body.operation, "agent-wait");
+  assert.equal(result.body.task_id, "task_agent_wait");
+  assert.equal(result.body.agent, "reasonix-tui");
+  assert.equal(result.body.tool_name, "agent_wait_task");
+});
+
 test("start-and-wait returns as soon as injected waiter reports completion", async () => {
   const mock = await startMockServer((req, res) => {
     if (req.method === "POST" && req.url === "/api/tasks") {
@@ -367,6 +536,128 @@ test("start-and-wait returns as soon as injected waiter reports completion", asy
     assert.equal(result.body.task_id, "task_done");
     assert.equal(result.body.status, "review");
     assert.equal(result.body.timed_out, false);
+  } finally {
+    await closeServer(mock.server);
+  }
+});
+
+test("agent-start-and-wait returns as soon as injected generic waiter reports completion", async () => {
+  const mock = await startMockServer((req, res) => {
+    if (req.method === "POST" && req.url === "/api/agent-tasks") {
+      req.resume();
+      req.on("end", () => {
+        res.writeHead(200, { "content-type": "application/json" });
+        res.end(JSON.stringify({ ok: true, data: { task_id: "task_agent_done", status: "running", agent: "reasonix-tui" } }));
+      });
+      return;
+    }
+    res.writeHead(404).end("{}");
+  });
+
+  try {
+    const result = await run(["agent-start-and-wait", "--agent-id", "reasonix-tui", "--timeout-seconds", "1800"], {
+      env: { MIMO_BRIDGE_URL: mock.baseUrl },
+      stdin: stdinFromText(JSON.stringify({ objective: "run and finish" })),
+      waitForTask: async ({ taskId, agentId, operation, toolName }) => ({
+        exitCode: 0,
+        body: {
+          ok: true,
+          operation,
+          task_id: taskId,
+          agent: agentId,
+          tool_name: toolName,
+          status: "review",
+          timed_out: false,
+          waited_ms: 10,
+          review_package: { task_id: taskId, status: "review" },
+        },
+      }),
+    });
+
+    assert.equal(result.exitCode, 0);
+    assert.equal(result.body.operation, "agent-start-and-wait");
+    assert.equal(result.body.task_id, "task_agent_done");
+    assert.equal(result.body.agent, "reasonix-tui");
+    assert.equal(result.body.tool_name, "agent_wait_task");
+  } finally {
+    await closeServer(mock.server);
+  }
+});
+
+test("agent lifecycle commands call fixed REST routes", async () => {
+  const calls = [];
+  const mock = await startMockServer((req, res) => {
+    const chunks = [];
+    req.on("data", (data) => chunks.push(data));
+    req.on("end", () => {
+      const bodyText = Buffer.concat(chunks).toString("utf8");
+      calls.push({ method: req.method, url: req.url, body: bodyText ? JSON.parse(bodyText) : null });
+      res.writeHead(200, { "content-type": "application/json" });
+      res.end(JSON.stringify({
+        ok: true,
+        data: {
+          task_id: "task_life",
+          agent: "reasonix-tui",
+          status: req.url.includes("delete") ? "deleted" : "ok",
+          action: bodyText ? JSON.parse(bodyText).action : undefined,
+        },
+      }));
+    });
+  });
+
+  try {
+    const env = { MIMO_BRIDGE_URL: mock.baseUrl };
+    await runClient(["agent-cancel", "--agent-id", "reasonix-tui", "--task-id", "task_life"], { env });
+    await runClient(["agent-finish", "--agent-id", "reasonix-tui", "--task-id", "task_life", "--status", "accepted"], { env });
+    await runClient(["agent-merge", "--agent-id", "reasonix-tui", "--task-id", "task_life", "--action", "merge"], { env });
+    await runClient(["agent-discard", "--agent-id", "reasonix-tui", "--task-id", "task_life"], { env });
+    await runClient(["agent-delete", "--agent-id", "reasonix-tui", "--task-id", "task_life"], { env });
+
+    assert.deepEqual(
+      calls.map((call) => [call.method, call.url]),
+      [
+        ["POST", "/api/agent-tasks/task_life/cancel"],
+        ["POST", "/api/agent-tasks/task_life/finish"],
+        ["POST", "/api/agent-tasks/task_life/worktree"],
+        ["POST", "/api/agent-tasks/task_life/worktree"],
+        ["DELETE", "/api/agent-tasks/task_life?agent_id=reasonix-tui"],
+      ]
+    );
+    assert.equal(calls[0].body.agent_id, "reasonix-tui");
+    assert.equal(calls[1].body.status, "accepted");
+    assert.equal(calls[2].body.action, "merge");
+    assert.equal(calls[3].body.action, "discard");
+  } finally {
+    await closeServer(mock.server);
+  }
+});
+
+test("agent-queue command fetches filtered queue", async () => {
+  const mock = await startMockServer((req, res) => {
+    if (req.method === "GET" && req.url === "/api/agent-queue?agent_id=reasonix-tui") {
+      res.writeHead(200, { "content-type": "application/json" });
+      res.end(JSON.stringify({
+        ok: true,
+        data: {
+          running: 1,
+          queued: 1,
+          agent_id: "reasonix-tui",
+          queue: [{ taskId: "task_q", agentId: "reasonix-tui" }],
+        },
+      }));
+      return;
+    }
+    res.writeHead(404).end("{}");
+  });
+
+  try {
+    const result = await runClient(["agent-queue", "--agent-id", "reasonix-tui"], { env: { MIMO_BRIDGE_URL: mock.baseUrl } });
+    assert.equal(result.code, 0);
+    const out = JSON.parse(result.stdout);
+    assert.equal(out.ok, true);
+    assert.equal(out.operation, "agent-queue");
+    assert.equal(out.agent_id, "reasonix-tui");
+    assert.equal(out.queue[0].taskId, "task_q");
   } finally {
     await closeServer(mock.server);
   }

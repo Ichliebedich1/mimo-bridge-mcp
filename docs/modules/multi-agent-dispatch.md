@@ -22,7 +22,7 @@ Reasonix should eventually reach the same project role as MiMo:
 
 ## Current Status
 
-P6.0-P6.9 are partially implemented. The runtime now has an Agent Registry, Reasonix TUI probe, Reasonix one-shot runner, generic low-token task get/wait/reply tools, generic lifecycle tools for cancel/finish/merge/delete/queue, Reasonix session mapping through `agent_session_path`, a first Admin UI agent selector/badge/reply pass, an agent-aware queue that permits safe parallelism only for different agents editing non-overlapping paths, Reasonix live/session parsing for the read-only live viewer, safe local folder opening, and explicit Reasonix token/cost extraction when session fields exist. Existing `mimo_*` MCP tools remain compatible.
+P6.0-P6.10 are partially implemented. The runtime now has an Agent Registry, Reasonix TUI probe, Reasonix one-shot runner, generic low-token task get/wait/reply tools, generic lifecycle tools for cancel/finish/merge/delete/queue, safe client Agent commands, Reasonix session mapping through `agent_session_path`, a first Admin UI agent selector/badge/reply pass, an agent-aware queue that permits safe parallelism only for different agents editing non-overlapping paths, Reasonix live/session parsing for the read-only live viewer, safe local folder opening, and explicit Reasonix token/cost extraction when session fields exist. Existing `mimo_*` MCP tools remain compatible.
 
 Observed local Reasonix installation on this machine:
 
@@ -402,6 +402,30 @@ Status:
 - Verified with root/local-daemon/admin-ui builds.
 - Focused tests: `node --test tests\agent-lifecycle-task.test.mjs tests\agent-get-wait-task.test.mjs tests\admin-api.test.mjs tests\stdio-protocol.test.mjs` passed 43/43.
 - P6 regression: `node --test tests\agent-start-task.test.mjs tests\agent-reply-task.test.mjs tests\task-queue.test.mjs tests\reasonix-event-parser.test.mjs tests\live-task-view.test.mjs tests\token-budget.test.mjs` passed 75/75. Windows node-pty `AttachConsole failed` output is known noise when exit code is 0.
+
+### P6.10 Safe Client Agent Commands
+
+Goal: third-party agents and scripts should call Reasonix/generic Agent paths without fragile shell JSON or MiMo-specific command names.
+
+Tasks:
+
+- Extend `scripts/mimo-bridge-client.mjs` with `agent-*` commands.
+- Keep existing MiMo commands unchanged.
+- Use REST for `agent-list`, `agent-start`, `agent-review`, lifecycle actions, and `agent-queue`.
+- Use MCP SDK only for `agent_wait_task`, with request timeout greater than `timeout_seconds`.
+- Preserve UTF-8 JSON file/stdin behavior and the thin PowerShell wrapper.
+
+Acceptance:
+
+- Scripted callers can start, wait, review, finish, merge/discard, delete, and inspect Reasonix tasks using the safe client.
+- No caller needs inline PowerShell or inline Node JSON for Reasonix delegation.
+- Output remains compact JSON with bounded review data.
+
+Status:
+
+- Implemented locally.
+- `node --test tests\mimo-bridge-client.test.mjs` passed 24/24.
+- Combined focused regression `node --test tests\mimo-bridge-client.test.mjs tests\agent-lifecycle-task.test.mjs tests\agent-get-wait-task.test.mjs tests\admin-api.test.mjs tests\stdio-protocol.test.mjs` passed 67/67 after root/local-daemon/admin-ui builds.
 
 ## Test Plan
 
