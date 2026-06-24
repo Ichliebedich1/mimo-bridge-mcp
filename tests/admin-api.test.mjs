@@ -316,6 +316,7 @@ function createContext() {
         },
       },
       pendingReviews: createPendingReviewsHandler(taskStore),
+      agentPendingReviews: createPendingReviewsHandler(taskStore),
       agentList: createAgentListHandler(agentRegistry),
       deleteTask: createDeleteTaskHandler(taskStore),
     },
@@ -393,6 +394,47 @@ test("admin API exposes bounded pending reviews recovery inbox", async () => {
     assert.strictEqual(serialized.includes("raw_log_path"), false);
     assert.strictEqual(serialized.includes("stderr_log_path"), false);
     assert.strictEqual(serialized.includes("worktree_path"), false);
+  } finally {
+    fixture.cleanup();
+  }
+});
+
+test("admin API exposes bounded agent pending reviews recovery inbox", async () => {
+  const fixture = createContext();
+  try {
+    const reasonixTask = fixture.context.taskStore.createTask(
+      {
+        objective: "reasonix pending review",
+        workspace_path: "C:\\sensitive\\workspace",
+        editable_paths: ["src"],
+        readonly_paths: [],
+        acceptance_criteria: [],
+        max_rounds: 5,
+        runtime_timeout_seconds: 900,
+      },
+      { agent: "reasonix-tui" }
+    );
+    fixture.context.taskStore.updateTaskStatus(reasonixTask.task_id, "review");
+
+    const result = await callApi(
+      fixture.context,
+      "GET",
+      "/api/agent-pending-reviews?agent_id=reasonix-tui&limit=5&max_chars=4000"
+    );
+
+    assert.strictEqual(result.statusCode, 200);
+    assert.strictEqual(result.body.ok, true);
+    assert.strictEqual(result.body.data.agent_id, "reasonix-tui");
+    assert.strictEqual(result.body.data.pending_count, 1);
+    assert.strictEqual(result.body.data.returned_count, 1);
+    assert.strictEqual(result.body.data.tasks[0].task_id, reasonixTask.task_id);
+    assert.strictEqual(result.body.data.tasks[0].agent, "reasonix-tui");
+    assert.match(result.body.data.tasks[0].review_command, /agent-review --agent-id reasonix-tui/);
+    const serialized = JSON.stringify(result.body);
+    assert.strictEqual(serialized.includes("raw_log_path"), false);
+    assert.strictEqual(serialized.includes("stderr_log_path"), false);
+    assert.strictEqual(serialized.includes("worktree_path"), false);
+    assert.strictEqual(serialized.includes("sensitive"), false);
   } finally {
     fixture.cleanup();
   }

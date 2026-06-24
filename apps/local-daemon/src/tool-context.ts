@@ -45,6 +45,7 @@ export interface ToolContext {
     agentDeleteTask: ReturnType<typeof createAgentDeleteTaskHandler>;
     agentQueueStatus: ReturnType<typeof createAgentQueueStatusHandler>;
     agentListTasks: ReturnType<typeof createAgentListTasksHandler>;
+    agentPendingReviews: ReturnType<typeof createPendingReviewsHandler>;
     getTask: ReturnType<typeof createGetTaskHandler>;
     waitTask: ReturnType<typeof createWaitTaskHandler>;
     pendingReviews: ReturnType<typeof createPendingReviewsHandler>;
@@ -101,6 +102,7 @@ export function createToolContext(config: DaemonConfig): ToolContext {
       agentDeleteTask: createAgentDeleteTaskHandler(taskStore),
       agentQueueStatus,
       agentListTasks: createAgentListTasksHandler(taskStore),
+      agentPendingReviews: createPendingReviewsHandler(taskStore),
       getTask,
       waitTask,
       pendingReviews,

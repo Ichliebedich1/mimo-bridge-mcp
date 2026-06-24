@@ -100,6 +100,7 @@ function createMcpServer(context: ToolContext): McpServer {
   registerJsonTool(server, "agent_get_task", "Read any agent task with bounded detail levels", context.tools.agentGetTask);
   registerJsonTool(server, "agent_wait_task", "Low-token wait for any agent task", context.tools.agentWaitTask);
   registerJsonTool(server, "agent_list_tasks", "List recent tasks with bounded agent-safe summaries", context.tools.agentListTasks);
+  registerJsonTool(server, "agent_pending_reviews", "List completed agent tasks waiting for Codex review", context.tools.agentPendingReviews);
   registerJsonTool(server, "agent_cancel_task", "Cancel a queued or running task for any supported agent", context.tools.agentCancelTask);
   registerJsonTool(server, "agent_finish_task", "Mark any supported agent task as accepted or abandoned", context.tools.agentFinishTask);
   registerJsonTool(server, "agent_merge_task", "Merge or discard any supported agent task Worktree", context.tools.agentMergeTask);

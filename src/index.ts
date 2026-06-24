@@ -54,6 +54,7 @@ async function main() {
   const agentMergeTask = createAgentMergeTaskHandler(taskStore, config);
   const agentDeleteTask = createAgentDeleteTaskHandler(taskStore);
   const agentListTasks = createAgentListTasksHandler(taskStore);
+  const agentPendingReviews = createPendingReviewsHandler(taskStore);
   const agentQueueStatus = createAgentQueueStatusHandler({
     getQueueStatus: () => startTask.getQueueStatus(),
   });
@@ -81,6 +82,7 @@ async function main() {
   registerJsonTool(server, "agent_get_task", "Read any agent task with bounded detail levels", agentGetTask);
   registerJsonTool(server, "agent_wait_task", "Low-token wait for any agent task", agentWaitTask);
   registerJsonTool(server, "agent_list_tasks", "List recent tasks with bounded agent-safe summaries", agentListTasks);
+  registerJsonTool(server, "agent_pending_reviews", "List completed agent tasks waiting for Codex review", agentPendingReviews);
   registerJsonTool(server, "agent_cancel_task", "Cancel a queued or running task for any supported agent", agentCancelTask);
   registerJsonTool(server, "agent_finish_task", "Mark any supported agent task as accepted or abandoned", agentFinishTask);
   registerJsonTool(server, "agent_merge_task", "Merge or discard any supported agent task Worktree", agentMergeTask);

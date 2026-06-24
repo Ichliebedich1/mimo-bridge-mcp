@@ -241,14 +241,50 @@ async function recoverOperation({ args, baseUrl }) {
     max_chars: String(args["max-chars"] || args.max_chars || 8000),
   });
   const response = await fetchJson(baseUrl, `/api/pending-reviews?${params}`);
-  return normalizeRestEnvelope("recover", response, (data) => ({
+  return normalizePendingReviewsEnvelope("recover", response);
+}
+
+async function agentRecoverOperation({ args, baseUrl }) {
+  const params = new URLSearchParams({
+    limit: String(args.limit || 10),
+    max_chars: String(args["max-chars"] || args.max_chars || 8000),
+  });
+  const agentId = getAgentId(args);
+  if (agentId) {
+    params.set("agent_id", agentId);
+  }
+  const response = await fetchJson(baseUrl, `/api/agent-pending-reviews?${params}`);
+  return normalizePendingReviewsEnvelope("agent-recover", response, agentId);
+}
+
+function normalizePendingReviewsEnvelope(operation, response, agentId = "") {
+  return normalizeRestEnvelope(operation, response, (data) => ({
+    agent_id: (data.agent_id ?? agentId) || null,
     pending_count: data.pending_count ?? 0,
     returned_count: data.returned_count ?? 0,
     truncated: Boolean(data.truncated),
-    tasks: data.tasks ?? [],
+    tasks: Array.isArray(data.tasks) ? data.tasks.map(toSafePendingReviewSummary) : [],
     next_review_command: data.next_review_command ?? null,
     recovery_note: data.recovery_note,
   }));
+}
+
+function toSafePendingReviewSummary(task) {
+  return {
+    task_id: task.task_id,
+    agent: task.agent,
+    status: task.status,
+    updated_at: task.updated_at,
+    current_round: task.current_round,
+    objective: task.objective,
+    changed_files_count: task.changed_files_count,
+    risk_flags: task.risk_flags,
+    review_recommendation: task.review_recommendation,
+    has_worktree: task.has_worktree,
+    origin_codex_thread_id: task.origin_codex_thread_id,
+    origin_codex_thread_url: task.origin_codex_thread_url,
+    review_command: task.review_command,
+  };
 }
 
 async function agentReviewOperation({ args, baseUrl }) {
@@ -549,6 +585,7 @@ function helpOperation() {
       "node scripts/mimo-bridge-client.mjs agent-start-and-wait --agent-id reasonix-tui --json .\\runtime\\client-requests\\task.json --timeout-seconds 1800",
       "node scripts/mimo-bridge-client.mjs agent-review --agent-id reasonix-tui --task-id task_xxx --detail-level review --max-chars 8000",
       "node scripts/mimo-bridge-client.mjs agent-tasks --agent-id reasonix-tui --limit 10",
+      "node scripts/mimo-bridge-client.mjs agent-recover --agent-id reasonix-tui --limit 10 --max-chars 8000",
       "node scripts/mimo-bridge-client.mjs agent-finish --agent-id reasonix-tui --task-id task_xxx --status accepted",
       "node scripts/mimo-bridge-client.mjs agent-merge --agent-id reasonix-tui --task-id task_xxx --action merge",
       "node scripts/mimo-bridge-client.mjs agent-delete --agent-id reasonix-tui --task-id task_xxx",
@@ -592,6 +629,9 @@ export async function run(argv = process.argv.slice(2), options = {}) {
     case "agent-tasks":
     case "agent-list-tasks":
       return agentTasksOperation({ args, baseUrl, stdin });
+    case "agent-recover":
+    case "agent-pending-reviews":
+      return agentRecoverOperation({ args, baseUrl, stdin });
     case "recover":
     case "pending-reviews":
       return recoverOperation({ args, baseUrl, stdin });

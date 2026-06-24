@@ -116,6 +116,16 @@ export async function handleAdminApi(
       return true;
     }
 
+    if (req.method === "GET" && url.pathname === "/api/agent-pending-reviews") {
+      const data = await context.tools.agentPendingReviews.handler({
+        agent_id: url.searchParams.get("agent_id") ?? undefined,
+        limit: parseLimit(url.searchParams.get("limit")),
+        max_chars: parseMaxChars(url.searchParams.get("max_chars")),
+      });
+      sendJson(res, 200, wrapToolResult(data));
+      return true;
+    }
+
     if (req.method === "POST" && url.pathname === "/api/tasks") {
       const body = StartTaskBodySchema.parse(await readJsonBody(req));
       const data = await context.tools.startTask.handler(body);

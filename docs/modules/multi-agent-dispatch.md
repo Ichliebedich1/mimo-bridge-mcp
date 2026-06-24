@@ -474,6 +474,32 @@ Status:
 - Focused tests passed: `node --test tests\agent-list-tasks.test.mjs tests\mimo-bridge-client.test.mjs tests\admin-api.test.mjs tests\stdio-protocol.test.mjs` 65/65.
 - Live smoke after daemon restart passed: `agent-list`, `agent-queue --agent-id reasonix-tui`, and `agent-tasks --agent-id reasonix-tui --limit 5`.
 
+### P6.13 Generic Agent Pending-Review Recovery
+
+Goal: Reasonix should have the same "Codex missed the completion, recover later" path that MiMo has.
+
+Tasks:
+
+- Add MCP `agent_pending_reviews`.
+- Add REST `GET /api/agent-pending-reviews?agent_id=...&limit=...&max_chars=...`.
+- Add safe client command `agent-recover` / `agent-pending-reviews`.
+- Extend pending-review summaries with `agent`.
+- Generate `agent-review --agent-id <agent>` commands for non-MiMo tasks while keeping existing MiMo `review --task-id` commands.
+- Keep output bounded and free of full logs, full diffs, source files, raw log paths, and raw local paths.
+
+Acceptance:
+
+- Codex can recover completed Reasonix tasks after an interrupted wait.
+- `agent_id` filtering works.
+- The next review command points to the correct generic Agent review command.
+
+Status:
+
+- Implemented and deployed locally.
+- Verified with root/local-daemon/admin-ui builds.
+- Focused tests passed: `node --test tests\pending-reviews.test.mjs tests\mimo-bridge-client.test.mjs tests\admin-api.test.mjs tests\stdio-protocol.test.mjs` 65/65.
+- Live smoke after daemon restart passed: `agent-recover --agent-id reasonix-tui --limit 5 --max-chars 8000`.
+
 ## Test Plan
 
 - `agent_list` shows MiMo and configured fake Reasonix.

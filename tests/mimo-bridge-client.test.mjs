@@ -504,6 +504,63 @@ test("recover command lists pending reviews without full logs or paths", async (
   }
 });
 
+test("agent-recover command lists filtered agent pending reviews", async () => {
+  const mock = await startMockServer((req, res) => {
+    if (req.url.startsWith("/api/agent-pending-reviews")) {
+      const url = new URL(req.url, "http://localhost");
+      assert.equal(url.searchParams.get("agent_id"), "reasonix-tui");
+      assert.equal(url.searchParams.get("limit"), "3");
+      assert.equal(url.searchParams.get("max_chars"), "4000");
+      res.writeHead(200, { "content-type": "application/json" });
+      res.end(JSON.stringify({
+        ok: true,
+        data: {
+          agent_id: "reasonix-tui",
+          pending_count: 1,
+          returned_count: 1,
+          truncated: false,
+          tasks: [
+            {
+              task_id: "task_reasonix_waiting",
+              agent: "reasonix-tui",
+              status: "review",
+              objective: "done",
+              changed_files_count: 2,
+              risk_flags: [],
+              review_recommendation: "approve",
+              review_command: "node scripts\\mimo-bridge-client.mjs agent-review --agent-id reasonix-tui --task-id task_reasonix_waiting --detail-level review --max-chars 8000",
+              raw_log_path: "C:\\sensitive\\raw.log",
+            },
+          ],
+          next_review_command: "node scripts\\mimo-bridge-client.mjs agent-review --agent-id reasonix-tui --task-id task_reasonix_waiting --detail-level review --max-chars 8000",
+          recovery_note: "Task(s) are waiting for Codex review.",
+        },
+      }));
+      return;
+    }
+    res.writeHead(404).end("{}");
+  });
+
+  try {
+    const result = await runClient(["agent-recover", "--agent-id", "reasonix-tui", "--limit", "3", "--max-chars", "4000"], {
+      env: { MIMO_BRIDGE_URL: mock.baseUrl },
+    });
+    assert.equal(result.code, 0);
+    const out = JSON.parse(result.stdout);
+    assert.equal(out.ok, true);
+    assert.equal(out.operation, "agent-recover");
+    assert.equal(out.agent_id, "reasonix-tui");
+    assert.equal(out.pending_count, 1);
+    assert.equal(out.tasks[0].task_id, "task_reasonix_waiting");
+    assert.match(out.next_review_command, /agent-review --agent-id reasonix-tui/);
+    const serialized = JSON.stringify(out);
+    assert.equal(serialized.includes("sensitive"), false);
+    assert.equal(serialized.includes("raw_log_path"), false);
+  } finally {
+    await closeServer(mock.server);
+  }
+});
+
 test("wait command uses SDK request timeout greater than timeout_seconds", () => {
   assert.equal(sdkRequestTimeoutMs(1), 61_000);
   assert.equal(sdkRequestTimeoutMs(1800), 1_860_000);

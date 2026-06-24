@@ -3,6 +3,7 @@ import type { TaskStore } from "./task-store.js";
 
 export interface PendingReviewSummary {
   task_id: string;
+  agent: string;
   status: "review";
   updated_at: string;
   current_round: number;
@@ -17,6 +18,7 @@ export interface PendingReviewSummary {
 }
 
 export interface PendingReviewsSnapshot {
+  agent_id: string | null;
   pending_count: number;
   returned_count: number;
   truncated: boolean;
@@ -28,6 +30,7 @@ export interface PendingReviewsSnapshot {
 export interface PendingReviewsOptions {
   limit?: number;
   max_chars?: number;
+  agent_id?: string;
 }
 
 const DEFAULT_LIMIT = 10;
@@ -43,32 +46,42 @@ export function getPendingReviewsSnapshot(
   const maxChars = clampInteger(options.max_chars, 1000, 20000, DEFAULT_MAX_CHARS);
   const pendingTasks = taskStore
     .listTasks(MAX_SCAN_LIMIT)
-    .filter((task): task is TaskState & { status: "review" } => task.status === "review");
+    .filter((task): task is TaskState & { status: "review" } => task.status === "review")
+    .filter((task) => !options.agent_id || task.agent === options.agent_id);
 
   const summaries = pendingTasks.map(toPendingReviewSummary);
   const tasks: PendingReviewSummary[] = [];
 
   for (const summary of summaries.slice(0, limit)) {
-    const candidate = buildSnapshot(pendingTasks.length, [...tasks, summary], false);
+    const candidate = buildSnapshot(pendingTasks.length, [...tasks, summary], false, options.agent_id ?? null);
     if (JSON.stringify(candidate).length > maxChars && tasks.length > 0) {
       break;
     }
     tasks.push(summary);
-    if (JSON.stringify(buildSnapshot(pendingTasks.length, tasks, false)).length >= maxChars) {
+    if (JSON.stringify(buildSnapshot(pendingTasks.length, tasks, false, options.agent_id ?? null)).length >= maxChars) {
       break;
     }
   }
 
   const truncated = tasks.length < pendingTasks.length;
-  return buildSnapshot(pendingTasks.length, tasks, truncated);
+  return buildSnapshot(pendingTasks.length, tasks, truncated, options.agent_id ?? null);
 }
 
-export function getPendingReviewCount(taskStore: TaskStore): number {
-  return taskStore.listTasks(MAX_SCAN_LIMIT).filter((task) => task.status === "review").length;
+export function getPendingReviewCount(taskStore: TaskStore, agentId?: string): number {
+  return taskStore
+    .listTasks(MAX_SCAN_LIMIT)
+    .filter((task) => task.status === "review")
+    .filter((task) => !agentId || task.agent === agentId).length;
 }
 
-function buildSnapshot(pendingCount: number, tasks: PendingReviewSummary[], truncated: boolean): PendingReviewsSnapshot {
+function buildSnapshot(
+  pendingCount: number,
+  tasks: PendingReviewSummary[],
+  truncated: boolean,
+  agentId: string | null
+): PendingReviewsSnapshot {
   return {
+    agent_id: agentId,
     pending_count: pendingCount,
     returned_count: tasks.length,
     truncated,
@@ -76,8 +89,8 @@ function buildSnapshot(pendingCount: number, tasks: PendingReviewSummary[], trun
     next_review_command: tasks[0]?.review_command ?? null,
     recovery_note:
       pendingCount === 0
-        ? "No MiMo tasks are waiting for Codex review."
-        : "MiMo has completed task(s) waiting for Codex review. Start with the first review_command and keep using Review Package before focused escalation.",
+        ? "No tasks are waiting for Codex review."
+        : "Task(s) are waiting for Codex review. Start with the first review_command and keep using Review Package before focused escalation.",
   };
 }
 
@@ -85,6 +98,7 @@ function toPendingReviewSummary(task: TaskState & { status: "review" }): Pending
   const reviewPackage = task.review_package;
   return {
     task_id: task.task_id,
+    agent: task.agent,
     status: "review",
     updated_at: task.updated_at,
     current_round: task.current_round,
@@ -95,15 +109,22 @@ function toPendingReviewSummary(task: TaskState & { status: "review" }): Pending
     has_worktree: Boolean(task.worktree),
     origin_codex_thread_id: task.config.origin_codex_thread_id ?? null,
     origin_codex_thread_url: task.config.origin_codex_thread_url ?? null,
-    review_command: `node scripts\\mimo-bridge-client.mjs review --task-id ${task.task_id} --detail-level review --max-chars 8000`,
+    review_command: buildReviewCommand(task),
   };
+}
+
+function buildReviewCommand(task: TaskState & { status: "review" }): string {
+  if (task.agent === "mimo") {
+    return `node scripts\\mimo-bridge-client.mjs review --task-id ${task.task_id} --detail-level review --max-chars 8000`;
+  }
+  return `node scripts\\mimo-bridge-client.mjs agent-review --agent-id ${task.agent} --task-id ${task.task_id} --detail-level review --max-chars 8000`;
 }
 
 function truncateText(value: string, maxChars: number): string {
   if (value.length <= maxChars) {
     return value;
   }
-  return `${value.slice(0, Math.max(0, maxChars - 1))}…`;
+  return `${value.slice(0, Math.max(0, maxChars - 3))}...`;
 }
 
 function clampInteger(value: unknown, min: number, max: number, fallback: number): number {

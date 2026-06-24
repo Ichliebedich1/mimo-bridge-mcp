@@ -8,6 +8,9 @@ This file is the project-local long-term memory. Update it after each meaningful
 - The default list output is low-context by design: task id, agent, status, objective, sanitized/truncated summary, modified file count, risk flags, review recommendation, timestamps, round, Worktree state, and safe-delete metadata. It does not return full diff, full logs, raw source, raw log paths, or raw local paths.
 - P6.12 verification passed: `npm.cmd run build`, `npm.cmd --prefix apps\local-daemon run build`, `npm.cmd --prefix apps\admin-ui run build`, and `node --test tests\agent-list-tasks.test.mjs tests\mimo-bridge-client.test.mjs tests\admin-api.test.mjs tests\stdio-protocol.test.mjs` passed 65/65.
 - Local daemon was restarted after P6.12. `agent-list`, `agent-queue --agent-id reasonix-tui`, and `agent-tasks --agent-id reasonix-tui --limit 5` live smoke passed; historical Reasonix summaries were sanitized and truncated.
+- P6.13 generic Agent pending-review recovery is implemented and deployed locally. New surfaces: MCP `agent_pending_reviews`, REST `GET /api/agent-pending-reviews?agent_id=...&limit=...&max_chars=...`, and safe client `node scripts\mimo-bridge-client.mjs agent-recover --agent-id reasonix-tui --limit 5 --max-chars 8000`.
+- P6.13 gives Reasonix the same interrupted-wait recovery path as MiMo: Codex can ask for completed Reasonix tasks waiting for review without reading full logs, full diff, source, or local paths. Reasonix summaries generate `agent-review --agent-id reasonix-tui ...` commands; MiMo summaries keep the old `review --task-id ...` command.
+- P6.13 verification passed: root build, local-daemon build, admin-ui build, and `node --test tests\pending-reviews.test.mjs tests\mimo-bridge-client.test.mjs tests\admin-api.test.mjs tests\stdio-protocol.test.mjs` passed 65/65. Live `agent-recover --agent-id reasonix-tui` returned ok with no pending reviews.
 
 ## Current Release Target
 
