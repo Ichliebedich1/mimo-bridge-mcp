@@ -331,20 +331,31 @@ Status:
 - Implemented locally in `src/services/reasonix-event-parser.ts` and `apps/local-daemon/src/live-task-view.ts`.
 - Covered by `tests/reasonix-event-parser.test.mjs`, `tests/live-task-view.test.mjs`, and `tests/admin-api.test.mjs`.
 
-### P6.7 GUI Session Sharing
+### P6.7 Safe Local Open / GUI Session Sharing First Slice
 
-Goal: GUI displays or opens TUI-created sessions without GUI automation.
+Goal: let the user inspect task/session folders from the Admin UI without exposing arbitrary local path opening.
 
 Tasks:
 
+- Add safe backend route to open task folder or Reasonix session folder.
+- Resolve paths from stored task state only; never accept a raw path from the browser.
+- Validate task folders against active Worktree roots or configured `allowedRoots`.
+- Validate Reasonix session folders against configured `REASONIX_HOME`.
 - Confirm GUI reads `REASONIX_HOME` session/project stores.
-- Add safe backend route to open Reasonix GUI or session folder.
 - Optionally write/update GUI tab metadata only if Reasonix documents the format and it is safe.
 
 Acceptance:
 
-- User can inspect Reasonix task session from GUI or the folder.
+- User can inspect Reasonix task session folder from Admin UI.
+- Raw local paths are not returned to the browser.
 - Bridge does not click GUI controls or steal focus.
+
+Status:
+
+- First safe local-open slice is implemented.
+- Admin UI task detail includes "打开任务文件夹" and Reasonix-only "打开会话文件夹".
+- REST route: `POST /api/tasks/:id/open` with `action=task_folder|session_folder`.
+- Direct Reasonix GUI-to-specific-session opening remains future work until a stable command/deep link is confirmed.
 
 ### P6.8 Token/Cost Integration
 

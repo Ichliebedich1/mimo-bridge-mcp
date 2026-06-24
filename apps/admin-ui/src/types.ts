@@ -86,6 +86,9 @@ export type TaskActionResult = {
   status?: string;
   action?: string;
   message?: string;
+  opened?: boolean;
+  target_kind?: string;
+  target_name?: string;
   queue_position?: number;
   [key: string]: unknown;
 };

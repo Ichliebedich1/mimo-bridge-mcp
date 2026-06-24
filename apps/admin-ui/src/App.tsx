@@ -16,6 +16,7 @@ import {
   fetchTokenBudget,
   finishTask,
   formatDateTime,
+  openTaskTarget,
   replyTask,
   resetTokenBudget,
   worktreeTask,
@@ -226,6 +227,11 @@ function App() {
     });
   }
 
+  async function handleOpenTaskTarget(taskId: string, action: 'task_folder' | 'session_folder') {
+    const label = action === 'session_folder' ? '会话文件夹' : '任务文件夹';
+    await runAction('正在打开' + label + '…', label + '已请求打开。', () => openTaskTarget(taskId, action));
+  }
+
   function confirmCancel(taskId: string) {
     setConfirmAction({
       title: '确认取消任务？',
@@ -415,6 +421,7 @@ function App() {
                 onLoadFull={(taskId) => fetchFullTask(taskId)}
                 onLoadLogs={(taskId) => fetchTaskLogs(taskId, 20)}
                 onMergeAndAccept={confirmMergeAndAccept}
+                onOpenTaskTarget={handleOpenTaskTarget}
                 onRefresh={() => refreshTaskDetail(selectedTask.id)}
                 onReply={handleReply}
               />
@@ -759,6 +766,7 @@ function TaskDetailPage({
   onLoadDiff,
   onLoadLogs,
   onLoadFull,
+  onOpenTaskTarget,
   onRefresh,
 }: {
   task: Task;
@@ -773,6 +781,7 @@ function TaskDetailPage({
   onLoadDiff: (taskId: string, filePath: string) => Promise<FocusedTaskResult>;
   onLoadLogs: (taskId: string) => Promise<TaskLogsResult>;
   onLoadFull: (taskId: string) => Promise<FullTaskResult>;
+  onOpenTaskTarget: (taskId: string, action: 'task_folder' | 'session_folder') => Promise<void>;
   onRefresh: () => Promise<void>;
 }) {
   const [selectedFile, setSelectedFile] = useState<ChangedFile | null>(task.changedFiles[0] ?? null);
@@ -1016,6 +1025,15 @@ function TaskDetailPage({
               实时运行查看
             </button>
             <span className="action-helper">只读查看任务运行事件，不提供输入或控制。</span>
+            <button className="button soft" disabled={Boolean(actionBusy)} onClick={() => void onOpenTaskTarget(task.id, 'task_folder')} type="button">
+              打开任务文件夹
+            </button>
+            {task.agent === 'reasonix-tui' && (
+              <button className="button soft" disabled={Boolean(actionBusy)} onClick={() => void onOpenTaskTarget(task.id, 'session_folder')} type="button">
+                打开会话文件夹
+              </button>
+            )}
+            <span className="action-helper">由本地 daemon 按任务记录解析路径；浏览器不会传任意本地路径。</span>
             <button className="button primary" disabled={!canReview || hasBlocker || !task.hasWorktree || Boolean(actionBusy)} onClick={() => onMergeAndAccept(task.id)} type="button">
               合并 Worktree 并验收
             </button>

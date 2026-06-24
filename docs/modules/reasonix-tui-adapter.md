@@ -40,10 +40,11 @@ Implemented:
 - Reasonix reply/continue: `agent_reply_task` resumes with `reasonix run --resume <agent_session_path>` after validating the session file is under configured `REASONIX_HOME`; REST and admin UI replies are wired.
 - Reasonix live/session parser: `src/services/reasonix-event-parser.ts` reads bounded Reasonix session JSONL tails, exposes visible assistant `content` as live messages, summarizes tool calls/results as folded tool events, redacts local paths/session/token/password/API-key patterns, ignores user/system records, and does not expose `reasoning_content`.
 - Live viewer integration: `/api/tasks/:id/live` merges Bridge runtime JSONL events with Reasonix session events for `reasonix-tui` tasks and still returns session events when the Bridge round log is missing.
+- Safe local open first slice: Admin UI can call `POST /api/tasks/:id/open` to open a task folder or Reasonix session folder. The daemon resolves paths from stored task state, validates Worktree/workspace/Reasonix-home boundaries, and does not return raw local paths to the browser.
 
 Not implemented yet:
 
-- Reasonix GUI shared-session opening/viewing.
+- Direct Reasonix GUI shared-session opening/viewing.
 - Reasonix token/cost extraction if session JSONL exposes real data.
 - Wider real-world validation against multiple Reasonix session JSONL variants beyond the observed `role/content/tool_calls` shape.
 
@@ -205,6 +206,8 @@ Only after session mapping:
 - Avoid editing GUI tab metadata unless the format is documented and stable.
 - Do not automate GUI clicks as core execution.
 
+Status: first local-open slice is implemented for task folders and Reasonix session folders. Direct Reasonix GUI launch to a specific session is not implemented yet.
+
 ## Collaboration Needed
 
 - Agent Registry: provide generic agent discovery and dispatch.
@@ -251,6 +254,7 @@ Integration smoke:
 - `reasonix-session-store` maps `.jsonl` session files under `REASONIX_HOME\projects` and ignores `.trash`/out-of-window files.
 - `reasonix-event-parser` surfaces assistant-visible messages, folds tool calls/results, redacts local paths/secrets, and skips user/system/reasoning content.
 - `/api/tasks/:id/live` can include Reasonix session events without exposing `agent_session_path`.
+- `POST /api/tasks/:id/open` opens only backend-resolved task/session folders and never accepts arbitrary browser paths.
 - A real Reasonix probe reports configured/missing without crashing.
 - A real one-shot Reasonix task runs only after the probe and fake-runner tests pass; current local smoke succeeded with `max_steps=20`.
 

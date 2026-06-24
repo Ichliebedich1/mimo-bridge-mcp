@@ -6,6 +6,7 @@ import type { DaemonConfig } from "./daemon-config.js";
 import type { ToolContext } from "./tool-context.js";
 import { readLiveTaskView, parseLiveParams } from "./live-task-view.js";
 import { getPendingReviewCount } from "../../../src/services/pending-reviews.js";
+import { createOpenTaskTargetHandler } from "./task-open-actions.js";
 
 const StartTaskBodySchema = z.object({
   objective: z.string().min(1),
@@ -40,6 +41,10 @@ const FinishBodySchema = z.object({
 
 const WorktreeBodySchema = z.object({
   action: z.enum(["merge", "discard"]),
+});
+
+const OpenTaskBodySchema = z.object({
+  action: z.enum(["task_folder", "session_folder"]),
 });
 
 const TaskQuerySchema = z.object({
@@ -203,6 +208,16 @@ export async function handleAdminApi(
         const data = await context.tools.mergeTask.handler({
           task_id: taskId,
           ...body,
+        });
+        sendJson(res, toolStatusCode(data), wrapToolResult(data));
+        return true;
+      }
+
+      if (req.method === "POST" && action === "open") {
+        const body = OpenTaskBodySchema.parse(await readJsonBody(req));
+        const data = await createOpenTaskTargetHandler(config, context.taskStore).handler({
+          task_id: taskId,
+          action: body.action,
         });
         sendJson(res, toolStatusCode(data), wrapToolResult(data));
         return true;

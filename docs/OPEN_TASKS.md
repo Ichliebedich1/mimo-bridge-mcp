@@ -7,7 +7,7 @@
 
 - Continue P6 multi-agent dispatch so Codex can assign separate tasks to MiMo and Reasonix instead of choosing only one active provider. P6.0/P6.1 Agent Registry/probe, P6.2 Reasonix one-shot runner plus generic low-token get/wait/session mapping, P6.3 first Admin UI agent selector/badges, P6.4 agent-aware queue/path-conflict scheduling, P6.5 Reasonix reply/continue, and P6.6 Reasonix live/session parsing are implemented. Next is MiMo adapter migration to generic tools, GUI shared-session viewing/opening, and Reasonix token/cost extraction if real fields exist.
 - Audit active Worktree cancellation cleanup.
-- Add admin UI actions for "open task folder" and "open current session window" using backend-safe localhost routes, borrowing the fallback/path-safety design from the external Mimo Code Session Manager. This is planning only; avoid arbitrary file-open routes and do not add a control surface to the read-only live viewer.
+- Continue backend-safe session opening work: first slice is implemented for "open task folder" and Reasonix "open session folder". Remaining work is direct Reasonix GUI/session opening if Reasonix exposes a stable command/deep link; do not automate GUI clicks and do not expose arbitrary file-open routes.
 
 ## Completed
 
@@ -42,6 +42,7 @@
 - P6.4 Agent-aware queue/path-conflict scheduling: `TaskQueue` now carries `agentId`, `workspacePath`, and `editablePaths`; the global queue can run up to two tasks, but only when they use different agents and non-overlapping editable paths. Same-agent tasks, overlapping paths, missing path metadata, or missing agent metadata stay queued. This is the first safe step toward running one MiMo task and one Reasonix task at the same time.
 - P6.5 Reasonix reply/continue: added `agent_reply_task`, REST `POST /api/agent-tasks/:id/replies`, admin UI agent-aware replies, and Reasonix TUI resume through `reasonix run --resume <agent_session_path>`. The resume path must exist under configured `REASONIX_HOME`; Review Package refresh and round advancement are covered by focused tests.
 - P6.6 Reasonix live/session parsing: added `src/services/reasonix-event-parser.ts`; `/api/tasks/:id/live` now merges Bridge runtime logs with bounded Reasonix session JSONL tails for `reasonix-tui` tasks. Visible assistant replies are primary messages; tool calls/results are folded; user/system records, `reasoning_content`, raw session paths, local paths, and secret-like values are not exposed.
+- P6.7 safe local-open first slice: added backend route `POST /api/tasks/:id/open` with `action=task_folder|session_folder`, plus Admin UI buttons for "打开任务文件夹" and Reasonix-only "打开会话文件夹". The daemon resolves paths from stored task state, validates Worktree/workspace/Reasonix-home boundaries, opens the folder locally, and returns only target kind/name instead of raw paths.
 ## Risks
 
 - The on-demand development Scheduled Task is not the final launcher or installer behavior.

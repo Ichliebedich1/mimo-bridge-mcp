@@ -604,6 +604,26 @@ test("admin API live view returns 404 for nonexistent task", async () => {
   }
 });
 
+test("admin API validates task open action without accepting arbitrary paths", async () => {
+  const fixture = createContext();
+  try {
+    const invalid = await callApi(fixture.context, "POST", "/api/tasks/" + fixture.taskId + "/open", {
+      action: "C:\\sensitive\\repo",
+    });
+    assert.strictEqual(invalid.statusCode, 400);
+    assert.strictEqual(invalid.body.ok, false);
+
+    const missing = await callApi(fixture.context, "POST", "/api/tasks/task_nonexistent/open", {
+      action: "task_folder",
+    });
+    assert.strictEqual(missing.statusCode, 400);
+    assert.strictEqual(missing.body.ok, false);
+    assert.strictEqual(JSON.stringify(missing.body).includes("sensitive"), false);
+  } finally {
+    fixture.cleanup();
+  }
+});
+
 test("admin API list includes safe-delete metadata for terminal task without worktree", async () => {
   const fixture = createContext();
   try {
