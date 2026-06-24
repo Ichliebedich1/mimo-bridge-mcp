@@ -32,6 +32,7 @@ export function getBudgetedTaskSnapshot(task: TaskState, maxChars: number) {
     status: task.status,
     agent: task.agent,
     session_id: task.session_id,
+    agent_session_path: task.agent_session_path ?? null,
     config: {
       ...task.config,
       editable_paths: [...task.config.editable_paths],

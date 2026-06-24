@@ -66,6 +66,7 @@ export class TaskStore {
       status: "queued",
       agent: options.agent ?? "mimo",
       session_id: options.session_id ?? null,
+      agent_session_path: null,
       config,
       current_round: 1,
       created_at: now,
@@ -160,6 +161,7 @@ export class TaskStore {
     if (!task) return null;
 
     if (result.summary !== undefined) task.summary = result.summary;
+    if (result.agent_session_path !== undefined) task.agent_session_path = result.agent_session_path;
     if (result.modified_files !== undefined) task.modified_files = result.modified_files;
     if (result.test_results !== undefined) task.test_results = result.test_results;
     if (result.questions !== undefined) task.questions = result.questions;

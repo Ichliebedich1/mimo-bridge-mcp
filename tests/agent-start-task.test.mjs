@@ -101,6 +101,9 @@ test("agent_start_task runs Reasonix TUI one-shot task through Worktree review f
     assert.strictEqual(task.review_package.status, "review");
     assert.strictEqual(task.review_package.changed_files.includes("src/reasonix-output.txt"), true);
     assert.strictEqual(task.review_package.review_recommendation, "approve");
+    assert.ok(task.agent_session_path);
+    assert.match(task.agent_session_path, /task_[a-f0-9]{12}.*\.jsonl$/);
+    assert.strictEqual(task.agent_session_path.startsWith(reasonixHome), true);
     assert.match(task.summary, /Reasonix fake/);
   } finally {
     runningTasks.cancelAll();

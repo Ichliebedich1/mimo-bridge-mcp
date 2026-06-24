@@ -10,7 +10,7 @@ P6 should first adapt Reasonix TUI, not Reasonix GUI. The TUI adapter should run
 
 ## Current Status
 
-P6.0-P6.2 Agent discovery, Reasonix one-shot execution, and generic low-token task get/wait are implemented locally.
+P6.0-P6.2 Agent discovery, Reasonix one-shot execution, generic low-token task get/wait, and Reasonix session mapping are implemented locally.
 
 Implemented:
 
@@ -23,6 +23,7 @@ Implemented:
 - Persistent config `agents[]` validation and normalization.
 - STDIO env config for `REASONIX_COMMAND`, `REASONIX_HOME`, `REASONIX_DEFAULT_MODEL`, `REASONIX_MODELS`, and `REASONIX_MAX_STEPS`.
 - `src/services/reasonix-tui-runner.ts`.
+- `src/services/reasonix-session-store.ts`.
 - `src/tools/agent-start-task.ts`.
 - `src/tools/agent-get-task.ts`.
 - `src/tools/agent-wait-task.ts`.
@@ -32,10 +33,10 @@ Implemented:
 - REST routes `GET /api/agent-tasks/:task_id` and `POST /api/agent-tasks/:task_id/wait`.
 - Fake Reasonix one-shot Worktree Review Package test.
 - Controlled real Reasonix smoke task `task_f8b579217015` succeeded with `max_steps=20`, changed only `notes/result.txt`, had `risk_flags: []`, and its temporary Worktree was discarded afterward.
+- Reasonix session mapping: after a TUI run, Bridge scans only configured `REASONIX_HOME\projects` for in-window `.jsonl` session files, skips `.trash`, prefers task/workspace matches, and persists the best match as `agent_session_path`. Browser API responses sanitize this path.
 
 Not implemented yet:
 
-- Reasonix session mapping.
 - Agent-aware queue/path conflict scheduling.
 - Admin UI agent selector.
 - Reasonix continue/reply support.
@@ -62,6 +63,7 @@ Local discovery on this machine:
   - sandbox available: `false`
   - fake-runner P6.2 supports one-shot execution through `agent_start_task`.
   - real Reasonix smoke succeeded when `max_steps=20`; `max_steps=5` was insufficient and caused a false failure.
+  - real Reasonix stores session JSONL files under `ReasonixData\projects\<encoded-project-path>\sessions\*.jsonl`.
 
 ## Entry Files Added
 
@@ -72,7 +74,6 @@ Local discovery on this machine:
 
 - `src/services/agent-runner.ts`
 - `src/services/reasonix-event-parser.ts`
-- `src/services/reasonix-session-store.ts`
 - `src/tools/agent-reply-task.ts`
 
 ## Existing Files To Modify
@@ -179,6 +180,8 @@ After a run, map the Bridge task to a Reasonix session JSONL:
 
 This is the key to later GUI visibility.
 
+Status: implemented for one-shot runs. The first version does not parse session contents; it records the session path only. It intentionally avoids exposing the full session path to browser API responses.
+
 ### Phase 4: Continue / Reply
 
 After session mapping is reliable, add reply support:
@@ -207,8 +210,7 @@ Only after session mapping:
 
 ## Pending Work
 
-- Confirm exact Reasonix session JSONL shape with local fixture files.
-- Implement Reasonix session mapping and persist `agent_session_path`.
+- Parse Reasonix session JSONL shape only when needed for richer live view or token/cost extraction.
 - Decide whether Bridge uses the user's existing `REASONIX_HOME` or a Bridge-managed Reasonix home.
 - Decide default Reasonix model for Bridge tasks.
 - Decide safe permission mode for non-interactive Reasonix execution.
@@ -238,6 +240,7 @@ Integration smoke:
 - A fake Reasonix runner completes one task and produces a Review Package.
 - `agent_get_task` returns a bounded Review Package for Reasonix tasks without full diff/log/source.
 - `agent_wait_task` waits locally and returns bounded review evidence or a minimal timeout response.
+- `reasonix-session-store` maps `.jsonl` session files under `REASONIX_HOME\projects` and ignores `.trash`/out-of-window files.
 - A real Reasonix probe reports configured/missing without crashing.
 - A real one-shot Reasonix task runs only after the probe and fake-runner tests pass; current local smoke succeeded with `max_steps=20`.
 

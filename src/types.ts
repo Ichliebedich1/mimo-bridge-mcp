@@ -164,6 +164,7 @@ export interface TaskState {
   status: TaskStatus;
   agent: string;
   session_id: string | null;
+  agent_session_path?: string | null;
   config: TaskConfig;
   current_round: number;
   created_at: string;
@@ -210,6 +211,7 @@ export interface TaskResult {
   task_id: string;
   agent: string;
   session_id: string | null;
+  agent_session_path?: string | null;
   status: TaskStatus;
   summary: string;
   modified_files: string[];

@@ -412,6 +412,7 @@ function sanitizeForBrowser(value: unknown): unknown {
   const blockedKeys = new Set([
     "raw_log_path",
     "stderr_log_path",
+    "agent_session_path",
     "worktree_path",
     "workspace_path",
     "repo_path",

@@ -144,6 +144,7 @@ function createContext() {
           return {
             task_id: input.task_id,
             agent: input.agent_id ?? "reasonix-tui",
+            agent_session_path: "C:\\sensitive\\reasonix\\session.jsonl",
             status: "review",
             detail_level: input.detail_level,
             task: { config: { workspace_path: "C:\\sensitive\\workspace" } },
@@ -172,6 +173,7 @@ function createContext() {
           return {
             task_id: input.task_id,
             agent: input.agent_id ?? "reasonix-tui",
+            agent_session_path: "C:\\sensitive\\reasonix\\session.jsonl",
             status: "review",
             detail_level: input.detail_level,
             timed_out: false,
@@ -401,6 +403,7 @@ test("admin API exposes agent task review details through generic route", async 
     assert.strictEqual(result.body.data.task_id, fixture.taskId);
     assert.strictEqual(result.body.data.agent, "reasonix-tui");
     assert.ok(result.body.data.review_package);
+    assert.strictEqual(JSON.stringify(result.body).includes("agent_session_path"), false);
     assert.strictEqual(JSON.stringify(result.body).includes("workspace_path"), false);
     assert.strictEqual(JSON.stringify(result.body).includes("sensitive"), false);
     const captured = fixture.calls.find(([name]) => name === "agentGetTask");
@@ -426,6 +429,7 @@ test("admin API exposes low-token wait for generic agent tasks", async () => {
     assert.strictEqual(result.body.data.agent, "reasonix-tui");
     assert.strictEqual(result.body.data.timed_out, false);
     assert.ok(result.body.data.review_package);
+    assert.strictEqual(JSON.stringify(result.body).includes("agent_session_path"), false);
     const captured = fixture.calls.find(([name]) => name === "agentWaitTask");
     assert.ok(captured);
     assert.strictEqual(captured[1].timeout_seconds, 30);

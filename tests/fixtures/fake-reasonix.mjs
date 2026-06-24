@@ -55,6 +55,24 @@ if (!brief.includes("# ")) {
 
 mkdirSync("src", { recursive: true });
 writeFileSync(join("src", "reasonix-output.txt"), "Reasonix fake task completed\n", "utf-8");
+writeFakeSession(taskText);
 console.log("Reasonix fake received task brief.");
 console.log("Reasonix fake wrote src/reasonix-output.txt.");
 process.exit(0);
+
+function writeFakeSession(taskText) {
+  if (!process.env.REASONIX_HOME) {
+    return;
+  }
+  const projectName = process.cwd().replace(/[:\\/]+/g, "-").replace(/^-+|-+$/g, "");
+  const sessionsDir = join(process.env.REASONIX_HOME, "projects", projectName, "sessions");
+  mkdirSync(sessionsDir, { recursive: true });
+  const taskId = /task_[a-f0-9]{12}/i.exec(taskText)?.[0] || "task_unknown";
+  const sessionPath = join(sessionsDir, `20260625-000000.000000000-fake-${taskId}.jsonl`);
+  writeFileSync(sessionPath, JSON.stringify({
+    type: "message",
+    task_id: taskId,
+    text: "fake Reasonix session",
+  }) + "\n", "utf-8");
+  writeFileSync(sessionPath + ".meta", JSON.stringify({ task_id: taskId }) + "\n", "utf-8");
+}

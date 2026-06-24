@@ -1,8 +1,10 @@
 import { appendFileSync, existsSync, readFileSync } from "node:fs";
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
+import { basename } from "node:path";
 import { platform } from "node:os";
 import { execFileSync } from "node:child_process";
 import type { AgentConfig, TaskResult, TaskState } from "../types.js";
+import { findReasonixSessionPath } from "./reasonix-session-store.js";
 
 export interface ReasonixRunnerOptions {
   agent: AgentConfig;
@@ -34,6 +36,7 @@ export function runReasonixTuiTask(
 
   prepareReasonixWorkspace(task.config.workspace_path);
   writeReasonixEvent(logPath, "start", "Reasonix TUI task started.");
+  const startedAtMs = Date.now();
 
   let timeoutId: ReturnType<typeof setTimeout> | null = null;
   let cancelled = false;
@@ -62,11 +65,19 @@ export function runReasonixTuiTask(
     const stdout = stdoutChunks.join("");
     const stderr = stderrChunks.join("");
     const summary = summarizeReasonixOutput(stdout, stderr, exitCode, signal);
+    const sessionCandidate = findReasonixSessionPath({
+      homeDir: agent.home_dir,
+      workspacePath: task.config.workspace_path,
+      taskId: task.task_id,
+      startedAtMs,
+      finishedAtMs: Date.now(),
+    });
     const status = exitCode === 0 ? "review" : "failed";
     const result: TaskResult = {
       task_id: task.task_id,
       agent: "reasonix-tui",
       session_id: null,
+      agent_session_path: sessionCandidate?.path ?? null,
       status,
       summary,
       modified_files: [],
@@ -78,6 +89,9 @@ export function runReasonixTuiTask(
       error: exitCode === 0 ? null : `Reasonix exit code: ${exitCode ?? "null"}`,
       exit_code: exitCode,
     };
+    if (sessionCandidate) {
+      writeReasonixEvent(logPath, "session", `Reasonix session mapped: ${basename(sessionCandidate.path)}`);
+    }
     writeReasonixEvent(logPath, status, summary);
     onResult(result);
   };
