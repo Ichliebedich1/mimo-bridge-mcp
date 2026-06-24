@@ -11,10 +11,23 @@ import { GitWorktreeManager } from "../services/git-worktree.js";
 import { refreshReviewPackage } from "../services/review-package.js";
 import { computeTaskScope } from "../services/task-scope.js";
 
+type StartTaskRunner = (
+  options: {
+    mimoNodePath: string;
+    mimoEntryPath: string;
+    task: any;
+    runtimeDir: string;
+    timeoutMs: number;
+  },
+  onResult: (result: TaskResult) => void,
+  onError: (error: string) => void
+) => { cancel: () => void };
+
 export interface StartTaskDependencies {
-  runTask?: typeof runMimoTask;
+  runTask?: StartTaskRunner;
   runningTasks?: RunningTaskRegistry;
   taskQueue?: TaskQueue;
+  agentId?: string;
 }
 
 export const StartTaskSchema = z.object({
@@ -45,6 +58,7 @@ export function createStartTaskHandler(
   const runTask = dependencies.runTask ?? runMimoTask;
   const runningTasks = dependencies.runningTasks ?? globalRunningTasks;
   const taskQueue = dependencies.taskQueue ?? globalTaskQueue;
+  const agentId = dependencies.agentId ?? "mimo";
 
   function executeTask(
     taskId: string,
@@ -177,7 +191,7 @@ export function createStartTaskHandler(
         origin_codex_thread_id: input.origin_codex_thread_id,
         origin_codex_thread_url: input.origin_codex_thread_url,
         origin_source: input.origin_source,
-      });
+      }, { agent: agentId });
 
       let worktreePath = input.workspace_path;
       let worktreeState: WorktreeState | null = null;

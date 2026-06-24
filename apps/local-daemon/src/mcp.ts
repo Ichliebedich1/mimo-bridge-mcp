@@ -94,6 +94,7 @@ function createMcpServer(context: ToolContext): McpServer {
   registerJsonTool(server, "mimo_pending_reviews", "低上下文恢复入口：列出已经完成、正在等待 Codex 审查的 MiMo 任务", context.tools.pendingReviews);
   registerJsonTool(server, "mimo_merge_task", "合并或丢弃任务的 Worktree 修改", context.tools.mergeTask);
   registerJsonTool(server, "agent_list", "列出可用执行 Agent，包括 MiMo 和 Reasonix TUI 探测状态", context.tools.agentList);
+  registerJsonTool(server, "agent_start_task", "使用指定 Agent 创建并后台启动任务；P6 当前支持 mimo 与 reasonix-tui one-shot", context.tools.agentStartTask);
   server.tool("mimo_queue_status", "查询任务队列状态", {}, async () => {
     const startTask = context.tools.startTask;
     const result = "getQueueStatus" in startTask ? startTask.getQueueStatus() : { running: 0, queued: 0, queue: [] };

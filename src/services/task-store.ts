@@ -1,7 +1,7 @@
 import { readFileSync, writeFileSync, mkdirSync, existsSync, readdirSync, renameSync, unlinkSync } from "node:fs";
 import { join, resolve, normalize } from "node:path";
 import { randomUUID } from "node:crypto";
-import type { TaskState, TaskConfig, TaskStatus, WorktreeState, ReviewPackage } from "../types.js";
+import type { TaskState, TaskConfig, TaskStatus, WorktreeState, ReviewPackage, TaskCreateOptions } from "../types.js";
 
 const TASK_ID_PATTERN = /^task_[a-f0-9]{12}$/;
 
@@ -57,15 +57,15 @@ export class TaskStore {
     return filePath;
   }
 
-  createTask(config: TaskConfig): TaskState {
+  createTask(config: TaskConfig, options: TaskCreateOptions = {}): TaskState {
     const taskId = `task_${randomUUID().replace(/-/g, "").slice(0, 12)}`;
     const now = new Date().toISOString();
 
     const task: TaskState = {
       task_id: taskId,
       status: "queued",
-      agent: "mimo",
-      session_id: null,
+      agent: options.agent ?? "mimo",
+      session_id: options.session_id ?? null,
       config,
       current_round: 1,
       created_at: now,

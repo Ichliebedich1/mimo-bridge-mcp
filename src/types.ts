@@ -94,6 +94,11 @@ export interface TaskConfig {
   origin_source?: string;
 }
 
+export interface TaskCreateOptions {
+  agent?: string;
+  session_id?: string | null;
+}
+
 export interface WorktreeState {
   repo_path: string;
   worktrees_root: string;

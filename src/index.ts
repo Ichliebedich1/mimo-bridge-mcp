@@ -16,6 +16,7 @@ import { createWaitTaskHandler } from "./tools/wait-task.js";
 import { createPendingReviewsHandler } from "./tools/pending-reviews.js";
 import { createAgentRegistry } from "./services/agent-registry.js";
 import { createAgentListHandler } from "./tools/agent-list.js";
+import { createAgentStartTaskHandler } from "./tools/agent-start-task.js";
 
 async function main() {
   const config = loadConfig();
@@ -36,6 +37,7 @@ async function main() {
     mimoVersion: null,
   });
   const agentList = createAgentListHandler(agentRegistry);
+  const agentStartTask = createAgentStartTaskHandler(config, config.agents, taskStore);
   const replyTask = createReplyTaskHandler(config, taskStore);
   const cancelTask = createCancelTaskHandler(taskStore);
   const finishTask = createFinishTaskHandler(taskStore);
@@ -170,6 +172,18 @@ async function main() {
     agentList.schema.shape,
     async (params) => {
       const result = await agentList.handler(params);
+      return {
+        content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+      };
+    }
+  );
+
+  server.tool(
+    "agent_start_task",
+    "使用指定 Agent 创建并后台启动任务；P6 当前支持 mimo 与 reasonix-tui one-shot",
+    agentStartTask.schema.shape,
+    async (params) => {
+      const result = await agentStartTask.handler(params);
       return {
         content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
       };

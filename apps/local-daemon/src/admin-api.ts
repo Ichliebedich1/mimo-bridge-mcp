@@ -25,6 +25,10 @@ const StartTaskBodySchema = z.object({
   origin_source: z.string().optional(),
 });
 
+const AgentStartTaskBodySchema = StartTaskBodySchema.extend({
+  agent_id: z.string().min(1).default("mimo"),
+});
+
 const ReplyBodySchema = z.object({
   message: z.string().min(1),
   priority: z.number().int().min(0).max(10).default(5),
@@ -91,6 +95,13 @@ export async function handleAdminApi(
     if (req.method === "POST" && url.pathname === "/api/tasks") {
       const body = StartTaskBodySchema.parse(await readJsonBody(req));
       const data = await context.tools.startTask.handler(body);
+      sendJson(res, toolStatusCode(data), wrapToolResult(data));
+      return true;
+    }
+
+    if (req.method === "POST" && url.pathname === "/api/agent-tasks") {
+      const body = AgentStartTaskBodySchema.parse(await readJsonBody(req));
+      const data = await context.tools.agentStartTask.handler(body);
       sendJson(res, toolStatusCode(data), wrapToolResult(data));
       return true;
     }

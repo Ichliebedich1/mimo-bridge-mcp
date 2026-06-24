@@ -12,6 +12,7 @@ import { createWaitTaskHandler } from "../../../src/tools/wait-task.js";
 import { createPendingReviewsHandler } from "../../../src/tools/pending-reviews.js";
 import { createAgentRegistry } from "../../../src/services/agent-registry.js";
 import { createAgentListHandler } from "../../../src/tools/agent-list.js";
+import { createAgentStartTaskHandler } from "../../../src/tools/agent-start-task.js";
 import type { DaemonConfig } from "./daemon-config.js";
 
 type UnavailableHandler = {
@@ -25,6 +26,7 @@ export interface ToolContext {
   configError: string | null;
   tools: {
     startTask: ReturnType<typeof createStartTaskHandler> | UnavailableHandler;
+    agentStartTask: ReturnType<typeof createAgentStartTaskHandler> | UnavailableHandler;
     getTask: ReturnType<typeof createGetTaskHandler>;
     waitTask: ReturnType<typeof createWaitTaskHandler>;
     pendingReviews: ReturnType<typeof createPendingReviewsHandler>;
@@ -65,6 +67,7 @@ export function createToolContext(config: DaemonConfig): ToolContext {
     configError: config.configError,
     tools: {
       startTask: config.mcpConfig ? createStartTaskHandler(config.mcpConfig, taskStore) : unavailable,
+      agentStartTask: config.mcpConfig ? createAgentStartTaskHandler(config.mcpConfig, config.agents, taskStore) : unavailable,
       getTask,
       waitTask,
       pendingReviews,

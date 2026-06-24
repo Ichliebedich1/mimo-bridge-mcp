@@ -22,15 +22,19 @@ Implemented:
 - `GET /api/health` lightweight `agents.configured` summary.
 - Persistent config `agents[]` validation and normalization.
 - STDIO env config for `REASONIX_COMMAND`, `REASONIX_HOME`, `REASONIX_DEFAULT_MODEL`, `REASONIX_MODELS`, and `REASONIX_MAX_STEPS`.
+- `src/services/reasonix-tui-runner.ts`.
+- `src/tools/agent-start-task.ts`.
+- MCP tool `agent_start_task`.
+- REST route `POST /api/agent-tasks`.
+- Fake Reasonix one-shot Worktree Review Package test.
 
 Not implemented yet:
 
 - `agent_start_task`.
-- Reasonix TUI task execution.
-- Reasonix Review Package generation.
 - Reasonix session mapping.
 - Agent-aware queue/path conflict scheduling.
 - Admin UI agent selector.
+ - Controlled real Reasonix execution smoke.
 
 Local discovery on this machine:
 
@@ -52,7 +56,7 @@ Local discovery on this machine:
   - sessions dir configured under `D:\DeepSeek-Reasonix\ReasonixData\sessions`
   - permission mode: `ask`
   - sandbox available: `false`
-  - `start_task` capability intentionally remains `false` until P6.2 is implemented.
+  - fake-runner P6.2 supports one-shot execution through `agent_start_task`; real Reasonix execution smoke is still pending.
 
 ## Entry Files Added
 
@@ -62,10 +66,8 @@ Local discovery on this machine:
 ## Entry Files To Add Next
 
 - `src/services/agent-runner.ts`
-- `src/services/reasonix-tui-runner.ts`
 - `src/services/reasonix-event-parser.ts`
 - `src/services/reasonix-session-store.ts`
-- `src/tools/agent-start-task.ts`
 - `src/tools/agent-get-task.ts`
 - `src/tools/agent-wait-task.ts`
 - `src/tools/agent-reply-task.ts`
@@ -161,6 +163,8 @@ Bridge should:
 - Mark status `review` on exit code 0 and `failed` otherwise.
 - Build a Review Package from git diff and bounded Reasonix output.
 
+Status: fake-runner implementation complete. It reuses existing `createStartTaskHandler` for allowedRoots, dynamic task scope, Worktree creation, queueing, and Review Package generation. Real Reasonix execution still needs a controlled smoke on a disposable repo before UI exposure.
+
 ### Phase 3: Session Record Mapping
 
 After a run, map the Bridge task to a Reasonix session JSONL:
@@ -200,7 +204,7 @@ Only after session mapping:
 
 ## Pending Work
 
-- Implement P6.2 Reasonix TUI one-shot runner.
+- Run controlled real Reasonix one-shot smoke on a disposable repo.
 - Confirm exact Reasonix session JSONL shape with local fixture files.
 - Decide whether Bridge uses the user's existing `REASONIX_HOME` or a Bridge-managed Reasonix home.
 - Decide default Reasonix model for Bridge tasks.

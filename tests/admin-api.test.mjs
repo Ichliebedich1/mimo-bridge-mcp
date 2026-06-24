@@ -132,6 +132,12 @@ function createContext() {
         },
         getQueueStatus: () => ({ running: 0, queued: 0, queue: [] }),
       },
+      agentStartTask: {
+        handler: async (input) => {
+          calls.push(["agentStartTask", input]);
+          return { task_id: "task_agent_created", status: "running", agent: input.agent_id };
+        },
+      },
       getTask: {
         handler: async (input) => {
           calls.push(["getTask", input]);
@@ -306,6 +312,24 @@ test("admin API maps mutating routes to their dedicated handlers", async () => {
     assert.strictEqual(fixture.calls[3][1].status, "accepted");
     assert.strictEqual(fixture.calls[4][1].action, "merge");
     assert.strictEqual(fixture.calls[5][1].reset, true);
+  } finally {
+    fixture.cleanup();
+  }
+});
+
+test("admin API maps POST /api/agent-tasks to agentStartTask", async () => {
+  const fixture = createContext();
+  try {
+    const result = await callApi(fixture.context, "POST", "/api/agent-tasks", {
+      agent_id: "reasonix-tui",
+      objective: "agent task",
+      workspace_path: "C:\\workspace",
+    });
+    assert.strictEqual(result.statusCode, 200);
+    assert.strictEqual(result.body.ok, true);
+    const captured = fixture.calls.find(([name]) => name === "agentStartTask");
+    assert.ok(captured);
+    assert.strictEqual(captured[1].agent_id, "reasonix-tui");
   } finally {
     fixture.cleanup();
   }
