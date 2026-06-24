@@ -23,8 +23,13 @@ export function createMergeTaskHandler(taskStore: TaskStore, config: Pick<Config
         return { error: "任务没有关联的 Worktree" };
       }
 
-      if (task.status !== "review" && task.status !== "accepted") {
+      const mergeAllowed = task.status === "review" || task.status === "accepted";
+      const discardAllowed = mergeAllowed || task.status === "failed" || task.status === "cancelled" || task.status === "abandoned";
+      if (input.action === "merge" && !mergeAllowed) {
         return { error: `任务状态不允许合并: ${task.status}` };
+      }
+      if (input.action === "discard" && !discardAllowed) {
+        return { error: `任务状态不允许丢弃 Worktree: ${task.status}` };
       }
 
       try {

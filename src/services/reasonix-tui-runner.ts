@@ -1,4 +1,4 @@
-import { appendFileSync } from "node:fs";
+import { appendFileSync, existsSync, readFileSync } from "node:fs";
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { platform } from "node:os";
 import { execFileSync } from "node:child_process";
@@ -30,8 +30,9 @@ export function runReasonixTuiTask(
   const logPath = `${runtimeDir}/logs/${task.task_id}-round-${round}.jsonl`;
   const stderrLogPath = `${runtimeDir}/logs/${task.task_id}-round-${round}.stderr.log`;
   const briefPath = `${runtimeDir}/briefs/${task.task_id}-round-${round}.md`;
-  const args = buildReasonixRunArgs(agent, briefPath);
+  const args = buildReasonixRunArgs(agent, briefPath, task.config.workspace_path);
 
+  prepareReasonixWorkspace(task.config.workspace_path);
   writeReasonixEvent(logPath, "start", "Reasonix TUI task started.");
 
   let timeoutId: ReturnType<typeof setTimeout> | null = null;
@@ -127,7 +128,7 @@ export function runReasonixTuiTask(
   };
 }
 
-function buildReasonixRunArgs(agent: AgentConfig, briefPath: string): string[] {
+function buildReasonixRunArgs(agent: AgentConfig, briefPath: string, workspacePath: string): string[] {
   const args = [...(agent.command_args ?? []), "run"];
   if (agent.default_model) {
     args.push("--model", agent.default_model);
@@ -135,8 +136,40 @@ function buildReasonixRunArgs(agent: AgentConfig, briefPath: string): string[] {
   if (agent.max_steps && Number.isInteger(agent.max_steps) && agent.max_steps > 0) {
     args.push("--max-steps", String(agent.max_steps));
   }
-  args.push(`请读取任务说明文件并完成任务: ${briefPath}`);
+  args.push([
+    "你正在 MiMo Bridge 管控的任务 Worktree 中运行。",
+    `当前工作目录就是目标项目目录: ${workspacePath}`,
+    "所有任务说明里的相对路径都必须按当前工作目录解析。",
+    "不要把任务说明文件所在的 runtime/briefs 目录当成项目目录，也不要修改 runtime 目录。",
+    `请读取任务说明文件并完成任务: ${briefPath}`,
+  ].join("\n"));
   return args;
+}
+
+function prepareReasonixWorkspace(workspacePath: string): void {
+  addGitExclude(workspacePath, [
+    "cad_mcp.log",
+    "solidworks_mcp.log",
+    "reasonix_mcp.log",
+  ]);
+}
+
+function addGitExclude(workspacePath: string, patterns: string[]): void {
+  try {
+    const excludePath = execFileSync("git", ["rev-parse", "--git-path", "info/exclude"], {
+      cwd: workspacePath,
+      encoding: "utf-8",
+      timeout: 5000,
+    }).trim();
+    const existing = existsSync(excludePath) ? readFileSync(excludePath, "utf-8") : "";
+    const missing = patterns.filter((pattern) => !existing.split(/\r?\n/).includes(pattern));
+    if (missing.length === 0) {
+      return;
+    }
+    appendFileSync(excludePath, `${existing.endsWith("\n") || existing.length === 0 ? "" : "\n"}# MiMo Bridge Reasonix side-effect logs\n${missing.join("\n")}\n`, "utf-8");
+  } catch {
+    // Non-git workspaces still run; Worktree review is simply less precise there.
+  }
 }
 
 function appendRaw(chunks: string[], logPath: string, eventType: string, text: string, status?: string): void {

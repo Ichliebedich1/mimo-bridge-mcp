@@ -35,9 +35,14 @@ if (args[0] !== "run") {
 }
 
 const taskText = args[args.length - 1] || "";
-const match = /任务说明文件并完成任务:\s*(.+)$/u.exec(taskText);
+const match = /任务说明文件并完成任务:\s*(.+)$/mu.exec(taskText);
 if (!match) {
   console.error("missing task brief path");
+  process.exit(1);
+}
+
+if (!taskText.includes("当前工作目录就是目标项目目录")) {
+  console.error("missing workspace orientation");
   process.exit(1);
 }
 
