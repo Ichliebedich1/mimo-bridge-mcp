@@ -22,7 +22,7 @@ Reasonix should eventually reach the same project role as MiMo:
 
 ## Current Status
 
-P6.0-P6.11 are partially implemented. The runtime now has an Agent Registry, Reasonix TUI probe, Reasonix one-shot runner, generic low-token task get/wait/reply tools, generic lifecycle tools for cancel/finish/merge/delete/queue, safe client Agent commands including replies, Reasonix session mapping through `agent_session_path`, a first Admin UI agent selector/badge/reply pass, an agent-aware queue that permits safe parallelism only for different agents editing non-overlapping paths, Reasonix live/session parsing for the read-only live viewer, safe local folder opening, and explicit Reasonix token/cost extraction when session fields exist. Existing `mimo_*` MCP tools remain compatible.
+P6.0-P6.16 are implemented locally. The runtime now has an Agent Registry, Reasonix TUI probe, Reasonix one-shot runner, generic low-token task get/wait/reply tools, generic lifecycle/status tools for cancel/finish/merge/delete/queue/token, safe client Agent commands including replies/recovery/listing/token status, Reasonix session mapping through `agent_session_path`, Admin UI agent selector/badge/reply support, agent-aware queue scheduling, Reasonix live/session parsing for the read-only live viewer, safe local folder opening, explicit Reasonix token/cost extraction when session fields exist, bounded generic task listing/recovery, and generic Review Package summary fields. Existing `mimo_*` MCP tools remain compatible.
 
 Observed local Reasonix installation on this machine:
 
@@ -499,6 +499,29 @@ Status:
 - Verified with root/local-daemon/admin-ui builds.
 - Focused tests passed: `node --test tests\pending-reviews.test.mjs tests\mimo-bridge-client.test.mjs tests\admin-api.test.mjs tests\stdio-protocol.test.mjs` 65/65.
 - Live smoke after daemon restart passed: `agent-recover --agent-id reasonix-tui --limit 5 --max-chars 8000`.
+
+### P6.14-P6.16 Generic Status And Review Naming
+
+Goal: remove remaining MiMo-only wording from normal Reasonix review/status paths without breaking old clients.
+
+Tasks:
+
+- Report Reasonix `capabilities.token_usage=true` when explicit Reasonix session token/cost fields can be recorded.
+- Add MCP `agent_token_status` and safe client `agent-token-status`.
+- Add Review Package `agent_summary` / `agent_summary_zh`, while preserving `mimo_summary` / `mimo_summary_zh` as compatibility aliases.
+- Make Admin UI prefer generic summary fields when available.
+
+Acceptance:
+
+- Reasonix scripts can check shared TokenBudget without using a MiMo-named command.
+- New Review Packages include generic and legacy summary fields.
+- Old clients that read `mimo_summary` still work.
+
+Status:
+
+- Implemented locally.
+- Verified P6.15 with root/local-daemon/admin-ui builds, 52/52 focused tests, daemon restart, and live `agent-token-status` smoke.
+- Verified P6.16 with root/local-daemon/admin-ui builds and `node --test tests\review-package.test.mjs tests\agent-start-task.test.mjs tests\admin-api.test.mjs` passing 51/51.
 
 ## Test Plan
 

@@ -272,6 +272,8 @@ Integration smoke:
 - Reasonix token extraction records only explicit session JSONL token/cost fields and does not estimate usage from text.
 - `/api/agents` reports `token_usage=true` for ready Reasonix TUI because Bridge records explicit session JSONL token/cost fields when they exist.
 - `agent_list_tasks` / safe client `agent-tasks` lists recent Reasonix tasks with sanitized and truncated summaries, risk flags, review recommendation, Worktree state, and safe-delete metadata. It must not expose raw Reasonix session paths, raw logs, full source, or full diffs.
+- `agent-token-status` reads shared TokenBudget status without resetting it.
+- Review Package contains `agent_summary` / `agent_summary_zh` and legacy `mimo_summary` / `mimo_summary_zh`.
 - A real Reasonix probe reports configured/missing without crashing.
 - A real one-shot Reasonix task runs only after the probe and fake-runner tests pass; current local smoke succeeded with `max_steps=20`.
 
