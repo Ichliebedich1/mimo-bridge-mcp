@@ -22,7 +22,7 @@ Reasonix should eventually reach the same project role as MiMo:
 
 ## Current Status
 
-P6.0-P6.5 are partially implemented. The runtime now has an Agent Registry, Reasonix TUI probe, Reasonix one-shot runner, generic low-token task get/wait/reply tools, Reasonix session mapping through `agent_session_path`, a first Admin UI agent selector/badge/reply pass, and an agent-aware queue that permits safe parallelism only for different agents editing non-overlapping paths. Existing `mimo_*` MCP tools remain compatible.
+P6.0-P6.6 are partially implemented. The runtime now has an Agent Registry, Reasonix TUI probe, Reasonix one-shot runner, generic low-token task get/wait/reply tools, Reasonix session mapping through `agent_session_path`, a first Admin UI agent selector/badge/reply pass, an agent-aware queue that permits safe parallelism only for different agents editing non-overlapping paths, and Reasonix live/session parsing for the read-only live viewer. Existing `mimo_*` MCP tools remain compatible.
 
 Observed local Reasonix installation on this machine:
 
@@ -308,7 +308,30 @@ Status:
 - Reasonix TUI uses `reasonix run --resume <agent_session_path>`; the session file must exist under configured `REASONIX_HOME`.
 - Follow-up runs advance `current_round`, refresh Review Package, and keep local session paths out of browser responses.
 
-### P6.6 GUI Session Sharing
+### P6.6 Reasonix Live / Session Parsing
+
+Goal: Reasonix live viewer becomes useful in the same spirit as MiMo live viewer.
+
+Tasks:
+
+- Parse bounded tails of Reasonix session JSONL from `agent_session_path`.
+- Show visible assistant replies as primary message events.
+- Fold Reasonix tool calls and tool results into summarized tool events.
+- Redact local paths, session ids, token/password/API-key patterns.
+- Do not expose hidden reasoning fields such as `reasoning_content`.
+- Merge Reasonix session events with Bridge runtime logs in `/api/tasks/:id/live`.
+
+Acceptance:
+
+- User can see what Reasonix visibly replied and which tools it used.
+- Browser responses do not expose `agent_session_path`, full source, full diffs, full logs, or hidden reasoning.
+
+Status:
+
+- Implemented locally in `src/services/reasonix-event-parser.ts` and `apps/local-daemon/src/live-task-view.ts`.
+- Covered by `tests/reasonix-event-parser.test.mjs`, `tests/live-task-view.test.mjs`, and `tests/admin-api.test.mjs`.
+
+### P6.7 GUI Session Sharing
 
 Goal: GUI displays or opens TUI-created sessions without GUI automation.
 
@@ -323,7 +346,7 @@ Acceptance:
 - User can inspect Reasonix task session from GUI or the folder.
 - Bridge does not click GUI controls or steal focus.
 
-### P6.7 Token/Cost Integration
+### P6.8 Token/Cost Integration
 
 Goal: Reasonix token reporting joins TokenBudget if real data exists.
 
@@ -343,7 +366,7 @@ Acceptance:
 - `mimo_*` tools still work unchanged.
 - `agent_start_task` rejects unknown `agent_id`.
 - Fake Reasonix runner can complete, fail, timeout, and be cancelled.
-- Reasonix parser extracts visible text and tool summaries from fixture logs.
+- Reasonix parser extracts visible text and tool summaries from fixture logs/session JSONL.
 - Review Package includes `agent_summary`.
 - Old tasks with `mimo_summary` render correctly.
 - Disjoint MiMo/Reasonix fake tasks can run concurrently.
@@ -366,5 +389,5 @@ Acceptance:
 4. Add fake Reasonix adapter tests.
 5. Add real `reasonix-tui` health probe.
 6. Add one-shot `reasonix run` execution.
-7. Add Reasonix parser/live viewer integration.
-8. Add richer Reasonix live/session parsing now that one-shot execution, agent-aware queueing, and TUI resume are stable.
+7. Add Reasonix parser/live viewer integration. Completed as P6.6.
+8. Next: GUI shared-session viewing/opening, then token/cost extraction if stable Reasonix fields exist.

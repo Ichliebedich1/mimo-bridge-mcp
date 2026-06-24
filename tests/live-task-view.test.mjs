@@ -431,6 +431,74 @@ test("readLiveTaskView reads events from existing log file", () => {
   }
 });
 
+test("readLiveTaskView merges Reasonix session messages into live events", () => {
+  const dir = tmpDir();
+  try {
+    const taskStore = new TaskStore(dir);
+    const task = taskStore.createTask({
+      objective: "reasonix live view",
+      workspace_path: "C:\\workspace",
+      editable_paths: [],
+      readonly_paths: [],
+      acceptance_criteria: [],
+      max_rounds: 5,
+      runtime_timeout_seconds: 900,
+    }, { agent: "reasonix-tui" });
+    taskStore.updateTaskStatus(task.task_id, "running");
+
+    const logPath = taskStore.getLogPath(task.task_id, 1);
+    writeFileSync(logPath, JSON.stringify({ type: "start", timestamp: Date.now(), summary: "Reasonix TUI task started." }) + "\n", "utf-8");
+
+    const sessionPath = join(dir, "reasonix-session.jsonl");
+    writeFileSync(sessionPath, [
+      JSON.stringify({ role: "user", content: "task brief should not show" }),
+      JSON.stringify({ role: "assistant", content: "我正在检查文件并准备修改。", reasoning_content: "hidden" }),
+      JSON.stringify({ role: "assistant", content: "", tool_calls: [{ name: "shell", arguments: JSON.stringify({ command: "npm test" }) }] }),
+      JSON.stringify({ role: "tool", name: "shell", content: "npm test passed" }),
+    ].join("\n") + "\n", "utf-8");
+    taskStore.updateTaskAgentSession(task.task_id, sessionPath);
+
+    const result = readLiveTaskView(taskStore, task.task_id, 20, 8000);
+    assert.ok(!("error" in result));
+    assert.ok(result.events.some((event) => event.kind === "message" && event.summary.includes("检查文件")));
+    assert.ok(result.events.some((event) => event.kind === "tool" && event.tool === "shell"));
+    const serialized = JSON.stringify(result);
+    assert.strictEqual(serialized.includes("task brief should not show"), false);
+    assert.strictEqual(serialized.includes("hidden"), false);
+    assert.strictEqual(serialized.includes(sessionPath), false);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("readLiveTaskView can show Reasonix session events when bridge log is missing", () => {
+  const dir = tmpDir();
+  try {
+    const taskStore = new TaskStore(dir);
+    const task = taskStore.createTask({
+      objective: "reasonix session only",
+      workspace_path: "C:\\workspace",
+      editable_paths: [],
+      readonly_paths: [],
+      acceptance_criteria: [],
+      max_rounds: 5,
+      runtime_timeout_seconds: 900,
+    }, { agent: "reasonix-tui" });
+
+    const sessionPath = join(dir, "reasonix-session-only.jsonl");
+    writeFileSync(sessionPath, JSON.stringify({ role: "assistant", content: "只剩 session 文件也能查看。" }) + "\n", "utf-8");
+    taskStore.updateTaskAgentSession(task.task_id, sessionPath);
+
+    const result = readLiveTaskView(taskStore, task.task_id, 20, 8000);
+    assert.ok(!("error" in result));
+    assert.strictEqual(result.events.length, 1);
+    assert.strictEqual(result.events[0].kind, "message");
+    assert.match(result.events[0].summary, /\[session\] 文件/);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test("readLiveTaskView uses the latest completed log round after current_round advances", () => {
   const dir = tmpDir();
   try {

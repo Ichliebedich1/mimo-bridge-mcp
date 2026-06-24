@@ -2,6 +2,7 @@ import { closeSync, existsSync, fstatSync, openSync, readSync } from "node:fs";
 import { basename } from "node:path";
 import type { TaskStore } from "../../../src/services/task-store.js";
 import { createEventParser } from "../../../src/services/event-parser.js";
+import { parseReasonixSessionTail } from "../../../src/services/reasonix-event-parser.js";
 
 export interface LiveEvent {
   timestamp: string;
@@ -68,18 +69,21 @@ export function readLiveTaskView(
   const logPath = taskStore.getLogPath(taskId, logRound);
 
   if (!existsSync(logPath)) {
+    const reasonixOnly = task.agent === "reasonix-tui" && task.agent_session_path
+      ? parseReasonixSessionTail(task.agent_session_path, maxEvents, maxChars)
+      : { events: [], truncated: false };
     return {
       task_id: task.task_id,
       status: task.status,
       current_round: logRound,
       updated_at: task.updated_at,
       is_live: isLive,
-      events: [],
-      truncated: false,
+      events: reasonixOnly.events,
+      truncated: reasonixOnly.truncated,
     };
   }
 
-  const result = readTailEvents(logPath, maxEvents, maxChars);
+  const result = readMergedLiveEvents(task.agent, task.agent_session_path, logPath, maxEvents, maxChars);
 
   return {
     task_id: task.task_id,
@@ -90,6 +94,35 @@ export function readLiveTaskView(
     events: result.events,
     truncated: result.truncated,
   };
+}
+
+function readMergedLiveEvents(
+  agent: string,
+  agentSessionPath: string | null | undefined,
+  logPath: string,
+  maxEvents: number,
+  maxChars: number,
+): { events: LiveEvent[]; truncated: boolean } {
+  const runtimeResult = readTailEvents(logPath, maxEvents, maxChars);
+  if (agent !== "reasonix-tui" || !agentSessionPath) {
+    return runtimeResult;
+  }
+
+  const sessionResult = parseReasonixSessionTail(agentSessionPath, maxEvents, maxChars);
+  if (sessionResult.events.length === 0) {
+    return {
+      events: runtimeResult.events,
+      truncated: runtimeResult.truncated || sessionResult.truncated,
+    };
+  }
+
+  return boundLiveEvents(
+    dedupeLiveEvents([...runtimeResult.events, ...sessionResult.events])
+      .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()),
+    maxEvents,
+    maxChars,
+    runtimeResult.truncated || sessionResult.truncated,
+  );
 }
 
 function findLogRound(taskStore: TaskStore, taskId: string, currentRound: number, isLive: boolean): number {
@@ -189,6 +222,52 @@ function readTailEvents(
   } finally {
     closeSync(fd);
   }
+}
+
+function dedupeLiveEvents(events: LiveEvent[]): LiveEvent[] {
+  const seen = new Set<string>();
+  const result: LiveEvent[] = [];
+  for (const event of events) {
+    const key = [
+      event.event_type,
+      event.kind,
+      event.tool ?? "",
+      event.status ?? "",
+      event.summary,
+    ].join("\u0000");
+    if (seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+    result.push(event);
+  }
+  return result;
+}
+
+function boundLiveEvents(
+  events: LiveEvent[],
+  maxEvents: number,
+  maxChars: number,
+  alreadyTruncated: boolean,
+): { events: LiveEvent[]; truncated: boolean } {
+  const recent = events.slice(-maxEvents);
+  let charCount = 0;
+  let charTruncated = false;
+  const bounded: LiveEvent[] = [];
+
+  for (let i = recent.length - 1; i >= 0; i--) {
+    const event = recent[i];
+    const eventChars = JSON.stringify(event).length;
+    if (charCount + eventChars > maxChars && bounded.length > 0) {
+      charTruncated = true;
+      break;
+    }
+    bounded.push(event);
+    charCount += eventChars;
+  }
+
+  bounded.reverse();
+  return { events: bounded, truncated: alreadyTruncated || charTruncated || events.length > recent.length };
 }
 
 export function parseJsonlLine(line: string): LiveEvent | null {

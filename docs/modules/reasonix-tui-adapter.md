@@ -10,7 +10,7 @@ P6 should first adapt Reasonix TUI, not Reasonix GUI. The TUI adapter should run
 
 ## Current Status
 
-P6.0-P6.5 Agent discovery, Reasonix one-shot execution, generic low-token task get/wait/reply, Reasonix session mapping, first Admin UI integration, and agent-aware queue/path-conflict scheduling are implemented locally.
+P6.0-P6.6 Agent discovery, Reasonix one-shot execution, generic low-token task get/wait/reply, Reasonix session mapping, first Admin UI integration, agent-aware queue/path-conflict scheduling, and Reasonix live/session parsing are implemented locally.
 
 Implemented:
 
@@ -38,12 +38,14 @@ Implemented:
 - Admin UI first slice: Create Task can select MiMo or Reasonix TUI; MiMo tasks still call `/api/tasks`, Reasonix tasks call `/api/agent-tasks`; list/detail pages show agent badges; System page shows `/api/agents` status.
 - Agent-aware queue/path conflict scheduling: `TaskQueue` stores `agentId`, `workspacePath`, and `editablePaths`; different agents can run in parallel only when editable paths do not overlap; same-agent tasks and unknown metadata remain queued.
 - Reasonix reply/continue: `agent_reply_task` resumes with `reasonix run --resume <agent_session_path>` after validating the session file is under configured `REASONIX_HOME`; REST and admin UI replies are wired.
+- Reasonix live/session parser: `src/services/reasonix-event-parser.ts` reads bounded Reasonix session JSONL tails, exposes visible assistant `content` as live messages, summarizes tool calls/results as folded tool events, redacts local paths/session/token/password/API-key patterns, ignores user/system records, and does not expose `reasoning_content`.
+- Live viewer integration: `/api/tasks/:id/live` merges Bridge runtime JSONL events with Reasonix session events for `reasonix-tui` tasks and still returns session events when the Bridge round log is missing.
 
 Not implemented yet:
 
-- Rich Reasonix session/live parser beyond bounded process output.
 - Reasonix GUI shared-session opening/viewing.
 - Reasonix token/cost extraction if session JSONL exposes real data.
+- Wider real-world validation against multiple Reasonix session JSONL variants beyond the observed `role/content/tool_calls` shape.
 
 Local discovery on this machine:
 
@@ -77,7 +79,6 @@ Local discovery on this machine:
 ## Entry Files To Add Next
 
 - `src/services/agent-runner.ts`
-- `src/services/reasonix-event-parser.ts`
 
 ## Existing Files To Modify
 
@@ -215,7 +216,8 @@ Only after session mapping:
 
 ## Pending Work
 
-- Parse Reasonix session JSONL shape for richer live view and token/cost extraction if real fields exist.
+- Validate additional real Reasonix session JSONL variants and extend the parser tolerantly if new stable fields appear.
+- Parse Reasonix token/cost extraction if real fields exist.
 - Decide whether Bridge uses the user's existing `REASONIX_HOME` or a Bridge-managed Reasonix home.
 - Decide default Reasonix model for Bridge tasks.
 - Decide safe permission mode for non-interactive Reasonix execution.
@@ -236,6 +238,7 @@ Focused tests:
 
 - `node --test tests/agent-registry.test.mjs`
 - `node --test tests/reasonix-event-parser.test.mjs`
+- `node --test tests/live-task-view.test.mjs`
 - `node --test tests/reasonix-session-store.test.mjs`
 - `node --test tests/task-queue.test.mjs`
 
@@ -246,6 +249,8 @@ Integration smoke:
 - `agent_get_task` returns a bounded Review Package for Reasonix tasks without full diff/log/source.
 - `agent_wait_task` waits locally and returns bounded review evidence or a minimal timeout response.
 - `reasonix-session-store` maps `.jsonl` session files under `REASONIX_HOME\projects` and ignores `.trash`/out-of-window files.
+- `reasonix-event-parser` surfaces assistant-visible messages, folds tool calls/results, redacts local paths/secrets, and skips user/system/reasoning content.
+- `/api/tasks/:id/live` can include Reasonix session events without exposing `agent_session_path`.
 - A real Reasonix probe reports configured/missing without crashing.
 - A real one-shot Reasonix task runs only after the probe and fake-runner tests pass; current local smoke succeeded with `max_steps=20`.
 
