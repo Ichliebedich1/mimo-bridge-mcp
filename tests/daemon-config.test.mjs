@@ -106,6 +106,16 @@ describe("daemon-config", () => {
       assert.strictEqual(result.error, null);
     });
 
+    it("should load JSON config with UTF-8 BOM", () => {
+      const configPath = join(testDir, "valid-bom.json");
+      writeFileSync(configPath, "\uFEFF" + JSON.stringify({ mimoNodePath: "/usr/bin/node", port: 4001 }), "utf-8");
+      const result = loadPersistentConfig(configPath);
+      assert.ok(result.config);
+      assert.strictEqual(result.config.mimoNodePath, "/usr/bin/node");
+      assert.strictEqual(result.config.port, 4001);
+      assert.strictEqual(result.error, null);
+    });
+
     it("should return error for invalid JSON", () => {
       const configPath = join(testDir, "bad.json");
       writeFileSync(configPath, "{ not valid json");

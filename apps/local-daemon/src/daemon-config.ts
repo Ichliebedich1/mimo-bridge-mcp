@@ -36,7 +36,7 @@ export function loadPersistentConfig(configPath: string): { config: PersistentCo
     return { config: null, error: null };
   }
   try {
-    const raw = readFileSync(configPath, "utf-8");
+    const raw = stripUtf8Bom(readFileSync(configPath, "utf-8"));
     const parsed = JSON.parse(raw);
     if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
       return { config: null, error: `配置文件不是有效的 JSON 对象: ${configPath}` };
@@ -120,6 +120,10 @@ function validatePersistentFields(config: PersistentConfig): string | null {
     }
   }
   return null;
+}
+
+function stripUtf8Bom(value: string): string {
+  return value.charCodeAt(0) === 0xFEFF ? value.slice(1) : value;
 }
 
 export function loadDaemonConfig(): DaemonConfig {
