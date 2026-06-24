@@ -77,6 +77,7 @@ Let Codex split and review work while MiMo performs bounded coding tasks through
 - P6.10 safe client Agent commands are complete in code and focused tests: `node --test tests\mimo-bridge-client.test.mjs` passed 24/24, and combined focused regression `node --test tests\mimo-bridge-client.test.mjs tests\agent-lifecycle-task.test.mjs tests\agent-get-wait-task.test.mjs tests\admin-api.test.mjs tests\stdio-protocol.test.mjs` passed 67/67 after root/local-daemon/admin-ui builds.
 - P6.10 live daemon smoke passed: `agent-list` returned ready MiMo and ready Reasonix TUI, and `agent-queue --agent-id reasonix-tui` returned an empty queue.
 - P6.11 safe client reply commands are complete in code and focused tests: `node --test tests\mimo-bridge-client.test.mjs` passed 26/26, and combined focused regression `node --test tests\mimo-bridge-client.test.mjs tests\agent-reply-task.test.mjs tests\agent-lifecycle-task.test.mjs tests\admin-api.test.mjs tests\stdio-protocol.test.mjs` passed 67/67 after root/local-daemon/admin-ui builds.
+- Latest P6.11 package build is complete: `npm.cmd run package:installer` produced `artifacts\MiMoBridgeSetup-win10-win11-x64.exe` (55,599,616 bytes) and ignored local `artifacts\MiMoBridge-portable-win10-win11-x64.zip` (55,636,480 bytes). `npm.cmd run validate:release -- -SkipPackageBuild` passed; installer self-test exit was 0 and release validation wrote ignored local `artifacts\release-validation.json`.
 
 ## Collaboration Needed
 

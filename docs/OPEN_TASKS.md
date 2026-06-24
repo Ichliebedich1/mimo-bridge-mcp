@@ -47,6 +47,7 @@
 - P6.9 generic agent lifecycle tools: added `agent_cancel_task`, `agent_finish_task`, `agent_merge_task`, `agent_delete_task`, and `agent_queue_status` to STDIO MCP and HTTP MCP. REST also supports `/api/agent-tasks/:id/cancel`, `/finish`, `/worktree`, `DELETE /api/agent-tasks/:id`, and `GET /api/agent-queue`. These wrap existing lifecycle behavior, enforce optional `agent_id` mismatch protection, and let Codex manage Reasonix tasks without calling `mimo_*` lifecycle tools. Verified with root/local-daemon/admin-ui builds, 43/43 focused tests, and 75/75 P6 regression.
 - P6.10 safe client Agent commands: scripted callers can now use `agent-start`, `agent-wait`, `agent-review`, `agent-finish`, `agent-merge`, `agent-delete`, and `agent-queue` for Reasonix or other agents without inline PowerShell/Node JSON. Verified with `node --test tests\mimo-bridge-client.test.mjs` passing 24/24 and combined focused regression passing 67/67.
 - P6.11 safe client reply commands: scripted callers can now use `reply` and `agent-reply` for MiMo/Reasonix follow-up messages without inline shell JSON. Verified with `node --test tests\mimo-bridge-client.test.mjs` passing 26/26 and combined focused regression passing 67/67.
+- P6.11 package build/validation: `npm.cmd run package:installer` produced the updated tracked installer exe and ignored local portable zip; `npm.cmd run validate:release -- -SkipPackageBuild` passed with installer self-test exit 0.
 ## Risks
 
 - The on-demand development Scheduled Task is not the final launcher or installer behavior.
@@ -61,7 +62,7 @@
 1. Use `mimo_wait_task` for all later MiMo work instead of repeated polling.
 2. After any interrupted MiMo wait or context compression, run `node scripts\mimo-bridge-client.mjs recover --limit 5 --max-chars 8000` before starting new work. If it returns 404, rebuild/restart the local daemon so it loads the recovery-inbox code.
 3. Validate the launcher and installer on clean Windows 10/11 x64 machines and after reboot/logon.
-4. Keep portable ZIP and EXE installer validation in the release checklist.
+4. Keep portable ZIP and EXE installer validation in the release checklist; latest local validation passed after P6.11, but clean-machine manual validation is still separate.
 5. Continue P6 with the design in `docs/modules/multi-agent-dispatch.md` and `docs/modules/reasonix-tui-adapter.md`: next slices are deeper MiMo adapter migration behind generic tools, direct Reasonix GUI shared-session opening if stable support exists, and final package rebuild/release validation.
 6. Use `scripts/mimo-bridge-client.mjs` or `.ps1` for scripted agent-to-bridge calls; use `agent-*` commands for Reasonix/multi-agent work and do not return to inline JSON in PowerShell.
 7. When using `mimo_wait_task` from an MCP SDK script outside the safe client, pass request options such as `{ timeout: (timeout_seconds + 20) * 1000 }` to avoid client-side timeout. See `docs/modules/low-token-wait.md` for the 1800/3600s examples.
