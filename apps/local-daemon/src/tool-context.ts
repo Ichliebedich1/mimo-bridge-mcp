@@ -9,6 +9,7 @@ import { createStartTaskHandler } from "../../../src/tools/start-task.js";
 import { createTokenStatusHandler } from "../../../src/tools/token-status.js";
 import { createDeleteTaskHandler } from "../../../src/tools/delete-task.js";
 import { createWaitTaskHandler } from "../../../src/tools/wait-task.js";
+import { createPendingReviewsHandler } from "../../../src/tools/pending-reviews.js";
 import type { DaemonConfig } from "./daemon-config.js";
 
 type UnavailableHandler = {
@@ -24,6 +25,7 @@ export interface ToolContext {
     startTask: ReturnType<typeof createStartTaskHandler> | UnavailableHandler;
     getTask: ReturnType<typeof createGetTaskHandler>;
     waitTask: ReturnType<typeof createWaitTaskHandler>;
+    pendingReviews: ReturnType<typeof createPendingReviewsHandler>;
     replyTask: ReturnType<typeof createReplyTaskHandler> | UnavailableHandler;
     cancelTask: ReturnType<typeof createCancelTaskHandler>;
     finishTask: ReturnType<typeof createFinishTaskHandler>;
@@ -38,6 +40,7 @@ export function createToolContext(config: DaemonConfig): ToolContext {
   const taskStore = new TaskStore(config.runtimeDir);
   const getTask = createGetTaskHandler(taskStore);
   const waitTask = createWaitTaskHandler(taskStore);
+  const pendingReviews = createPendingReviewsHandler(taskStore);
   const cancelTask = createCancelTaskHandler(taskStore);
   const finishTask = createFinishTaskHandler(taskStore);
   const listTasks = createListTasksHandler(taskStore);
@@ -55,6 +58,7 @@ export function createToolContext(config: DaemonConfig): ToolContext {
       startTask: config.mcpConfig ? createStartTaskHandler(config.mcpConfig, taskStore) : unavailable,
       getTask,
       waitTask,
+      pendingReviews,
       replyTask: config.mcpConfig ? createReplyTaskHandler(config.mcpConfig, taskStore) : unavailable,
       cancelTask,
       finishTask,

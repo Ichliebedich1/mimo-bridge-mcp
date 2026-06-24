@@ -5,6 +5,7 @@ import { readJsonBody, sendJson } from "./http-utils.js";
 import type { DaemonConfig } from "./daemon-config.js";
 import type { ToolContext } from "./tool-context.js";
 import { readLiveTaskView, parseLiveParams } from "./live-task-view.js";
+import { getPendingReviewCount } from "../../../src/services/pending-reviews.js";
 
 const StartTaskBodySchema = z.object({
   objective: z.string().min(1),
@@ -19,6 +20,9 @@ const StartTaskBodySchema = z.object({
   scope_mode: z.enum(["strict", "suggested", "repo-wide"]).default("strict"),
   include_tests: z.enum(["auto", "always", "never"]).default("auto"),
   repo_wide_confirmed: z.boolean().default(false),
+  origin_codex_thread_id: z.string().optional(),
+  origin_codex_thread_url: z.string().optional(),
+  origin_source: z.string().optional(),
 });
 
 const ReplyBodySchema = z.object({
@@ -66,6 +70,15 @@ export async function handleAdminApi(
       const limit = parseLimit(url.searchParams.get("limit"));
       const data = await context.tools.listTasks.handler({ limit });
       sendJson(res, 200, wrapToolResult(augmentListTasksResult(data, context)));
+      return true;
+    }
+
+    if (req.method === "GET" && url.pathname === "/api/pending-reviews") {
+      const data = await context.tools.pendingReviews.handler({
+        limit: parseLimit(url.searchParams.get("limit")),
+        max_chars: parseMaxChars(url.searchParams.get("max_chars")),
+      });
+      sendJson(res, 200, wrapToolResult(data));
       return true;
     }
 
@@ -197,6 +210,10 @@ function getHealth(config: DaemonConfig, context: ToolContext) {
       version: config.mimoVersion,
     },
     queue,
+    pending_reviews: {
+      count: getPendingReviewCount(context.taskStore),
+      command: "node scripts\\mimo-bridge-client.mjs recover",
+    },
     security: {
       localhost_only: true,
       arbitrary_tool_proxy: false,
@@ -211,6 +228,14 @@ function parseLimit(raw: string | null): number {
     return 20;
   }
   return Math.min(value, 50);
+}
+
+function parseMaxChars(raw: string | null): number {
+  const value = raw ? Number(raw) : 8000;
+  if (!Number.isInteger(value) || value < 1000) {
+    return 8000;
+  }
+  return Math.min(value, 20000);
 }
 
 function parseTaskQuery(params: URLSearchParams): Record<string, unknown> {
@@ -279,6 +304,9 @@ function augmentListTasksResult(data: unknown, context: ToolContext): unknown {
         can_delete: safeDelete.can_delete,
         delete_blockers: safeDelete.delete_blockers,
         delete_label: safeDelete.delete_label,
+        origin_codex_thread_id: stored.config.origin_codex_thread_id ?? null,
+        origin_codex_thread_url: stored.config.origin_codex_thread_url ?? null,
+        origin_source: stored.config.origin_source ?? null,
       };
     }),
   };
@@ -307,6 +335,9 @@ function augmentTaskResult(data: unknown, context: ToolContext): unknown {
     can_delete: safeDelete.can_delete,
     delete_blockers: safeDelete.delete_blockers,
     delete_label: safeDelete.delete_label,
+    origin_codex_thread_id: stored.config.origin_codex_thread_id ?? null,
+    origin_codex_thread_url: stored.config.origin_codex_thread_url ?? null,
+    origin_source: stored.config.origin_source ?? null,
   };
 }
 

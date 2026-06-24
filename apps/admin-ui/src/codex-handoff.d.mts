@@ -5,14 +5,25 @@ export type CodexHandoffTask = {
   status?: string;
   title?: string;
   objective?: string;
+  originCodexThreadId?: string | null;
+  originCodexThreadUrl?: string | null;
 };
 
 export type CodexHandoffResult = {
   copied: boolean;
   prompt: string;
-  url: typeof CODEX_NEW_THREAD_URL;
+  url: string;
   error: string | null;
 };
+
+export function isSafeCodexThreadUrl(url: unknown): boolean;
+
+export function buildCodexThreadUrl(threadId: string): string | null;
+
+export function resolveCodexHandoffUrl(
+  originThreadId?: string | null,
+  originThreadUrl?: string | null,
+): string;
 
 export function buildCodexReviewPrompt(task: CodexHandoffTask): string;
 

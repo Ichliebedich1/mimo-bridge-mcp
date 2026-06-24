@@ -21,7 +21,7 @@ import {
   type HealthResponse,
   type QueueStatusResponse,
 } from './api';
-import { CODEX_NEW_THREAD_URL, copyCodexReviewPrompt } from './codex-handoff.mjs';
+import { CODEX_NEW_THREAD_URL, copyCodexReviewPrompt, resolveCodexHandoffUrl } from './codex-handoff.mjs';
 import type {
   ChangedFile,
   CreateTaskInput,
@@ -832,8 +832,11 @@ function TaskDetailPage({
     setHandoffMessage(null);
     const result = await copyCodexReviewPrompt(task, writeClipboardText);
     setHandoffPrompt(result.prompt);
+    const returningToThread = result.url !== CODEX_NEW_THREAD_URL;
     if (result.copied) {
-      setHandoffMessage('交接指令已复制，并已请求打开 Codex 新会话。请在 Codex 中粘贴并发送。');
+      setHandoffMessage(returningToThread
+        ? '交接指令已复制，并已请求回到原 Codex 线程。请在 Codex 中粘贴并发送。'
+        : '交接指令已复制，并已请求打开 Codex 新会话。请在 Codex 中粘贴并发送。');
       return;
     }
     setLocalError('无法自动复制交接指令。Codex 仍会尝试打开，请在下方手动复制指令。');
@@ -963,13 +966,13 @@ function TaskDetailPage({
           <div className="action-stack">
             <a
               className="button soft codex-handoff"
-              href={CODEX_NEW_THREAD_URL}
+              href={resolveCodexHandoffUrl(task.originCodexThreadId, task.originCodexThreadUrl)}
               onClick={() => void handoffToCodex()}
               role="button"
             >
-              交给 Codex 审查
+              {task.originCodexThreadId ? '回到原 Codex 线程审查' : '交给 Codex 审查'}
             </a>
-            <span className="action-helper">复制低上下文审查指令，并打开 Codex 新会话。</span>
+            <span className="action-helper">{task.originCodexThreadId ? '复制低上下文审查指令，并回到发起任务的 Codex 线程。' : '复制低上下文审查指令，并打开 Codex 新会话。'}</span>
             <button className="button soft live-viewer-btn" onClick={() => setShowLiveViewer(true)} type="button">
               实时运行查看
             </button>

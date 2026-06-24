@@ -193,6 +193,22 @@ async function reviewOperation({ args, baseUrl }) {
   }));
 }
 
+async function recoverOperation({ args, baseUrl }) {
+  const params = new URLSearchParams({
+    limit: String(args.limit || 10),
+    max_chars: String(args["max-chars"] || args.max_chars || 8000),
+  });
+  const response = await fetchJson(baseUrl, `/api/pending-reviews?${params}`);
+  return normalizeRestEnvelope("recover", response, (data) => ({
+    pending_count: data.pending_count ?? 0,
+    returned_count: data.returned_count ?? 0,
+    truncated: Boolean(data.truncated),
+    tasks: data.tasks ?? [],
+    next_review_command: data.next_review_command ?? null,
+    recovery_note: data.recovery_note,
+  }));
+}
+
 async function waitOperation({ args, baseUrl, waitForTaskImpl }) {
   const taskId = String(args["task-id"] || args.task_id || "");
   if (!taskId) {
@@ -286,6 +302,7 @@ function helpOperation() {
       "node scripts/mimo-bridge-client.mjs wait --task-id task_xxx --timeout-seconds 1800",
       "node scripts/mimo-bridge-client.mjs start-and-wait --json .\\runtime\\client-requests\\task.json --timeout-seconds 1800",
       "node scripts/mimo-bridge-client.mjs review --task-id task_xxx --detail-level review --max-chars 8000",
+      "node scripts/mimo-bridge-client.mjs recover --limit 10 --max-chars 8000",
     ],
   });
 }
@@ -307,6 +324,9 @@ export async function run(argv = process.argv.slice(2), options = {}) {
       return startAndWaitOperation({ args, baseUrl, stdin, waitForTaskImpl });
     case "review":
       return reviewOperation({ args, baseUrl, stdin });
+    case "recover":
+    case "pending-reviews":
+      return recoverOperation({ args, baseUrl, stdin });
     case "":
     case "help":
     case "--help":

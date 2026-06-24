@@ -13,6 +13,7 @@ import { createMergeTaskHandler } from "./tools/merge-task.js";
 import { createTokenStatusHandler } from "./tools/token-status.js";
 import { createDeleteTaskHandler } from "./tools/delete-task.js";
 import { createWaitTaskHandler } from "./tools/wait-task.js";
+import { createPendingReviewsHandler } from "./tools/pending-reviews.js";
 
 async function main() {
   const config = loadConfig();
@@ -26,6 +27,7 @@ async function main() {
   const startTask = createStartTaskHandler(config, taskStore);
   const getTask = createGetTaskHandler(taskStore);
   const waitTask = createWaitTaskHandler(taskStore);
+  const pendingReviews = createPendingReviewsHandler(taskStore);
   const replyTask = createReplyTaskHandler(config, taskStore);
   const cancelTask = createCancelTaskHandler(taskStore);
   const finishTask = createFinishTaskHandler(taskStore);
@@ -136,6 +138,18 @@ async function main() {
     {},
     async () => {
       const result = startTask.getQueueStatus();
+      return {
+        content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+      };
+    }
+  );
+
+  server.tool(
+    "mimo_pending_reviews",
+    "低上下文恢复入口：列出已经完成、正在等待 Codex 审查的 MiMo 任务",
+    pendingReviews.schema.shape,
+    async (params) => {
+      const result = await pendingReviews.handler(params);
       return {
         content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
       };

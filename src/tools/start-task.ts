@@ -30,6 +30,9 @@ export const StartTaskSchema = z.object({
   scope_mode: z.enum(["strict", "suggested", "repo-wide"]).default("strict"),
   include_tests: z.enum(["auto", "always", "never"]).default("auto"),
   repo_wide_confirmed: z.boolean().default(false),
+  origin_codex_thread_id: z.string().optional(),
+  origin_codex_thread_url: z.string().optional(),
+  origin_source: z.string().optional(),
 });
 
 export type StartTaskInput = z.infer<typeof StartTaskSchema>;
@@ -171,6 +174,9 @@ export function createStartTaskHandler(
         max_rounds: input.max_rounds,
         runtime_timeout_seconds: input.runtime_timeout_seconds,
         scope: scopeResult.snapshot,
+        origin_codex_thread_id: input.origin_codex_thread_id,
+        origin_codex_thread_url: input.origin_codex_thread_url,
+        origin_source: input.origin_source,
       });
 
       let worktreePath = input.workspace_path;

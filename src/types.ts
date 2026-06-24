@@ -33,6 +33,9 @@ export interface TaskConfig {
   max_rounds: number;
   runtime_timeout_seconds: number;
   scope?: TaskScopeSnapshot;
+  origin_codex_thread_id?: string;
+  origin_codex_thread_url?: string;
+  origin_source?: string;
 }
 
 export interface WorktreeState {
@@ -169,6 +172,9 @@ export interface StartTaskInput {
   scope_mode?: ScopeMode;
   include_tests?: IncludeTestsMode;
   repo_wide_confirmed?: boolean;
+  origin_codex_thread_id?: string;
+  origin_codex_thread_url?: string;
+  origin_source?: string;
 }
 
 export interface GetTaskInput {

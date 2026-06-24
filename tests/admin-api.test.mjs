@@ -8,6 +8,7 @@ import { join } from "node:path";
 import { handleAdminApi } from "../apps/local-daemon/dist/apps/local-daemon/src/admin-api.js";
 import { TaskStore } from "../dist/services/task-store.js";
 import { createDeleteTaskHandler } from "../dist/tools/delete-task.js";
+import { createPendingReviewsHandler } from "../dist/tools/pending-reviews.js";
 
 function createMockReq(method, body = undefined) {
   const req = new EventEmitter();
@@ -160,6 +161,7 @@ function createContext() {
           return input.reset ? { status: "reset" } : { status: "ok", used: { input_tokens: 0 } };
         },
       },
+      pendingReviews: createPendingReviewsHandler(taskStore),
       deleteTask: createDeleteTaskHandler(taskStore),
     },
   };
@@ -183,6 +185,39 @@ test("admin API exposes fixed routes, augments safe task fields, and sanitizes l
     assert.strictEqual(detail.body.data.has_worktree, true);
     assert.strictEqual(JSON.stringify(detail.body).includes("workspace_path"), false);
     assert.strictEqual(JSON.stringify(detail.body).includes("sensitive"), false);
+  } finally {
+    fixture.cleanup();
+  }
+});
+
+test("admin API health reports pending review count", async () => {
+  const fixture = createContext();
+  try {
+    const result = await callApi(fixture.context, "GET", "/api/health");
+    assert.strictEqual(result.statusCode, 200);
+    assert.strictEqual(result.body.ok, true);
+    assert.strictEqual(result.body.data.pending_reviews.count, 1);
+    assert.match(result.body.data.pending_reviews.command, /recover/);
+  } finally {
+    fixture.cleanup();
+  }
+});
+
+test("admin API exposes bounded pending reviews recovery inbox", async () => {
+  const fixture = createContext();
+  try {
+    const result = await callApi(fixture.context, "GET", "/api/pending-reviews?limit=5&max_chars=4000");
+    assert.strictEqual(result.statusCode, 200);
+    assert.strictEqual(result.body.ok, true);
+    assert.strictEqual(result.body.data.pending_count, 1);
+    assert.strictEqual(result.body.data.returned_count, 1);
+    assert.strictEqual(result.body.data.tasks[0].task_id, fixture.taskId);
+    assert.strictEqual(result.body.data.tasks[0].status, "review");
+    assert.match(result.body.data.tasks[0].review_command, new RegExp(fixture.taskId));
+    const serialized = JSON.stringify(result.body);
+    assert.strictEqual(serialized.includes("raw_log_path"), false);
+    assert.strictEqual(serialized.includes("stderr_log_path"), false);
+    assert.strictEqual(serialized.includes("worktree_path"), false);
   } finally {
     fixture.cleanup();
   }
@@ -508,6 +543,68 @@ test("admin API defaults scope fields when not provided", async () => {
     assert.strictEqual(captured[1].scope_mode, "strict");
     assert.strictEqual(captured[1].include_tests, "auto");
     assert.strictEqual(captured[1].repo_wide_confirmed, false);
+  } finally {
+    fixture.cleanup();
+  }
+});
+
+test("admin API accepts origin_codex_thread_id, origin_codex_thread_url, and origin_source in POST /api/tasks", async () => {
+  const fixture = createContext();
+  try {
+    const result = await callApi(fixture.context, "POST", "/api/tasks", {
+      objective: "origin test",
+      workspace_path: "C:\\sensitive\\workspace",
+      origin_codex_thread_id: "thread-abc-123",
+      origin_codex_thread_url: "codex://threads/thread-abc-123",
+      origin_source: "codex",
+    });
+    assert.strictEqual(result.statusCode, 200);
+    const captured = fixture.calls.find(([name]) => name === "startTask");
+    assert.ok(captured);
+    assert.strictEqual(captured[1].origin_codex_thread_id, "thread-abc-123");
+    assert.strictEqual(captured[1].origin_codex_thread_url, "codex://threads/thread-abc-123");
+    assert.strictEqual(captured[1].origin_source, "codex");
+  } finally {
+    fixture.cleanup();
+  }
+});
+
+test("admin API returns origin fields as null when not provided in task creation", async () => {
+  const fixture = createContext();
+  try {
+    const result = await callApi(fixture.context, "GET", "/api/tasks/" + fixture.taskId + "?detail_level=review&max_chars=8000");
+    assert.strictEqual(result.statusCode, 200);
+    assert.strictEqual(result.body.data.origin_codex_thread_id, null);
+    assert.strictEqual(result.body.data.origin_codex_thread_url, null);
+    assert.strictEqual(result.body.data.origin_source, null);
+  } finally {
+    fixture.cleanup();
+  }
+});
+
+test("admin API list includes origin fields for tasks with origin info", async () => {
+  const fixture = createContext();
+  try {
+    const taskWithOrigin = fixture.context.taskStore.createTask({
+      objective: "task with origin",
+      workspace_path: "C:\\workspace",
+      editable_paths: [],
+      readonly_paths: [],
+      acceptance_criteria: [],
+      max_rounds: 1,
+      runtime_timeout_seconds: 60,
+      origin_codex_thread_id: "origin-thread-id",
+      origin_codex_thread_url: "codex://threads/origin-thread-id",
+      origin_source: "codex",
+    });
+
+    const result = await callApi(fixture.context, "GET", "/api/tasks?limit=20");
+    assert.strictEqual(result.statusCode, 200);
+    const task = result.body.data.tasks.find((t) => t.task_id === taskWithOrigin.task_id);
+    assert.ok(task);
+    assert.strictEqual(task.origin_codex_thread_id, "origin-thread-id");
+    assert.strictEqual(task.origin_codex_thread_url, "codex://threads/origin-thread-id");
+    assert.strictEqual(task.origin_source, "codex");
   } finally {
     fixture.cleanup();
   }

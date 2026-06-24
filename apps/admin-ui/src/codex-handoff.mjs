@@ -1,5 +1,32 @@
 export const CODEX_NEW_THREAD_URL = "codex://threads/new";
 
+const SAFE_THREAD_ID_RE = /^[a-zA-Z0-9_-]+$/;
+const CODEX_THREAD_URL_RE = /^codex:\/\/threads\/([a-zA-Z0-9_-]+)$/;
+const MAX_THREAD_ID_LENGTH = 128;
+
+export function isSafeCodexThreadUrl(url) {
+  if (typeof url !== "string" || !url) return false;
+  if (url === CODEX_NEW_THREAD_URL) return true;
+  const match = CODEX_THREAD_URL_RE.exec(url);
+  return match !== null && match[1].length <= MAX_THREAD_ID_LENGTH;
+}
+
+export function buildCodexThreadUrl(threadId) {
+  if (typeof threadId !== "string" || !threadId) return null;
+  if (threadId.length > MAX_THREAD_ID_LENGTH) return null;
+  if (!SAFE_THREAD_ID_RE.test(threadId)) return null;
+  return "codex://threads/" + threadId;
+}
+
+export function resolveCodexHandoffUrl(originThreadId, originThreadUrl) {
+  const directUrl = buildCodexThreadUrl(originThreadId);
+  if (directUrl) return directUrl;
+  if (typeof originThreadUrl === "string" && isSafeCodexThreadUrl(originThreadUrl)) {
+    return originThreadUrl;
+  }
+  return CODEX_NEW_THREAD_URL;
+}
+
 export function buildCodexReviewPrompt(task) {
   const title = String(task.title || task.objective || task.id).trim();
   const objective = String(task.objective || task.title || "未提供目标").trim();
@@ -22,14 +49,15 @@ export function buildCodexReviewPrompt(task) {
 
 export async function copyCodexReviewPrompt(task, writeText) {
   const prompt = buildCodexReviewPrompt(task);
+  const url = resolveCodexHandoffUrl(task.originCodexThreadId, task.originCodexThreadUrl);
   try {
     await writeText(prompt);
-    return { copied: true, prompt, url: CODEX_NEW_THREAD_URL, error: null };
+    return { copied: true, prompt, url, error: null };
   } catch (error) {
     return {
       copied: false,
       prompt,
-      url: CODEX_NEW_THREAD_URL,
+      url,
       error: error instanceof Error ? error.message : String(error),
     };
   }

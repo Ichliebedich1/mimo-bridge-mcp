@@ -91,6 +91,7 @@ function createMcpServer(context: ToolContext): McpServer {
   registerJsonTool(server, "mimo_cancel_task", "终止运行中的 MiMo 任务或取消队列中的任务", context.tools.cancelTask);
   registerJsonTool(server, "mimo_finish_task", "标记任务为验收通过或放弃", context.tools.finishTask);
   registerJsonTool(server, "mimo_list_tasks", "列出最近的任务及状态", context.tools.listTasks);
+  registerJsonTool(server, "mimo_pending_reviews", "低上下文恢复入口：列出已经完成、正在等待 Codex 审查的 MiMo 任务", context.tools.pendingReviews);
   registerJsonTool(server, "mimo_merge_task", "合并或丢弃任务的 Worktree 修改", context.tools.mergeTask);
   server.tool("mimo_queue_status", "查询任务队列状态", {}, async () => {
     const startTask = context.tools.startTask;

@@ -65,6 +65,9 @@ type ListTasksResponse = {
     can_delete?: boolean;
     delete_blockers?: string[];
     delete_label?: string;
+    origin_codex_thread_id?: string | null;
+    origin_codex_thread_url?: string | null;
+    origin_source?: string | null;
   }>;
 };
 
@@ -129,6 +132,9 @@ type GetTaskResponse = {
     error?: string;
   }>;
   task?: unknown;
+  origin_codex_thread_id?: string | null;
+  origin_codex_thread_url?: string | null;
+  origin_source?: string | null;
 };
 
 type TokenStatusResponse = unknown;
@@ -368,6 +374,9 @@ function toUiTask(task: ListTasksResponse['tasks'][number]): Task {
     deleteBlockers: task.delete_blockers ?? [],
     deleteLabel: task.delete_label ?? '不可删除',
     source: 'api',
+    originCodexThreadId: task.origin_codex_thread_id ?? null,
+    originCodexThreadUrl: task.origin_codex_thread_url ?? null,
+    originSource: task.origin_source ?? null,
   };
 }
 
@@ -395,6 +404,9 @@ function detailToUiTask(response: GetTaskResponse): Task {
       deleteBlockers: response.delete_blockers ?? [],
       deleteLabel: response.delete_label ?? '不可删除',
       source: 'api',
+      originCodexThreadId: response.origin_codex_thread_id ?? null,
+      originCodexThreadUrl: response.origin_codex_thread_url ?? null,
+      originSource: response.origin_source ?? null,
     };
   }
 
@@ -429,6 +441,9 @@ function detailToUiTask(response: GetTaskResponse): Task {
     deleteBlockers: response.delete_blockers ?? [],
     deleteLabel: response.delete_label ?? '不可删除',
     source: 'api',
+    originCodexThreadId: response.origin_codex_thread_id ?? null,
+    originCodexThreadUrl: response.origin_codex_thread_url ?? null,
+    originSource: response.origin_source ?? null,
   };
 }
 

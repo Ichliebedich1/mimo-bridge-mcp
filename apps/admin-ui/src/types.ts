@@ -50,6 +50,9 @@ export type Task = {
   deleteBlockers: string[];
   deleteLabel: string;
   source?: 'mock' | 'api';
+  originCodexThreadId?: string | null;
+  originCodexThreadUrl?: string | null;
+  originSource?: string | null;
 };
 
 export type QueueItem = {
