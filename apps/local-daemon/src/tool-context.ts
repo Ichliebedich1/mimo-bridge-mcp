@@ -10,6 +10,8 @@ import { createTokenStatusHandler } from "../../../src/tools/token-status.js";
 import { createDeleteTaskHandler } from "../../../src/tools/delete-task.js";
 import { createWaitTaskHandler } from "../../../src/tools/wait-task.js";
 import { createPendingReviewsHandler } from "../../../src/tools/pending-reviews.js";
+import { createAgentRegistry } from "../../../src/services/agent-registry.js";
+import { createAgentListHandler } from "../../../src/tools/agent-list.js";
 import type { DaemonConfig } from "./daemon-config.js";
 
 type UnavailableHandler = {
@@ -26,6 +28,7 @@ export interface ToolContext {
     getTask: ReturnType<typeof createGetTaskHandler>;
     waitTask: ReturnType<typeof createWaitTaskHandler>;
     pendingReviews: ReturnType<typeof createPendingReviewsHandler>;
+    agentList: ReturnType<typeof createAgentListHandler>;
     replyTask: ReturnType<typeof createReplyTaskHandler> | UnavailableHandler;
     cancelTask: ReturnType<typeof createCancelTaskHandler>;
     finishTask: ReturnType<typeof createFinishTaskHandler>;
@@ -41,6 +44,12 @@ export function createToolContext(config: DaemonConfig): ToolContext {
   const getTask = createGetTaskHandler(taskStore);
   const waitTask = createWaitTaskHandler(taskStore);
   const pendingReviews = createPendingReviewsHandler(taskStore);
+  const agentRegistry = createAgentRegistry({
+    agents: config.agents,
+    mcpConfig: config.mcpConfig,
+    mimoVersion: config.mimoVersion,
+  });
+  const agentList = createAgentListHandler(agentRegistry);
   const cancelTask = createCancelTaskHandler(taskStore);
   const finishTask = createFinishTaskHandler(taskStore);
   const listTasks = createListTasksHandler(taskStore);
@@ -59,6 +68,7 @@ export function createToolContext(config: DaemonConfig): ToolContext {
       getTask,
       waitTask,
       pendingReviews,
+      agentList,
       replyTask: config.mcpConfig ? createReplyTaskHandler(config.mcpConfig, taskStore) : unavailable,
       cancelTask,
       finishTask,

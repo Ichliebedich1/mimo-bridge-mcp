@@ -1,6 +1,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { checkMimoVersion, type Config, type MimoVersion } from "../../../src/config.js";
+import type { AgentConfig } from "../../../src/types.js";
 
 export interface DaemonConfig {
   host: "127.0.0.1";
@@ -8,6 +9,7 @@ export interface DaemonConfig {
   runtimeDir: string;
   mcpConfig: Config | null;
   mimoVersion: MimoVersion | null;
+  agents: AgentConfig[];
   configError: string | null;
 }
 
@@ -17,6 +19,7 @@ export interface PersistentConfig {
   allowedRoots?: string[];
   runtimeDir?: string;
   port?: number;
+  agents?: AgentConfig[];
 }
 
 export function getDefaultConfigPath(): string {
@@ -77,6 +80,45 @@ function validatePersistentFields(config: PersistentConfig): string | null {
   if (process.env.MIMO_DAEMON_PORT === undefined && config.port !== undefined && (typeof config.port !== "number" || !Number.isInteger(config.port))) {
     return "配置文件 port 必须是整数";
   }
+  if (config.agents !== undefined) {
+    if (!Array.isArray(config.agents)) {
+      return "配置文件 agents 必须是数组";
+    }
+    for (const agent of config.agents) {
+      if (typeof agent !== "object" || agent === null || Array.isArray(agent)) {
+        return "配置文件 agents 的每一项必须是对象";
+      }
+      const item = agent as unknown as Record<string, unknown>;
+      if (typeof item.id !== "string" || item.id.length === 0) {
+        return "配置文件 agents 每一项必须有字符串 id";
+      }
+      if (typeof item.kind !== "string" || item.kind.length === 0) {
+        return "配置文件 agents 每一项必须有字符串 kind";
+      }
+      if (item.display_name !== undefined && typeof item.display_name !== "string") {
+        return "配置文件 agents.display_name 必须是字符串";
+      }
+      if (item.enabled !== undefined && typeof item.enabled !== "boolean") {
+        return "配置文件 agents.enabled 必须是布尔值";
+      }
+      if (item.command !== undefined && typeof item.command !== "string") {
+        return "配置文件 agents.command 必须是字符串";
+      }
+      if (item.command_args !== undefined) {
+        if (!Array.isArray(item.command_args) || item.command_args.some((arg) => typeof arg !== "string")) {
+          return "配置文件 agents.command_args 必须是字符串数组";
+        }
+      }
+      if (item.home_dir !== undefined && typeof item.home_dir !== "string") {
+        return "配置文件 agents.home_dir 必须是字符串";
+      }
+      if (item.models !== undefined) {
+        if (!Array.isArray(item.models) || item.models.some((model) => typeof model !== "string")) {
+          return "配置文件 agents.models 必须是字符串数组";
+        }
+      }
+    }
+  }
   return null;
 }
 
@@ -105,6 +147,7 @@ export function loadDaemonConfig(): DaemonConfig {
   const mimoNodePath = process.env.MIMO_NODE_PATH || persistent?.mimoNodePath;
   const mimoEntryPath = process.env.MIMO_ENTRY_PATH || persistent?.mimoEntryPath;
   const allowedRoots = resolveArrayField(process.env.MIMO_ALLOWED_ROOTS, persistent?.allowedRoots);
+  const agents = resolveAgentConfigs(persistent?.agents);
 
   let mcpConfig: Config | null = null;
   let mimoVersion: MimoVersion | null = null;
@@ -128,6 +171,7 @@ export function loadDaemonConfig(): DaemonConfig {
           mimoEntryPath,
           allowedRoots,
           runtimeDir,
+          agents,
         };
       } catch {
         configError = "MiMo 版本检查失败";
@@ -141,7 +185,39 @@ export function loadDaemonConfig(): DaemonConfig {
     runtimeDir,
     mcpConfig,
     mimoVersion,
+    agents,
     configError,
+  };
+}
+
+function resolveAgentConfigs(persisted: AgentConfig[] | undefined): AgentConfig[] {
+  const agents = Array.isArray(persisted) ? persisted.map(normalizeAgentConfig).filter((agent): agent is AgentConfig => agent !== null) : [];
+  if (!agents.some((agent) => agent.id === "mimo")) {
+    agents.unshift({
+      id: "mimo",
+      kind: "mimo",
+      display_name: "MiMo Code",
+      enabled: true,
+    });
+  }
+  return agents;
+}
+
+function normalizeAgentConfig(input: AgentConfig): AgentConfig | null {
+  if (!input || typeof input.id !== "string" || typeof input.kind !== "string") {
+    return null;
+  }
+  return {
+    id: input.id,
+    kind: input.kind,
+    display_name: input.display_name || input.id,
+    enabled: input.enabled !== false,
+    command: input.command,
+    command_args: Array.isArray(input.command_args) ? input.command_args.filter((arg) => typeof arg === "string") : undefined,
+    home_dir: input.home_dir,
+    default_model: input.default_model,
+    models: Array.isArray(input.models) ? input.models.filter((model) => typeof model === "string") : undefined,
+    max_steps: typeof input.max_steps === "number" && Number.isInteger(input.max_steps) ? input.max_steps : undefined,
   };
 }
 

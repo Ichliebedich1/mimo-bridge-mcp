@@ -10,6 +10,62 @@ export type TaskStatus =
 
 export type ScopeMode = "strict" | "suggested" | "repo-wide";
 export type IncludeTestsMode = "auto" | "always" | "never";
+export type AgentKind = "mimo" | "reasonix-tui" | "reasonix-gui" | "unknown";
+export type AgentStatus = "ready" | "disabled" | "missing" | "not_configured" | "error";
+
+export interface AgentConfig {
+  id: string;
+  kind: AgentKind;
+  display_name: string;
+  enabled: boolean;
+  command?: string;
+  command_args?: string[];
+  home_dir?: string;
+  default_model?: string;
+  models?: string[];
+  max_steps?: number;
+}
+
+export interface AgentCapabilityMap {
+  start_task: boolean;
+  wait_task: boolean;
+  review_package: boolean;
+  live_view: boolean;
+  reply_task: boolean;
+  token_usage: boolean;
+  worktree: boolean;
+}
+
+export interface AgentProbeResult {
+  id: string;
+  kind: AgentKind;
+  display_name: string;
+  enabled: boolean;
+  status: AgentStatus;
+  version: string | null;
+  default_model: string | null;
+  models: string[];
+  command_configured: boolean;
+  home_configured: boolean;
+  sessions: {
+    configured: boolean;
+    count: number | null;
+    bytes: number | null;
+  };
+  providers: Array<{
+    name: string;
+    kind: string | null;
+    models: string[];
+    key_present: boolean | null;
+    is_default: boolean | null;
+    context_window: number | null;
+  }>;
+  permission_mode: string | null;
+  sandbox_available: boolean | null;
+  capabilities: AgentCapabilityMap;
+  warnings: string[];
+  error: string | null;
+}
 
 export interface TaskScopeSnapshot {
   mode: ScopeMode;

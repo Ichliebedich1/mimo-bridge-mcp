@@ -9,6 +9,8 @@ import { handleAdminApi } from "../apps/local-daemon/dist/apps/local-daemon/src/
 import { TaskStore } from "../dist/services/task-store.js";
 import { createDeleteTaskHandler } from "../dist/tools/delete-task.js";
 import { createPendingReviewsHandler } from "../dist/tools/pending-reviews.js";
+import { createAgentRegistry } from "../dist/services/agent-registry.js";
+import { createAgentListHandler } from "../dist/tools/agent-list.js";
 
 function createMockReq(method, body = undefined) {
   const req = new EventEmitter();
@@ -50,9 +52,17 @@ async function callApi(context, method, path, body) {
       host: "127.0.0.1",
       port: 3210,
       runtimeDir: join(tmpdir(), "unused-runtime"),
-      mcpConfig: {},
+      mcpConfig: { agents: [] },
       configError: null,
       mimoVersion: { nodeVersion: "test", cliVersion: "test" },
+      agents: [
+        {
+          id: "mimo",
+          kind: "mimo",
+          display_name: "MiMo Code",
+          enabled: true,
+        },
+      ],
     },
     context
   );
@@ -86,6 +96,30 @@ function createContext() {
   });
 
   const calls = [];
+  const agentRegistry = createAgentRegistry({
+    agents: [
+      {
+        id: "mimo",
+        kind: "mimo",
+        display_name: "MiMo Code",
+        enabled: true,
+      },
+      {
+        id: "reasonix-tui",
+        kind: "reasonix-tui",
+        display_name: "Reasonix TUI",
+        enabled: true,
+      },
+    ],
+    mcpConfig: {
+      mimoNodePath: process.execPath,
+      mimoEntryPath: "fake-mimo.mjs",
+      allowedRoots: [runtimeDir],
+      runtimeDir,
+      agents: [],
+    },
+    mimoVersion: { nodeVersion: "node-test", cliVersion: "mimo-test" },
+  });
   const context = {
     taskStore,
     degraded: false,
@@ -162,6 +196,7 @@ function createContext() {
         },
       },
       pendingReviews: createPendingReviewsHandler(taskStore),
+      agentList: createAgentListHandler(agentRegistry),
       deleteTask: createDeleteTaskHandler(taskStore),
     },
   };
@@ -198,6 +233,26 @@ test("admin API health reports pending review count", async () => {
     assert.strictEqual(result.body.ok, true);
     assert.strictEqual(result.body.data.pending_reviews.count, 1);
     assert.match(result.body.data.pending_reviews.command, /recover/);
+    assert.ok(Array.isArray(result.body.data.agents.configured));
+    assert.strictEqual(result.body.data.agents.endpoint, "/api/agents");
+  } finally {
+    fixture.cleanup();
+  }
+});
+
+test("admin API exposes agent list without leaking command paths", async () => {
+  const fixture = createContext();
+  try {
+    const result = await callApi(fixture.context, "GET", "/api/agents");
+    assert.strictEqual(result.statusCode, 200);
+    assert.strictEqual(result.body.ok, true);
+    const mimo = result.body.data.agents.find((agent) => agent.id === "mimo");
+    const reasonix = result.body.data.agents.find((agent) => agent.id === "reasonix-tui");
+    assert.ok(mimo);
+    assert.strictEqual(mimo.status, "ready");
+    assert.ok(reasonix);
+    assert.strictEqual(reasonix.status, "not_configured");
+    assert.strictEqual(JSON.stringify(result.body).includes("mimoNodePath"), false);
   } finally {
     fixture.cleanup();
   }

@@ -1,12 +1,14 @@
 import { existsSync } from "node:fs";
 import { resolve } from "node:path";
 import { execFileSync } from "node:child_process";
+import type { AgentConfig } from "./types.js";
 
 export interface Config {
   mimoNodePath: string;
   mimoEntryPath: string;
   allowedRoots: string[];
   runtimeDir: string;
+  agents: AgentConfig[];
 }
 
 export interface MimoVersion {
@@ -49,6 +51,7 @@ export function loadConfig(): Config {
   const mimoEntryPath = process.env.MIMO_ENTRY_PATH;
   const allowedRoots = process.env.MIMO_ALLOWED_ROOTS?.split(";").filter(Boolean) || [];
   const runtimeDir = process.env.MIMO_RUNTIME_DIR || resolve(process.cwd(), "runtime");
+  const agents = loadAgentConfigsFromEnv();
 
   if (!mimoNodePath) {
     throw new Error("MIMO_NODE_PATH 环境变量未设置");
@@ -80,5 +83,38 @@ export function loadConfig(): Config {
     mimoEntryPath,
     allowedRoots,
     runtimeDir,
+    agents,
   };
+}
+
+function loadAgentConfigsFromEnv(): AgentConfig[] {
+  const agents: AgentConfig[] = [
+    {
+      id: "mimo",
+      kind: "mimo",
+      display_name: "MiMo Code",
+      enabled: true,
+    },
+  ];
+  const reasonixCommand = process.env.REASONIX_COMMAND;
+  if (reasonixCommand) {
+    agents.push({
+      id: "reasonix-tui",
+      kind: "reasonix-tui",
+      display_name: "Reasonix TUI",
+      enabled: process.env.REASONIX_ENABLED !== "false",
+      command: reasonixCommand,
+      home_dir: process.env.REASONIX_HOME,
+      default_model: process.env.REASONIX_DEFAULT_MODEL,
+      models: process.env.REASONIX_MODELS?.split(";").filter(Boolean),
+      max_steps: parseOptionalInt(process.env.REASONIX_MAX_STEPS),
+    });
+  }
+  return agents;
+}
+
+function parseOptionalInt(value: string | undefined): number | undefined {
+  if (!value) return undefined;
+  const parsed = Number(value);
+  return Number.isInteger(parsed) ? parsed : undefined;
 }

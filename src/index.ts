@@ -14,6 +14,8 @@ import { createTokenStatusHandler } from "./tools/token-status.js";
 import { createDeleteTaskHandler } from "./tools/delete-task.js";
 import { createWaitTaskHandler } from "./tools/wait-task.js";
 import { createPendingReviewsHandler } from "./tools/pending-reviews.js";
+import { createAgentRegistry } from "./services/agent-registry.js";
+import { createAgentListHandler } from "./tools/agent-list.js";
 
 async function main() {
   const config = loadConfig();
@@ -28,6 +30,12 @@ async function main() {
   const getTask = createGetTaskHandler(taskStore);
   const waitTask = createWaitTaskHandler(taskStore);
   const pendingReviews = createPendingReviewsHandler(taskStore);
+  const agentRegistry = createAgentRegistry({
+    agents: config.agents,
+    mcpConfig: config,
+    mimoVersion: null,
+  });
+  const agentList = createAgentListHandler(agentRegistry);
   const replyTask = createReplyTaskHandler(config, taskStore);
   const cancelTask = createCancelTaskHandler(taskStore);
   const finishTask = createFinishTaskHandler(taskStore);
@@ -150,6 +158,18 @@ async function main() {
     pendingReviews.schema.shape,
     async (params) => {
       const result = await pendingReviews.handler(params);
+      return {
+        content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+      };
+    }
+  );
+
+  server.tool(
+    "agent_list",
+    "列出可用执行 Agent，包括 MiMo 和 Reasonix TUI 探测状态",
+    agentList.schema.shape,
+    async (params) => {
+      const result = await agentList.handler(params);
       return {
         content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
       };

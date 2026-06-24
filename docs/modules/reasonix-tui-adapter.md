@@ -10,7 +10,27 @@ P6 should first adapt Reasonix TUI, not Reasonix GUI. The TUI adapter should run
 
 ## Current Status
 
-Planned.
+P6.0/P6.1 Agent discovery is implemented locally.
+
+Implemented:
+
+- `AgentConfig` / `AgentProbeResult` types.
+- `src/services/agent-registry.ts`.
+- `src/tools/agent-list.ts`.
+- MCP tool `agent_list`.
+- REST route `GET /api/agents`.
+- `GET /api/health` lightweight `agents.configured` summary.
+- Persistent config `agents[]` validation and normalization.
+- STDIO env config for `REASONIX_COMMAND`, `REASONIX_HOME`, `REASONIX_DEFAULT_MODEL`, `REASONIX_MODELS`, and `REASONIX_MAX_STEPS`.
+
+Not implemented yet:
+
+- `agent_start_task`.
+- Reasonix TUI task execution.
+- Reasonix Review Package generation.
+- Reasonix session mapping.
+- Agent-aware queue/path conflict scheduling.
+- Admin UI agent selector.
 
 Local discovery on this machine:
 
@@ -25,15 +45,26 @@ Local discovery on this machine:
   - `reasonix acp`
   - `reasonix doctor --json`
 - Reasonix documentation says CLI and desktop share Reasonix home/session storage.
+- Current real probe through Agent Registry returned:
+  - status: `ready`
+  - version: `dev`
+  - default model: `deepseek`
+  - sessions dir configured under `D:\DeepSeek-Reasonix\ReasonixData\sessions`
+  - permission mode: `ask`
+  - sandbox available: `false`
+  - `start_task` capability intentionally remains `false` until P6.2 is implemented.
 
-## Entry Files To Add
+## Entry Files Added
+
+- `src/services/agent-registry.ts`
+- `src/tools/agent-list.ts`
+
+## Entry Files To Add Next
 
 - `src/services/agent-runner.ts`
-- `src/services/agent-registry.ts`
 - `src/services/reasonix-tui-runner.ts`
 - `src/services/reasonix-event-parser.ts`
 - `src/services/reasonix-session-store.ts`
-- `src/tools/agent-list.ts`
 - `src/tools/agent-start-task.ts`
 - `src/tools/agent-get-task.ts`
 - `src/tools/agent-wait-task.ts`
@@ -111,6 +142,8 @@ Implement Reasonix health checks before running real tasks:
 
 Do not expose secrets. Use redacted `doctor --json` output only.
 
+Status: complete locally. Verified with fake Reasonix tests and a real local Reasonix probe.
+
 ### Phase 2: One-Shot Run
 
 Run a task with `reasonix run`:
@@ -167,6 +200,7 @@ Only after session mapping:
 
 ## Pending Work
 
+- Implement P6.2 Reasonix TUI one-shot runner.
 - Confirm exact Reasonix session JSONL shape with local fixture files.
 - Decide whether Bridge uses the user's existing `REASONIX_HOME` or a Bridge-managed Reasonix home.
 - Decide default Reasonix model for Bridge tasks.

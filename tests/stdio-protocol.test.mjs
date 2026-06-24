@@ -99,12 +99,12 @@ describe("STDIO MCP protocol", () => {
     }
   });
 
-  it("tools/list should return all 12 tools", async () => {
+  it("tools/list should return all 13 tools", async () => {
     const result = await sendRequest("tools/list");
 
     assert.ok(result.result);
     assert.ok(result.result.tools);
-    assert.strictEqual(result.result.tools.length, 12);
+    assert.strictEqual(result.result.tools.length, 13);
 
     const toolNames = result.result.tools.map((t) => t.name);
     assert.ok(toolNames.includes("mimo_start_task"));
@@ -116,6 +116,7 @@ describe("STDIO MCP protocol", () => {
     assert.ok(toolNames.includes("mimo_list_tasks"));
     assert.ok(toolNames.includes("mimo_pending_reviews"));
     assert.ok(toolNames.includes("mimo_merge_task"));
+    assert.ok(toolNames.includes("agent_list"));
     assert.ok(toolNames.includes("mimo_queue_status"));
     assert.ok(toolNames.includes("mimo_token_status"));
     assert.ok(toolNames.includes("mimo_delete_task"));
@@ -131,6 +132,21 @@ describe("STDIO MCP protocol", () => {
     const text = result.result.content[0].text;
     const parsed = JSON.parse(text);
     assert.ok(Array.isArray(parsed.tasks));
+  });
+
+  it("agent_list should return MiMo as a configured agent", async () => {
+    const result = await sendRequest("tools/call", {
+      name: "agent_list",
+      arguments: {},
+    });
+
+    assert.ok(result.result);
+    const text = result.result.content[0].text;
+    const parsed = JSON.parse(text);
+    const mimo = parsed.agents.find((agent) => agent.id === "mimo");
+    assert.ok(mimo);
+    assert.strictEqual(mimo.kind, "mimo");
+    assert.strictEqual(mimo.status, "ready");
   });
 
   it("mimo_get_task should return error for nonexistent task", async () => {

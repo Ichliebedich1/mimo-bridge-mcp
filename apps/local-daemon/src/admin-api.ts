@@ -66,6 +66,12 @@ export async function handleAdminApi(
       return true;
     }
 
+    if (req.method === "GET" && url.pathname === "/api/agents") {
+      const data = await context.tools.agentList.handler({});
+      sendJson(res, 200, wrapToolResult(data));
+      return true;
+    }
+
     if (req.method === "GET" && url.pathname === "/api/tasks") {
       const limit = parseLimit(url.searchParams.get("limit"));
       const data = await context.tools.listTasks.handler({ limit });
@@ -213,6 +219,14 @@ function getHealth(config: DaemonConfig, context: ToolContext) {
     pending_reviews: {
       count: getPendingReviewCount(context.taskStore),
       command: "node scripts\\mimo-bridge-client.mjs recover",
+    },
+    agents: {
+      configured: config.agents.map((agent) => ({
+        id: agent.id,
+        kind: agent.kind,
+        enabled: agent.enabled !== false,
+      })),
+      endpoint: "/api/agents",
     },
     security: {
       localhost_only: true,
