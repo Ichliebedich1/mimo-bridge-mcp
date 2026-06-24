@@ -4,7 +4,7 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { parseReasonixSessionLine, parseReasonixSessionTail } from "../dist/services/reasonix-event-parser.js";
+import { extractReasonixTokenUsageFromFile, parseReasonixSessionLine, parseReasonixSessionTail } from "../dist/services/reasonix-event-parser.js";
 
 function tmpDir() {
   return mkdtempSync(join(tmpdir(), "reasonix-events-"));
@@ -97,4 +97,59 @@ test("parseReasonixSessionTail handles missing files gracefully", () => {
     events: [],
     truncated: false,
   });
+});
+
+test("extractReasonixTokenUsageFromFile reads explicit usage fields only", () => {
+  const dir = tmpDir();
+  try {
+    const filePath = join(dir, "usage.jsonl");
+    writeFileSync(filePath, [
+      JSON.stringify({
+        role: "assistant",
+        content: "done",
+        usage: {
+          prompt_tokens: 120,
+          completion_tokens: 35,
+          total_tokens: 155,
+        },
+        cost: 0.0042,
+      }),
+      JSON.stringify({
+        role: "assistant",
+        content: "next",
+        tokens: {
+          input: 10,
+          output: 5,
+          reasoning: 3,
+          total: 18,
+        },
+      }),
+    ].join("\n") + "\n", "utf-8");
+
+    const usage = extractReasonixTokenUsageFromFile(filePath);
+    assert.strictEqual(usage.input_tokens, 130);
+    assert.strictEqual(usage.output_tokens, 43);
+    assert.strictEqual(usage.total_tokens, 173);
+    assert.strictEqual(usage.estimated_cost, 0.0042);
+    assert.strictEqual(usage.events_count, 2);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("extractReasonixTokenUsageFromFile does not invent token usage", () => {
+  const dir = tmpDir();
+  try {
+    const filePath = join(dir, "no-usage.jsonl");
+    writeFileSync(filePath, JSON.stringify({ role: "assistant", content: "no token fields here" }) + "\n", "utf-8");
+    assert.deepStrictEqual(extractReasonixTokenUsageFromFile(filePath), {
+      input_tokens: 0,
+      output_tokens: 0,
+      total_tokens: 0,
+      estimated_cost: null,
+      events_count: 0,
+    });
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 });

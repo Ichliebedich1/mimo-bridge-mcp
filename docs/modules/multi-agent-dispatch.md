@@ -22,7 +22,7 @@ Reasonix should eventually reach the same project role as MiMo:
 
 ## Current Status
 
-P6.0-P6.6 are partially implemented. The runtime now has an Agent Registry, Reasonix TUI probe, Reasonix one-shot runner, generic low-token task get/wait/reply tools, Reasonix session mapping through `agent_session_path`, a first Admin UI agent selector/badge/reply pass, an agent-aware queue that permits safe parallelism only for different agents editing non-overlapping paths, and Reasonix live/session parsing for the read-only live viewer. Existing `mimo_*` MCP tools remain compatible.
+P6.0-P6.8 are partially implemented. The runtime now has an Agent Registry, Reasonix TUI probe, Reasonix one-shot runner, generic low-token task get/wait/reply tools, Reasonix session mapping through `agent_session_path`, a first Admin UI agent selector/badge/reply pass, an agent-aware queue that permits safe parallelism only for different agents editing non-overlapping paths, Reasonix live/session parsing for the read-only live viewer, safe local folder opening, and explicit Reasonix token/cost extraction when session fields exist. Existing `mimo_*` MCP tools remain compatible.
 
 Observed local Reasonix installation on this machine:
 
@@ -371,6 +371,12 @@ Acceptance:
 - TokenBudget never invents Reasonix numbers.
 - UI distinguishes real, unknown, and unsupported.
 
+Status:
+
+- Implemented for explicit session JSONL token fields.
+- `reasonix-event-parser` recognizes `tokens`, `usage`, `token_usage`, `prompt_tokens`, `completion_tokens`, `total_tokens`, and `cost`.
+- `ReasonixTuiRunner` records usage only when `total_tokens > 0`; sessions without explicit usage fields remain unknown/no record.
+
 ## Test Plan
 
 - `agent_list` shows MiMo and configured fake Reasonix.
@@ -401,4 +407,4 @@ Acceptance:
 5. Add real `reasonix-tui` health probe.
 6. Add one-shot `reasonix run` execution.
 7. Add Reasonix parser/live viewer integration. Completed as P6.6.
-8. Next: GUI shared-session viewing/opening, then token/cost extraction if stable Reasonix fields exist.
+8. Next: direct GUI shared-session opening if stable Reasonix support exists, or migrate MiMo internals toward the generic `agent_*` layer while preserving `mimo_*` compatibility.

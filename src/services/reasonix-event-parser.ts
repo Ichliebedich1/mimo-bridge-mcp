@@ -10,6 +10,14 @@ export interface ReasonixLiveEvent {
   summary: string;
 }
 
+export interface ReasonixTokenUsageSummary {
+  input_tokens: number;
+  output_tokens: number;
+  total_tokens: number;
+  estimated_cost: number | null;
+  events_count: number;
+}
+
 const ABSOLUTE_BYTE_CAP = 512 * 1024;
 const CHUNK_SIZE = 8192;
 const MAX_SUMMARY_CHARS = 2000;
@@ -87,6 +95,56 @@ export function parseReasonixSessionTail(
   }
 }
 
+export function extractReasonixTokenUsageFromFile(filePath: string | null | undefined): ReasonixTokenUsageSummary {
+  if (!filePath || !existsSync(filePath)) {
+    return emptyTokenUsage();
+  }
+
+  let content: string;
+  let fd: number;
+  try {
+    fd = openSync(filePath, "r");
+  } catch {
+    return emptyTokenUsage();
+  }
+
+  try {
+    const stat = fstatSync(fd);
+    const maxBytes = Math.min(stat.size, ABSOLUTE_BYTE_CAP);
+    const buf = Buffer.alloc(maxBytes);
+    readSync(fd, buf, 0, maxBytes, Math.max(0, stat.size - maxBytes));
+    content = buf.toString("utf-8");
+  } catch {
+    return emptyTokenUsage();
+  } finally {
+    closeSync(fd);
+  }
+
+  const usage = emptyTokenUsage();
+  const lines = content.split(/\r?\n/).filter((line) => line.trim().length > 0);
+  for (const line of lines) {
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(line);
+    } catch {
+      continue;
+    }
+    const eventUsage = extractReasonixTokenUsageFromRecord(parsed);
+    if (eventUsage.events_count === 0) {
+      continue;
+    }
+    usage.input_tokens += eventUsage.input_tokens;
+    usage.output_tokens += eventUsage.output_tokens;
+    usage.total_tokens += eventUsage.total_tokens;
+    if (eventUsage.estimated_cost !== null) {
+      usage.estimated_cost = (usage.estimated_cost ?? 0) + eventUsage.estimated_cost;
+    }
+    usage.events_count += eventUsage.events_count;
+  }
+
+  return usage;
+}
+
 function parseReasonixSessionRecord(parsed: unknown, fallbackTimestampMs: number): ReasonixLiveEvent[] {
   if (!isRecord(parsed)) {
     return [];
@@ -155,6 +213,76 @@ function parseReasonixSessionRecord(parsed: unknown, fallbackTimestampMs: number
   }
 
   return [];
+}
+
+function extractReasonixTokenUsageFromRecord(parsed: unknown): ReasonixTokenUsageSummary {
+  if (!isRecord(parsed)) {
+    return emptyTokenUsage();
+  }
+
+  const candidates: unknown[] = [
+    parsed.tokens,
+    parsed.usage,
+    parsed.token_usage,
+    parsed.response_usage,
+  ];
+  if (isRecord(parsed.metadata)) {
+    candidates.push(parsed.metadata.tokens, parsed.metadata.usage, parsed.metadata.token_usage);
+  }
+
+  for (const candidate of candidates) {
+    const usage = parseTokenUsageObject(candidate, parsed);
+    if (usage.events_count > 0) {
+      return usage;
+    }
+  }
+
+  const direct = parseTokenUsageObject(parsed, parsed);
+  return direct;
+}
+
+function parseTokenUsageObject(value: unknown, costSource: unknown): ReasonixTokenUsageSummary {
+  if (!isRecord(value)) {
+    return emptyTokenUsage();
+  }
+
+  const input =
+    finiteNumber(value.input) ||
+    finiteNumber(value.input_tokens) ||
+    finiteNumber(value.prompt_tokens) ||
+    finiteNumber(value.prompt);
+  const output =
+    finiteNumber(value.output) ||
+    finiteNumber(value.output_tokens) ||
+    finiteNumber(value.completion_tokens) ||
+    finiteNumber(value.completion);
+  const reasoning =
+    finiteNumber(value.reasoning) ||
+    finiteNumber(value.reasoning_tokens);
+  const cacheRead = isRecord(value.cache) ? finiteNumber(value.cache.read) : finiteNumber(value.cache_read_tokens);
+  const cacheWrite = isRecord(value.cache) ? finiteNumber(value.cache.write) : finiteNumber(value.cache_write_tokens);
+  const total =
+    finiteNumber(value.total) ||
+    finiteNumber(value.total_tokens) ||
+    input + output + reasoning + cacheRead + cacheWrite;
+
+  if (total <= 0) {
+    return emptyTokenUsage();
+  }
+
+  const costFromUsage = finiteNumber(value.cost) || finiteNumber(value.estimated_cost);
+  const costFromSource = isRecord(costSource)
+    ? finiteNumber(costSource.cost) || finiteNumber(costSource.estimated_cost)
+    : 0;
+  const cost = costFromUsage || costFromSource;
+
+  return {
+    input_tokens: input,
+    output_tokens: output + reasoning,
+    total_tokens: total,
+    estimated_cost: cost > 0 ? cost : null,
+    events_count: 1,
+  };
 }
 
 function parseReasonixToolCall(call: unknown, timestamp: string): ReasonixLiveEvent | null {
@@ -377,6 +505,20 @@ function tryParseJson(value: string): unknown | null {
   } catch {
     return null;
   }
+}
+
+function emptyTokenUsage(): ReasonixTokenUsageSummary {
+  return {
+    input_tokens: 0,
+    output_tokens: 0,
+    total_tokens: 0,
+    estimated_cost: null,
+    events_count: 0,
+  };
+}
+
+function finiteNumber(value: unknown): number {
+  return typeof value === "number" && Number.isFinite(value) && value > 0 ? value : 0;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

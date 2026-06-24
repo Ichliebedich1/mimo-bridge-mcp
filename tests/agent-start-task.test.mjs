@@ -9,6 +9,7 @@ import { TaskStore } from "../dist/services/task-store.js";
 import { RunningTaskRegistry } from "../dist/services/running-tasks.js";
 import { TaskQueue } from "../dist/services/task-queue.js";
 import { createAgentStartTaskHandler } from "../dist/tools/agent-start-task.js";
+import { globalTokenBudget } from "../dist/services/token-budget.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -137,5 +138,92 @@ test("agent_start_task rejects unknown agents", async () => {
     assert.match(result.error, /Unknown agent_id/);
   } finally {
     rmSync(runtimeDir, { recursive: true, force: true });
+  }
+});
+
+test("agent_start_task records Reasonix token usage only when session exposes real usage", async () => {
+  const usageDir = join(testDir, "usage");
+  if (existsSync(usageDir)) {
+    rmSync(usageDir, { recursive: true, force: true });
+  }
+  const repoDir = join(usageDir, "repo");
+  const runtimeDir = join(usageDir, "runtime");
+  const reasonixHome = join(usageDir, "ReasonixData");
+  initRepo(repoDir);
+  mkdirSync(runtimeDir, { recursive: true });
+  mkdirSync(reasonixHome, { recursive: true });
+
+  const store = new TaskStore(runtimeDir);
+  const runningTasks = new RunningTaskRegistry();
+  const taskQueue = new TaskQueue(1);
+  const handler = createAgentStartTaskHandler(
+    {
+      mimoNodePath: process.execPath,
+      mimoEntryPath: join(__dirname, "fixtures", "fake-mimo.mjs"),
+      allowedRoots: [repoDir],
+      runtimeDir,
+      agents: [],
+    },
+    [
+      {
+        id: "mimo",
+        kind: "mimo",
+        display_name: "MiMo Code",
+        enabled: true,
+      },
+      {
+        id: "reasonix-tui",
+        kind: "reasonix-tui",
+        display_name: "Reasonix TUI",
+        enabled: true,
+        command: process.execPath,
+        command_args: [join(__dirname, "fixtures", "fake-reasonix.mjs")],
+        home_dir: reasonixHome,
+        max_steps: 3,
+      },
+    ],
+    store,
+    { runningTasks, taskQueue }
+  );
+
+  const previousUsageFlag = process.env.FAKE_REASONIX_USAGE;
+  process.env.FAKE_REASONIX_USAGE = "1";
+  globalTokenBudget.reset();
+  try {
+    const started = await handler.handler({
+      agent_id: "reasonix-tui",
+      objective: "Use Reasonix fake runner with token usage",
+      workspace_path: repoDir,
+      editable_paths: ["src"],
+      readonly_paths: [],
+      acceptance_criteria: ["src/reasonix-output.txt exists"],
+      use_worktree: true,
+      runtime_timeout_seconds: 60,
+    });
+
+    assert.strictEqual(started.status, "running");
+    for (let i = 0; i < 30; i++) {
+      const task = store.getTask(started.task_id);
+      if (task?.status === "review" || task?.status === "failed") {
+        break;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+
+    const usage = globalTokenBudget.getUsage();
+    assert.strictEqual(usage.input_tokens, 21);
+    assert.strictEqual(usage.output_tokens, 9);
+    assert.strictEqual(usage.total_tokens, 30);
+    assert.strictEqual(usage.estimated_cost, 0.0007);
+  } finally {
+    if (previousUsageFlag === undefined) {
+      delete process.env.FAKE_REASONIX_USAGE;
+    } else {
+      process.env.FAKE_REASONIX_USAGE = previousUsageFlag;
+    }
+    globalTokenBudget.reset();
+    runningTasks.cancelAll();
+    taskQueue.cancelAll();
+    rmSync(usageDir, { recursive: true, force: true });
   }
 });

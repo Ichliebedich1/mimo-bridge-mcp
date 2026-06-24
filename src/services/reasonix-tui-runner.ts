@@ -4,7 +4,9 @@ import { basename } from "node:path";
 import { platform } from "node:os";
 import { execFileSync } from "node:child_process";
 import type { AgentConfig, TaskResult, TaskState } from "../types.js";
+import { extractReasonixTokenUsageFromFile } from "./reasonix-event-parser.js";
 import { findReasonixSessionPath } from "./reasonix-session-store.js";
+import { globalTokenBudget } from "./token-budget.js";
 
 export interface ReasonixRunnerOptions {
   agent: AgentConfig;
@@ -74,6 +76,7 @@ export function runReasonixTuiTask(
       finishedAtMs: Date.now(),
     });
     const status = exitCode === 0 ? "review" : "failed";
+    recordReasonixTokenUsage(task, sessionCandidate?.path ?? null);
     const result: TaskResult = {
       task_id: task.task_id,
       agent: "reasonix-tui",
@@ -141,6 +144,23 @@ export function runReasonixTuiTask(
       stopChildProcessTree(child);
     },
   };
+}
+
+function recordReasonixTokenUsage(task: TaskState, sessionPath: string | null): void {
+  const usage = extractReasonixTokenUsageFromFile(sessionPath);
+  if (usage.events_count === 0 || usage.total_tokens <= 0) {
+    return;
+  }
+
+  globalTokenBudget.recordUsage(
+    usage.input_tokens,
+    usage.output_tokens,
+    `${task.task_id} round ${task.current_round} reasonix-tui`,
+    {
+      totalTokens: usage.total_tokens,
+      estimatedCost: usage.estimated_cost ?? undefined,
+    },
+  );
 }
 
 function buildReasonixRunArgs(

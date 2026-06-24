@@ -75,10 +75,19 @@ function writeFakeSession(taskText) {
   mkdirSync(sessionsDir, { recursive: true });
   const taskId = /task_[a-f0-9]{12}/i.exec(taskText)?.[0] || "task_unknown";
   const sessionPath = join(sessionsDir, `20260625-000000.000000000-fake-${taskId}.jsonl`);
-  writeFileSync(sessionPath, JSON.stringify({
+  const event = {
     type: "message",
     task_id: taskId,
     text: "fake Reasonix session",
-  }) + "\n", "utf-8");
+  };
+  if (process.env.FAKE_REASONIX_USAGE === "1") {
+    event.usage = {
+      prompt_tokens: 21,
+      completion_tokens: 9,
+      total_tokens: 30,
+    };
+    event.cost = 0.0007;
+  }
+  writeFileSync(sessionPath, JSON.stringify(event) + "\n", "utf-8");
   writeFileSync(sessionPath + ".meta", JSON.stringify({ task_id: taskId }) + "\n", "utf-8");
 }

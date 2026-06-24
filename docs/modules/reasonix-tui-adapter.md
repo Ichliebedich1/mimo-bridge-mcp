@@ -10,7 +10,7 @@ P6 should first adapt Reasonix TUI, not Reasonix GUI. The TUI adapter should run
 
 ## Current Status
 
-P6.0-P6.6 Agent discovery, Reasonix one-shot execution, generic low-token task get/wait/reply, Reasonix session mapping, first Admin UI integration, agent-aware queue/path-conflict scheduling, and Reasonix live/session parsing are implemented locally.
+P6.0-P6.8 Agent discovery, Reasonix one-shot execution, generic low-token task get/wait/reply, Reasonix session mapping, first Admin UI integration, agent-aware queue/path-conflict scheduling, Reasonix live/session parsing, safe session-folder opening, and explicit token/cost extraction are implemented locally.
 
 Implemented:
 
@@ -41,11 +41,12 @@ Implemented:
 - Reasonix live/session parser: `src/services/reasonix-event-parser.ts` reads bounded Reasonix session JSONL tails, exposes visible assistant `content` as live messages, summarizes tool calls/results as folded tool events, redacts local paths/session/token/password/API-key patterns, ignores user/system records, and does not expose `reasoning_content`.
 - Live viewer integration: `/api/tasks/:id/live` merges Bridge runtime JSONL events with Reasonix session events for `reasonix-tui` tasks and still returns session events when the Bridge round log is missing.
 - Safe local open first slice: Admin UI can call `POST /api/tasks/:id/open` to open a task folder or Reasonix session folder. The daemon resolves paths from stored task state, validates Worktree/workspace/Reasonix-home boundaries, and does not return raw local paths to the browser.
+- Token/cost extraction: Reasonix session parser extracts explicit `tokens`, `usage`, `token_usage`, `prompt_tokens`, `completion_tokens`, `total_tokens`, and `cost` fields when present. The runner records them into TokenBudget only when `total_tokens > 0`; no fields means no record.
 
 Not implemented yet:
 
 - Direct Reasonix GUI shared-session opening/viewing.
-- Reasonix token/cost extraction if session JSONL exposes real data.
+- Real-world validation against more Reasonix token/cost field variants if future versions change the session JSONL shape.
 - Wider real-world validation against multiple Reasonix session JSONL variants beyond the observed `role/content/tool_calls` shape.
 
 Local discovery on this machine:
@@ -220,7 +221,7 @@ Status: first local-open slice is implemented for task folders and Reasonix sess
 ## Pending Work
 
 - Validate additional real Reasonix session JSONL variants and extend the parser tolerantly if new stable fields appear.
-- Parse Reasonix token/cost extraction if real fields exist.
+- Validate Reasonix token/cost extraction against more real sessions if stable fields appear in future versions.
 - Decide whether Bridge uses the user's existing `REASONIX_HOME` or a Bridge-managed Reasonix home.
 - Decide default Reasonix model for Bridge tasks.
 - Decide safe permission mode for non-interactive Reasonix execution.
@@ -255,6 +256,7 @@ Integration smoke:
 - `reasonix-event-parser` surfaces assistant-visible messages, folds tool calls/results, redacts local paths/secrets, and skips user/system/reasoning content.
 - `/api/tasks/:id/live` can include Reasonix session events without exposing `agent_session_path`.
 - `POST /api/tasks/:id/open` opens only backend-resolved task/session folders and never accepts arbitrary browser paths.
+- Reasonix token extraction records only explicit session JSONL token/cost fields and does not estimate usage from text.
 - A real Reasonix probe reports configured/missing without crashing.
 - A real one-shot Reasonix task runs only after the probe and fake-runner tests pass; current local smoke succeeded with `max_steps=20`.
 
