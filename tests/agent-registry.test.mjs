@@ -46,7 +46,9 @@ test("agent registry reports unconfigured Reasonix without throwing", async () =
   const reasonix = result.agents.find((agent) => agent.id === "reasonix-tui");
   assert.ok(reasonix);
   assert.strictEqual(reasonix.status, "not_configured");
-  assert.strictEqual(reasonix.capabilities.start_task, false);
+    assert.strictEqual(reasonix.capabilities.start_task, false);
+    assert.strictEqual(reasonix.capabilities.wait_task, false);
+    assert.strictEqual(reasonix.capabilities.review_package, false);
 });
 
 test("agent registry probes Reasonix TUI with redacted doctor JSON", async () => {
@@ -105,6 +107,9 @@ process.exit(2);
     assert.ok(reasonix);
     assert.strictEqual(reasonix.status, "ready");
     assert.strictEqual(reasonix.version, "dev-test");
+    assert.strictEqual(reasonix.capabilities.start_task, true);
+    assert.strictEqual(reasonix.capabilities.wait_task, true);
+    assert.strictEqual(reasonix.capabilities.review_package, true);
     assert.strictEqual(reasonix.default_model, "deepseek");
     assert.strictEqual(reasonix.sessions.configured, true);
     assert.strictEqual(reasonix.sessions.count, 2);

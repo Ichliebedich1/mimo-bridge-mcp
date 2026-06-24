@@ -507,6 +507,66 @@ td span,
   white-space: nowrap;
 }
 
+.agent-line {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.agent-line span:not(.agent-badge) {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.agent-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 26px;
+  border-radius: 999px;
+  padding: 5px 10px;
+  font-size: 12px;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.agent-badge.agent-mimo {
+  background: var(--blue-soft);
+  color: var(--blue);
+}
+
+.agent-badge.agent-reasonix {
+  background: #ede9fe;
+  color: #6d28d9;
+}
+
+.agent-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+}
+
+.agent-card {
+  display: grid;
+  gap: 7px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  padding: 14px;
+  background: #ffffff;
+}
+
+.agent-card strong {
+  color: var(--ink);
+}
+
+.agent-card span:not(.agent-badge),
+.agent-card p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+
 .table-wrap {
   overflow: hidden;
   border: 1px solid var(--line);

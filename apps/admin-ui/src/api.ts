@@ -32,6 +32,10 @@ export type HealthResponse = {
     version: unknown;
   };
   queue: QueueStatusResponse;
+  agents?: {
+    configured: Array<{ id: string; kind: string; enabled: boolean }>;
+    endpoint: string;
+  };
   security: {
     localhost_only: boolean;
     arbitrary_tool_proxy: boolean;
@@ -45,9 +49,34 @@ export type QueueStatusResponse = {
   queue: Array<{ taskId: string; priority: number; enqueuedAt: number }>;
 };
 
+export type AgentStatusResponse = {
+  id: string;
+  kind: string;
+  display_name: string;
+  enabled: boolean;
+  status: string;
+  version: string | null;
+  default_model: string | null;
+  capabilities?: {
+    start_task?: boolean;
+    wait_task?: boolean;
+    review_package?: boolean;
+    live_view?: boolean;
+    reply_task?: boolean;
+    token_usage?: boolean;
+    worktree?: boolean;
+  };
+  error?: string | null;
+};
+
+type AgentListResponse = {
+  agents: AgentStatusResponse[];
+};
+
 type ListTasksResponse = {
   tasks: Array<{
     task_id: string;
+    agent?: string;
     status: TaskStatus;
     summary?: string;
     modified_files?: string[];
@@ -95,6 +124,7 @@ type ReviewPackageResponse = {
 
 type GetTaskResponse = {
   task_id: string;
+  agent?: string;
   detail_level?: 'summary' | 'review' | 'diff' | 'focused' | 'logs' | 'full';
   status: TaskStatus;
   created_at?: string;
@@ -146,6 +176,11 @@ export async function fetchHealth(): Promise<HealthResponse> {
 export async function fetchTasks(limit = 20): Promise<Task[]> {
   const response = unwrap(await getJson<ListTasksResponse>('/api/tasks?limit=' + encodeURIComponent(String(limit))));
   return response.tasks.map(toUiTask);
+}
+
+export async function fetchAgents(): Promise<AgentStatusResponse[]> {
+  const response = unwrap(await getJson<AgentListResponse>('/api/agents'));
+  return response.agents;
 }
 
 export async function fetchTask(taskId: string): Promise<Task> {
@@ -247,7 +282,11 @@ export async function fetchTokenBudget(): Promise<TokenStatusResponse> {
 }
 
 export async function createTask(input: CreateTaskInput): Promise<TaskActionResult> {
-  return unwrap(await postJson<TaskActionResult>('/api/tasks', input));
+  const { agent_id: agentId, ...taskInput } = input;
+  if (!agentId || agentId === 'mimo') {
+    return unwrap(await postJson<TaskActionResult>('/api/tasks', taskInput));
+  }
+  return unwrap(await postJson<TaskActionResult>('/api/agent-tasks', input));
 }
 
 export async function replyTask(taskId: string, message: string, priority = 5): Promise<TaskActionResult> {
@@ -350,6 +389,7 @@ function toUiTask(task: ListTasksResponse['tasks'][number]): Task {
   const objective = task.objective || firstLine(task.summary) || task.task_id;
   return {
     id: task.task_id,
+    agent: task.agent ?? 'mimo',
     status: task.status,
     title: objective,
     summary: task.summary || task.error || '暂无摘要；打开详情页查看 Review Package。',
@@ -385,6 +425,7 @@ function detailToUiTask(response: GetTaskResponse): Task {
   if (!review) {
     return {
       id: response.task_id,
+      agent: response.agent ?? 'mimo',
       status: response.status,
       title: response.task_id,
       summary: response.summary || '该任务暂未生成 Review Package。',
@@ -416,6 +457,7 @@ function detailToUiTask(response: GetTaskResponse): Task {
 
   return {
     id: response.task_id,
+    agent: response.agent ?? 'mimo',
     status: response.status,
     title: review.objective_zh || review.objective || response.task_id,
     summary: review.mimo_summary_zh || review.mimo_summary || 'Review Package 已生成。',

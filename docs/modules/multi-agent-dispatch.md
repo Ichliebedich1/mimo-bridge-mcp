@@ -22,7 +22,7 @@ Reasonix should eventually reach the same project role as MiMo:
 
 ## Current Status
 
-P6.0-P6.2 are partially implemented. The runtime now has an Agent Registry, Reasonix TUI probe, Reasonix one-shot runner, generic low-token task get/wait tools, and Reasonix session mapping through `agent_session_path`. The admin UI is still MiMo-first and needs an agent selector plus agent badges. Existing `mimo_*` MCP tools remain compatible.
+P6.0-P6.3 are partially implemented. The runtime now has an Agent Registry, Reasonix TUI probe, Reasonix one-shot runner, generic low-token task get/wait tools, Reasonix session mapping through `agent_session_path`, and a first Admin UI agent selector/badge pass. Existing `mimo_*` MCP tools remain compatible.
 
 Observed local Reasonix installation on this machine:
 
@@ -258,7 +258,7 @@ Status:
 - `agent_get_task` and `agent_wait_task` now reuse bounded Review Package behavior and optional `agent_id` mismatch checks.
 - Reasonix one-shot runs persist `agent_session_path` when a session JSONL is found under configured `REASONIX_HOME\projects`.
 - Controlled real Reasonix smoke succeeded with `max_steps=20`; `max_steps=5` was too low and caused a false failure.
-- Admin UI task creation/agent selector is still pending.
+- Admin UI task creation/agent selector and agent badges are implemented in the first UI slice.
 
 ### P6.3 Agent-Aware Queue
 

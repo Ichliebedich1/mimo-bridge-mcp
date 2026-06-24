@@ -83,7 +83,7 @@ function probeMimo(agent: AgentConfig, options: AgentRegistryOptions): AgentProb
 
 function probeReasonixTui(agent: AgentConfig, env: NodeJS.ProcessEnv): AgentProbeResult {
   const result = baseProbe(agent, "not_configured", "Reasonix command is not configured.");
-  result.capabilities = reasonixCapabilities();
+  result.capabilities = reasonixCapabilities(false);
   result.default_model = agent.default_model ?? null;
   result.models = agent.models ?? [];
   result.command_configured = Boolean(agent.command);
@@ -119,6 +119,7 @@ function probeReasonixTui(agent: AgentConfig, env: NodeJS.ProcessEnv): AgentProb
     applyReasonixDoctor(result, doctorRaw);
     result.status = "ready";
     result.error = null;
+    result.capabilities = reasonixCapabilities(true);
   } catch (error) {
     result.status = "error";
     result.error = `Reasonix doctor probe failed: ${errorToMessage(error)}`;
@@ -199,12 +200,12 @@ function baseProbe(agent: AgentConfig, status: AgentProbeResult["status"], error
   };
 }
 
-function reasonixCapabilities(): AgentCapabilityMap {
+function reasonixCapabilities(ready: boolean): AgentCapabilityMap {
   return {
-    start_task: false,
-    wait_task: false,
-    review_package: false,
-    live_view: false,
+    start_task: ready,
+    wait_task: ready,
+    review_package: ready,
+    live_view: ready,
     reply_task: false,
     token_usage: false,
     worktree: true,

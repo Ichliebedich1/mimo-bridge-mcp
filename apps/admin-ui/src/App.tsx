@@ -3,6 +3,7 @@ import {
   cancelTask,
   createTask,
   deleteTask,
+  fetchAgents,
   fetchFocusedTask,
   fetchFullTask,
   fetchHealth,
@@ -18,6 +19,7 @@ import {
   replyTask,
   resetTokenBudget,
   worktreeTask,
+  type AgentStatusResponse,
   type HealthResponse,
   type QueueStatusResponse,
 } from './api';
@@ -100,6 +102,7 @@ function App() {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [queueItems, setQueueItems] = useState<QueueItem[]>([]);
   const [health, setHealth] = useState<HealthResponse | null>(null);
+  const [agents, setAgents] = useState<AgentStatusResponse[]>([]);
   const [apiError, setApiError] = useState<string | null>(null);
   const [tokenStatus, setTokenStatus] = useState<unknown>(null);
   const [notice, setNotice] = useState<Notice | null>(null);
@@ -120,8 +123,10 @@ function App() {
         fetchQueue(),
         fetchTokenBudget().catch(() => null),
       ]);
+      const nextAgents = await fetchAgents().catch(() => []);
 
       setHealth(nextHealth);
+      setAgents(nextAgents);
       setTasks((current) => mergeTaskListPreservingDetail(current, nextTasks));
       setQueueItems(toQueueItems(nextQueue, nextTasks));
       setTokenStatus(nextToken);
@@ -205,7 +210,8 @@ function App() {
   }
 
   async function handleCreateTask(input: CreateTaskInput) {
-    const result = await runAction('正在创建 MiMo 任务…', '任务已提交给本地守护进程。', () => createTask(input));
+    const agentName = input.agent_id === 'reasonix-tui' ? 'Reasonix TUI' : 'MiMo';
+    const result = await runAction(`正在创建 ${agentName} 任务…`, '任务已提交给本地守护进程。', () => createTask(input));
     const taskId = typeof result?.task_id === 'string' ? result.task_id : '';
     if (taskId) {
       setSelectedTaskId(taskId);
@@ -391,10 +397,10 @@ function App() {
               onCreate={() => setPage('create')}
             />
           )}
-          {page === 'create' && <CreateTaskPage actionBusy={Boolean(actionBusy)} onCreate={handleCreateTask} />}
+          {page === 'create' && <CreateTaskPage actionBusy={Boolean(actionBusy)} agents={agents} onCreate={handleCreateTask} />}
           {page === 'queue' && <QueuePage queueItems={queueItems} onOpenTask={openTask} />}
           {page === 'token' && <TokenPage tokenStatus={tokenStatus} onReset={confirmTokenReset} actionBusy={Boolean(actionBusy)} />}
-          {page === 'system' && <SystemPage health={health} apiError={apiError} />}
+          {page === 'system' && <SystemPage agents={agents} health={health} apiError={apiError} />}
           {page === 'detail' &&
             (selectedTask ? (
               <TaskDetailPage
@@ -554,7 +560,18 @@ function TasksPage({
   );
 }
 
-function CreateTaskPage({ actionBusy, onCreate }: { actionBusy: boolean; onCreate: (input: CreateTaskInput) => Promise<void> }) {
+function CreateTaskPage({
+  actionBusy,
+  agents,
+  onCreate,
+}: {
+  actionBusy: boolean;
+  agents: AgentStatusResponse[];
+  onCreate: (input: CreateTaskInput) => Promise<void>;
+}) {
+  const runnableAgents = agents.filter((agent) => agent.enabled !== false && agent.capabilities?.start_task !== false);
+  const agentOptions = runnableAgents.length > 0 ? runnableAgents : [{ id: 'mimo', display_name: 'MiMo Code', status: 'ready' } as AgentStatusResponse];
+  const [agentId, setAgentId] = useState(agentOptions[0]?.id ?? 'mimo');
   const [objective, setObjective] = useState('');
   const [workspacePath, setWorkspacePath] = useState('');
   const [editablePaths, setEditablePaths] = useState('');
@@ -569,6 +586,12 @@ function CreateTaskPage({ actionBusy, onCreate }: { actionBusy: boolean; onCreat
   const [repoWideConfirmed, setRepoWideConfirmed] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    if (!agentOptions.some((agent) => agent.id === agentId)) {
+      setAgentId(agentOptions[0]?.id ?? 'mimo');
+    }
+  }, [agentId, agentOptions]);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -596,6 +619,7 @@ function CreateTaskPage({ actionBusy, onCreate }: { actionBusy: boolean; onCreat
     }
 
     const input: CreateTaskInput = {
+      agent_id: agentId,
       objective: objective.trim(),
       workspace_path: workspacePath.trim(),
       editable_paths: splitLines(editablePaths),
@@ -621,9 +645,20 @@ function CreateTaskPage({ actionBusy, onCreate }: { actionBusy: boolean; onCreat
   return (
     <div className="create-layout">
       <section className="panel">
-        <PanelHeader title="新建 MiMo 任务" helper="字段与 mimo_start_task 对齐；已有写任务时新任务会安全排队。" />
+        <PanelHeader title="新建 Agent 任务" helper="选择 MiMo 或 Reasonix TUI；已有写任务时新任务会安全排队。" />
         <form className="task-form" onSubmit={handleSubmit}>
           {formError && <div className="form-error">{formError}</div>}
+          <label>
+            <span>执行 Agent *</span>
+            <select value={agentId} onChange={(event) => setAgentId(event.target.value)}>
+              {agentOptions.map((agent) => (
+                <option key={agent.id} value={agent.id}>
+                  {agent.display_name || agent.id} ({agent.status})
+                </option>
+              ))}
+            </select>
+            <small className="field-help">MiMo 是稳定路径；Reasonix TUI 当前支持 one-shot 任务、低上下文审查和会话映射。</small>
+          </label>
           <label>
             <span>任务目标 *</span>
             <textarea value={objective} onChange={(event) => setObjective(event.target.value)} placeholder="例如：为管理页面接入真实取消/验收 API，并补充错误提示。" rows={5} />
@@ -848,6 +883,10 @@ function TaskDetailPage({
         <div>
           <span className="eyebrow">review package first</span>
           <h2>{task.title}</h2>
+          <div className="agent-line">
+            <AgentBadge agent={task.agent} />
+            <span>{task.agent === 'reasonix-tui' ? 'Reasonix TUI 执行任务' : 'MiMo Code 执行任务'}</span>
+          </div>
           <p>{task.summary}</p>
         </div>
         <div className="detail-meta">
@@ -1138,7 +1177,7 @@ function TokenPage({ tokenStatus, onReset, actionBusy }: { tokenStatus: unknown;
   );
 }
 
-function SystemPage({ health, apiError }: { health: HealthResponse | null; apiError: string | null }) {
+function SystemPage({ agents, health, apiError }: { agents: AgentStatusResponse[]; health: HealthResponse | null; apiError: string | null }) {
   return (
     <div className="page-grid">
       <section className="panel wide">
@@ -1163,6 +1202,20 @@ function SystemPage({ health, apiError }: { health: HealthResponse | null; apiEr
           />
         </div>
       </section>
+      <section className="panel wide">
+        <PanelHeader title="执行 Agent" helper="来自 /api/agents；创建任务时可选择 ready 且支持 start_task 的 Agent。" />
+        <div className="agent-grid">
+          {agents.length === 0 && <div className="lane-empty">暂未读取到 Agent 状态。</div>}
+          {agents.map((agent) => (
+            <div className="agent-card" key={agent.id}>
+              <AgentBadge agent={agent.id} />
+              <strong>{agent.display_name || agent.id}</strong>
+              <span>{agent.status}</span>
+              <p>{agent.error || (agent.capabilities?.start_task ? '可创建任务' : '暂不可创建任务')}</p>
+            </div>
+          ))}
+        </div>
+      </section>
     </div>
   );
 }
@@ -1182,8 +1235,9 @@ function TaskTable({
         <thead>
           <tr>
             <th>task_id</th>
+            <th>Agent</th>
             <th>状态</th>
-            <th>MiMo 摘要</th>
+            <th>任务摘要</th>
             <th>风险</th>
             <th>更新</th>
             <th>操作</th>
@@ -1194,6 +1248,9 @@ function TaskTable({
             <tr key={task.id}>
               <td>
                 <code>{task.id}</code>
+              </td>
+              <td>
+                <AgentBadge agent={task.agent} />
               </td>
               <td>
                 <Pill tone={statusMeta[task.status].tone}>{statusMeta[task.status].label}</Pill>
@@ -1247,6 +1304,12 @@ function PanelHeader({ title, helper }: { title: string; helper: string }) {
 
 function Pill({ tone, children }: { tone: string; children: ReactNode }) {
   return <span className={'pill tone-' + tone}>{children}</span>;
+}
+
+function AgentBadge({ agent }: { agent: string }) {
+  const label = agent === 'reasonix-tui' ? 'Reasonix TUI' : agent === 'mimo' ? 'MiMo' : agent;
+  const tone = agent === 'reasonix-tui' ? 'agent-reasonix' : 'agent-mimo';
+  return <span className={'agent-badge ' + tone}>{label}</span>;
 }
 
 function RiskBadge({ risk }: { risk: RiskFlag }) {

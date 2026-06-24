@@ -31,6 +31,7 @@ export type ChangedFile = {
 
 export type Task = {
   id: string;
+  agent: string;
   status: TaskStatus;
   title: string;
   summary: string;
@@ -65,6 +66,7 @@ export type QueueItem = {
 };
 
 export type CreateTaskInput = {
+  agent_id: string;
   objective: string;
   workspace_path: string;
   editable_paths: string[];

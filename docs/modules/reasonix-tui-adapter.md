@@ -34,12 +34,13 @@ Implemented:
 - Fake Reasonix one-shot Worktree Review Package test.
 - Controlled real Reasonix smoke task `task_f8b579217015` succeeded with `max_steps=20`, changed only `notes/result.txt`, had `risk_flags: []`, and its temporary Worktree was discarded afterward.
 - Reasonix session mapping: after a TUI run, Bridge scans only configured `REASONIX_HOME\projects` for in-window `.jsonl` session files, skips `.trash`, prefers task/workspace matches, and persists the best match as `agent_session_path`. Browser API responses sanitize this path.
+- Admin UI first slice: Create Task can select MiMo or Reasonix TUI; MiMo tasks still call `/api/tasks`, Reasonix tasks call `/api/agent-tasks`; list/detail pages show agent badges; System page shows `/api/agents` status.
 
 Not implemented yet:
 
 - Agent-aware queue/path conflict scheduling.
-- Admin UI agent selector.
 - Reasonix continue/reply support.
+- Agent-aware queue/path conflict scheduling.
 
 Local discovery on this machine:
 
