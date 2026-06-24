@@ -11,6 +11,8 @@ Let Codex split and review work while MiMo performs bounded coding tasks through
 ## Current Progress
 
 - Branch: `master`.
+- Latest local phase: P6.12 bounded generic Agent task listing is implemented and deployed. MCP `agent_list_tasks`, REST `GET /api/agent-tasks?agent_id=...&limit=...`, and safe client `agent-tasks` now list recent MiMo/Reasonix tasks without full diff/log/source. Output is sanitized/truncated and includes safe-delete metadata.
+- P6.12 verification: root build, local-daemon build, admin-ui build, and `node --test tests\agent-list-tasks.test.mjs tests\mimo-bridge-client.test.mjs tests\admin-api.test.mjs tests\stdio-protocol.test.mjs` passed 65/65. Live daemon smoke passed for `agent-list`, `agent-queue --agent-id reasonix-tui`, and `agent-tasks --agent-id reasonix-tui --limit 5`.
 - Committed Bridge baseline before this handoff-doc refresh: `master...origin/master [ahead 1]`.
 - Latest committed Bridge HEAD before this handoff-doc refresh: `01d734f docs: record session manager fallback collaboration`.
 - This handoff-doc refresh may be uncommitted if the user did not ask for a Git commit; always run `git status --short --branch` after context compression.

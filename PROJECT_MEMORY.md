@@ -2,6 +2,13 @@
 
 This file is the project-local long-term memory. Update it after each meaningful phase so another agent can continue without relying on chat context.
 
+## Latest Status
+
+- P6.12 bounded generic Agent task listing is implemented and deployed locally. New surfaces: MCP `agent_list_tasks`, REST `GET /api/agent-tasks?agent_id=...&limit=...`, and safe client `node scripts\mimo-bridge-client.mjs agent-tasks --agent-id reasonix-tui --limit 5`.
+- The default list output is low-context by design: task id, agent, status, objective, sanitized/truncated summary, modified file count, risk flags, review recommendation, timestamps, round, Worktree state, and safe-delete metadata. It does not return full diff, full logs, raw source, raw log paths, or raw local paths.
+- P6.12 verification passed: `npm.cmd run build`, `npm.cmd --prefix apps\local-daemon run build`, `npm.cmd --prefix apps\admin-ui run build`, and `node --test tests\agent-list-tasks.test.mjs tests\mimo-bridge-client.test.mjs tests\admin-api.test.mjs tests\stdio-protocol.test.mjs` passed 65/65.
+- Local daemon was restarted after P6.12. `agent-list`, `agent-queue --agent-id reasonix-tui`, and `agent-tasks --agent-id reasonix-tui --limit 5` live smoke passed; historical Reasonix summaries were sanitized and truncated.
+
 ## Current Release Target
 
 - Target OS: Windows 10/11 x64.

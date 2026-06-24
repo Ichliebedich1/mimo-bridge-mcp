@@ -21,6 +21,7 @@ import { createAgentFinishTaskHandler } from "../../../src/tools/agent-finish-ta
 import { createAgentMergeTaskHandler } from "../../../src/tools/agent-merge-task.js";
 import { createAgentDeleteTaskHandler } from "../../../src/tools/agent-delete-task.js";
 import { createAgentQueueStatusHandler } from "../../../src/tools/agent-queue-status.js";
+import { createAgentListTasksHandler } from "../../../src/tools/agent-list-tasks.js";
 import type { DaemonConfig } from "./daemon-config.js";
 
 type UnavailableHandler = {
@@ -43,6 +44,7 @@ export interface ToolContext {
     agentMergeTask: ReturnType<typeof createAgentMergeTaskHandler>;
     agentDeleteTask: ReturnType<typeof createAgentDeleteTaskHandler>;
     agentQueueStatus: ReturnType<typeof createAgentQueueStatusHandler>;
+    agentListTasks: ReturnType<typeof createAgentListTasksHandler>;
     getTask: ReturnType<typeof createGetTaskHandler>;
     waitTask: ReturnType<typeof createWaitTaskHandler>;
     pendingReviews: ReturnType<typeof createPendingReviewsHandler>;
@@ -98,6 +100,7 @@ export function createToolContext(config: DaemonConfig): ToolContext {
       agentMergeTask: createAgentMergeTaskHandler(taskStore, { runtimeDir: config.runtimeDir }),
       agentDeleteTask: createAgentDeleteTaskHandler(taskStore),
       agentQueueStatus,
+      agentListTasks: createAgentListTasksHandler(taskStore),
       getTask,
       waitTask,
       pendingReviews,

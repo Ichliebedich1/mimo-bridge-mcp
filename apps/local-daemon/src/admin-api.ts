@@ -130,6 +130,15 @@ export async function handleAdminApi(
       return true;
     }
 
+    if (req.method === "GET" && url.pathname === "/api/agent-tasks") {
+      const data = await context.tools.agentListTasks.handler({
+        agent_id: url.searchParams.get("agent_id") ?? undefined,
+        limit: parseLimit(url.searchParams.get("limit")),
+      });
+      sendJson(res, toolStatusCode(data), wrapToolResult(data));
+      return true;
+    }
+
     const agentTaskMatch = /^\/api\/agent-tasks\/([^/]+)(?:\/([^/]+))?$/.exec(url.pathname);
     if (agentTaskMatch) {
       const taskId = decodeURIComponent(agentTaskMatch[1]);

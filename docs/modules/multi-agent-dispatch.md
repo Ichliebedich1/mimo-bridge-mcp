@@ -449,6 +449,31 @@ Status:
 - `node --test tests\mimo-bridge-client.test.mjs` passed 26/26.
 - Combined focused regression `node --test tests\mimo-bridge-client.test.mjs tests\agent-reply-task.test.mjs tests\agent-lifecycle-task.test.mjs tests\admin-api.test.mjs tests\stdio-protocol.test.mjs` passed 67/67 after root/local-daemon/admin-ui builds.
 
+### P6.12 Bounded Agent Task Listing
+
+Goal: Codex and third-party agents need a small task index for Reasonix/MiMo without falling back to full task details, logs, source, or diffs.
+
+Tasks:
+
+- Add MCP `agent_list_tasks`.
+- Add REST `GET /api/agent-tasks?agent_id=...&limit=...`.
+- Add safe client command `agent-tasks` / `agent-list-tasks`.
+- Return only bounded task summaries: task id, agent, status, objective, sanitized/truncated summary, modified file count, risk flags, review recommendation, timestamps, round, Worktree state, and safe-delete metadata.
+- Sanitize local paths, session identifiers, stdin labels, token-like strings, API keys, authorization values, and passwords from summaries.
+
+Acceptance:
+
+- Listing recent Reasonix tasks does not expose full logs, full diff, source files, raw log paths, or raw local paths.
+- `agent_id` filtering works.
+- Safe-delete metadata is included so UI/agents can tell which terminal tasks are safe to remove.
+
+Status:
+
+- Implemented and deployed locally.
+- Verified with `npm.cmd run build`, `npm.cmd --prefix apps\local-daemon run build`, `npm.cmd --prefix apps\admin-ui run build`.
+- Focused tests passed: `node --test tests\agent-list-tasks.test.mjs tests\mimo-bridge-client.test.mjs tests\admin-api.test.mjs tests\stdio-protocol.test.mjs` 65/65.
+- Live smoke after daemon restart passed: `agent-list`, `agent-queue --agent-id reasonix-tui`, and `agent-tasks --agent-id reasonix-tui --limit 5`.
+
 ## Test Plan
 
 - `agent_list` shows MiMo and configured fake Reasonix.

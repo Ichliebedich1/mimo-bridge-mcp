@@ -441,6 +441,41 @@ async function agentQueueOperation({ args, baseUrl }) {
   }));
 }
 
+async function agentTasksOperation({ args, baseUrl }) {
+  const params = new URLSearchParams({
+    limit: String(args.limit || 10),
+  });
+  const agentId = getAgentId(args);
+  if (agentId) {
+    params.set("agent_id", agentId);
+  }
+  const response = await fetchJson(baseUrl, `/api/agent-tasks?${params}`);
+  return normalizeRestEnvelope("agent-tasks", response, (data) => ({
+    agent_id: (data.agent_id ?? agentId) || null,
+    returned_count: data.returned_count ?? 0,
+    tasks: Array.isArray(data.tasks) ? data.tasks.map(toSafeTaskSummary) : [],
+  }));
+}
+
+function toSafeTaskSummary(task) {
+  return {
+    task_id: task.task_id,
+    agent: task.agent,
+    status: task.status,
+    objective: task.objective,
+    summary: task.summary,
+    modified_files_count: task.modified_files_count,
+    risk_flags: task.risk_flags,
+    review_recommendation: task.review_recommendation,
+    created_at: task.created_at,
+    updated_at: task.updated_at,
+    current_round: task.current_round,
+    has_worktree: task.has_worktree,
+    can_delete: task.can_delete,
+    delete_blockers: task.delete_blockers,
+  };
+}
+
 async function waitForTask({ baseUrl, taskId, agentId, timeoutSeconds, detailLevel, maxChars, operation, toolName = "mimo_wait_task" }) {
   const transport = new StreamableHTTPClientTransport(new URL("/mcp", baseUrl));
   const client = new Client({ name: "mimo-bridge-client", version: "0.1.0" });
@@ -513,6 +548,7 @@ function helpOperation() {
       "node scripts/mimo-bridge-client.mjs agent-reply --agent-id reasonix-tui --task-id task_xxx --json .\\runtime\\client-requests\\reply.json",
       "node scripts/mimo-bridge-client.mjs agent-start-and-wait --agent-id reasonix-tui --json .\\runtime\\client-requests\\task.json --timeout-seconds 1800",
       "node scripts/mimo-bridge-client.mjs agent-review --agent-id reasonix-tui --task-id task_xxx --detail-level review --max-chars 8000",
+      "node scripts/mimo-bridge-client.mjs agent-tasks --agent-id reasonix-tui --limit 10",
       "node scripts/mimo-bridge-client.mjs agent-finish --agent-id reasonix-tui --task-id task_xxx --status accepted",
       "node scripts/mimo-bridge-client.mjs agent-merge --agent-id reasonix-tui --task-id task_xxx --action merge",
       "node scripts/mimo-bridge-client.mjs agent-delete --agent-id reasonix-tui --task-id task_xxx",
@@ -553,6 +589,9 @@ export async function run(argv = process.argv.slice(2), options = {}) {
       return reviewOperation({ args, baseUrl, stdin });
     case "agent-review":
       return agentReviewOperation({ args, baseUrl, stdin });
+    case "agent-tasks":
+    case "agent-list-tasks":
+      return agentTasksOperation({ args, baseUrl, stdin });
     case "recover":
     case "pending-reviews":
       return recoverOperation({ args, baseUrl, stdin });

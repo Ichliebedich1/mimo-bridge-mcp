@@ -233,6 +233,25 @@ function createContext() {
           return { running: 0, queued: 1, queue: [{ taskId: "task_agent", agentId: input.agent_id ?? "reasonix-tui" }] };
         },
       },
+      agentListTasks: {
+        handler: async (input) => {
+          calls.push(["agentListTasks", input]);
+          return {
+            agent_id: input.agent_id ?? null,
+            returned_count: 1,
+            tasks: [
+              {
+                task_id: task.task_id,
+                agent: input.agent_id ?? "reasonix-tui",
+                status: "review",
+                objective: "agent list objective",
+                summary: "done",
+                raw_log_path: "C:\\sensitive\\raw.log",
+              },
+            ],
+          };
+        },
+      },
       getTask: {
         handler: async (input) => {
           calls.push(["getTask", input]);
@@ -425,6 +444,26 @@ test("admin API maps POST /api/agent-tasks to agentStartTask", async () => {
     const captured = fixture.calls.find(([name]) => name === "agentStartTask");
     assert.ok(captured);
     assert.strictEqual(captured[1].agent_id, "reasonix-tui");
+  } finally {
+    fixture.cleanup();
+  }
+});
+
+test("admin API lists generic agent tasks through bounded route", async () => {
+  const fixture = createContext();
+  try {
+    const result = await callApi(fixture.context, "GET", "/api/agent-tasks?agent_id=reasonix-tui&limit=5");
+    assert.strictEqual(result.statusCode, 200);
+    assert.strictEqual(result.body.ok, true);
+    assert.strictEqual(result.body.data.agent_id, "reasonix-tui");
+    assert.strictEqual(result.body.data.returned_count, 1);
+    assert.strictEqual(result.body.data.tasks[0].agent, "reasonix-tui");
+    assert.strictEqual(JSON.stringify(result.body).includes("raw_log_path"), false);
+    assert.strictEqual(JSON.stringify(result.body).includes("sensitive"), false);
+    const captured = fixture.calls.find(([name]) => name === "agentListTasks");
+    assert.ok(captured);
+    assert.strictEqual(captured[1].agent_id, "reasonix-tui");
+    assert.strictEqual(captured[1].limit, 5);
   } finally {
     fixture.cleanup();
   }

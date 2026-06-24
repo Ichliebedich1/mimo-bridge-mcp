@@ -728,6 +728,46 @@ test("agent-queue command fetches filtered queue", async () => {
   }
 });
 
+test("agent-tasks command fetches bounded filtered task list", async () => {
+  const mock = await startMockServer((req, res) => {
+    if (req.method === "GET" && req.url === "/api/agent-tasks?limit=5&agent_id=reasonix-tui") {
+      res.writeHead(200, { "content-type": "application/json" });
+      res.end(JSON.stringify({
+        ok: true,
+        data: {
+          agent_id: "reasonix-tui",
+          returned_count: 1,
+          tasks: [
+            {
+              task_id: "task_listed",
+              agent: "reasonix-tui",
+              status: "review",
+              objective: "done",
+              raw_log_path: "C:\\sensitive\\raw.log",
+            },
+          ],
+        },
+      }));
+      return;
+    }
+    res.writeHead(404).end("{}");
+  });
+
+  try {
+    const result = await runClient(["agent-tasks", "--agent-id", "reasonix-tui", "--limit", "5"], { env: { MIMO_BRIDGE_URL: mock.baseUrl } });
+    assert.equal(result.code, 0);
+    const out = JSON.parse(result.stdout);
+    assert.equal(out.ok, true);
+    assert.equal(out.operation, "agent-tasks");
+    assert.equal(out.agent_id, "reasonix-tui");
+    assert.equal(out.returned_count, 1);
+    assert.equal(out.tasks[0].task_id, "task_listed");
+    assert.equal(JSON.stringify(out).includes("sensitive"), false);
+  } finally {
+    await closeServer(mock.server);
+  }
+});
+
 test("start-and-wait returns structured error when daemon is unreachable", async () => {
   const result = await runClient(["start-and-wait", "--timeout-seconds", "1"], {
     stdin: JSON.stringify({ objective: "test" }),

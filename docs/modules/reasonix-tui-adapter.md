@@ -266,6 +266,7 @@ Integration smoke:
 - `/api/tasks/:id/live` can include Reasonix session events without exposing `agent_session_path`.
 - `POST /api/tasks/:id/open` opens only backend-resolved task/session folders and never accepts arbitrary browser paths.
 - Reasonix token extraction records only explicit session JSONL token/cost fields and does not estimate usage from text.
+- `agent_list_tasks` / safe client `agent-tasks` lists recent Reasonix tasks with sanitized and truncated summaries, risk flags, review recommendation, Worktree state, and safe-delete metadata. It must not expose raw Reasonix session paths, raw logs, full source, or full diffs.
 - A real Reasonix probe reports configured/missing without crashing.
 - A real one-shot Reasonix task runs only after the probe and fake-runner tests pass; current local smoke succeeded with `max_steps=20`.
 
