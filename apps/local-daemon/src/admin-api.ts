@@ -139,6 +139,16 @@ export async function handleAdminApi(
         sendJson(res, toolStatusCode(data), wrapToolResult(augmentTaskResult(data, context)));
         return true;
       }
+
+      if (req.method === "POST" && action === "replies") {
+        const body = ReplyBodySchema.parse(await readJsonBody(req));
+        const data = await context.tools.agentReplyTask.handler({
+          task_id: taskId,
+          ...body,
+        });
+        sendJson(res, toolStatusCode(data), wrapToolResult(data));
+        return true;
+      }
     }
 
     const taskMatch = /^\/api\/tasks\/([^/]+)(?:\/([^/]+))?$/.exec(url.pathname);

@@ -289,8 +289,13 @@ export async function createTask(input: CreateTaskInput): Promise<TaskActionResu
   return unwrap(await postJson<TaskActionResult>('/api/agent-tasks', input));
 }
 
-export async function replyTask(taskId: string, message: string, priority = 5): Promise<TaskActionResult> {
-  return unwrap(await postJson<TaskActionResult>('/api/tasks/' + encodeURIComponent(taskId) + '/replies', { message, priority }));
+export async function replyTask(taskId: string, message: string, priority = 5, agent = 'mimo'): Promise<TaskActionResult> {
+  const encodedTaskId = encodeURIComponent(taskId);
+  const body = { message, priority, agent_id: agent };
+  if (agent && agent !== 'mimo') {
+    return unwrap(await postJson<TaskActionResult>('/api/agent-tasks/' + encodedTaskId + '/replies', body));
+  }
+  return unwrap(await postJson<TaskActionResult>('/api/tasks/' + encodedTaskId + '/replies', { message, priority }));
 }
 
 export async function cancelTask(taskId: string): Promise<TaskActionResult> {

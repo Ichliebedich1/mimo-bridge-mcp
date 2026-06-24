@@ -220,8 +220,8 @@ function App() {
     }
   }
 
-  async function handleReply(taskId: string, message: string, priority: number) {
-    await runAction('正在发送回复…', '回复已发送，MiMo 将继续处理。', () => replyTask(taskId, message, priority), {
+  async function handleReply(taskId: string, message: string, priority: number, agent: string) {
+    await runAction('正在发送回复…', '回复已发送，执行 Agent 将继续处理。', () => replyTask(taskId, message, priority, agent), {
       refreshTaskId: taskId,
     });
   }
@@ -763,7 +763,7 @@ function TaskDetailPage({
 }: {
   task: Task;
   actionBusy: string | null;
-  onReply: (taskId: string, message: string, priority: number) => Promise<void>;
+  onReply: (taskId: string, message: string, priority: number, agent: string) => Promise<void>;
   onCancel: (taskId: string) => void;
   onFinish: (taskId: string, status: 'accepted' | 'abandoned') => void;
   onMergeAndAccept: (taskId: string) => void;
@@ -849,13 +849,13 @@ function TaskDetailPage({
   async function submitReply() {
     const message = replyMessage.trim();
     if (!message) {
-      setLocalError('请先填写要发送给 MiMo 的回复。');
+      setLocalError('请先填写要发送给执行 Agent 的回复。');
       return;
     }
     setLocalError(null);
     setReplying(true);
     try {
-      await onReply(task.id, message, task.priority);
+      await onReply(task.id, message, task.priority, task.agent);
       setReplyMessage('');
     } finally {
       setReplying(false);

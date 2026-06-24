@@ -83,6 +83,8 @@ export function createStartTaskHandler(
         try {
           if (result.session_id) {
             taskStore.updateTaskSession(taskId, result.session_id);
+          } else if (result.agent_session_path) {
+            taskStore.updateTaskAgentSession(taskId, result.agent_session_path);
           }
           taskStore.updateTaskResult(taskId, result);
           taskStore.updateTaskStatus(taskId, result.status);

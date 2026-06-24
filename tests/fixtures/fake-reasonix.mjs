@@ -34,6 +34,8 @@ if (args[0] !== "run") {
   process.exit(2);
 }
 
+const resumeIndex = args.indexOf("--resume");
+const resumePath = resumeIndex >= 0 ? args[resumeIndex + 1] : "";
 const taskText = args[args.length - 1] || "";
 const match = /任务说明文件并完成任务:\s*(.+)$/mu.exec(taskText);
 if (!match) {
@@ -54,10 +56,14 @@ if (!brief.includes("# ")) {
 }
 
 mkdirSync("src", { recursive: true });
-writeFileSync(join("src", "reasonix-output.txt"), "Reasonix fake task completed\n", "utf-8");
+if (resumePath) {
+  writeFileSync(join("src", "reasonix-followup.txt"), `Reasonix fake resumed from ${resumePath}\n`, "utf-8");
+} else {
+  writeFileSync(join("src", "reasonix-output.txt"), "Reasonix fake task completed\n", "utf-8");
+}
 writeFakeSession(taskText);
 console.log("Reasonix fake received task brief.");
-console.log("Reasonix fake wrote src/reasonix-output.txt.");
+console.log(resumePath ? "Reasonix fake resumed previous session." : "Reasonix fake wrote src/reasonix-output.txt.");
 process.exit(0);
 
 function writeFakeSession(taskText) {

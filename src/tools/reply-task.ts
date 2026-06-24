@@ -10,10 +10,24 @@ import { globalTaskQueue, type TaskQueue } from "../services/task-queue.js";
 import { refreshReviewPackage } from "../services/review-package.js";
 import { GitWorktreeManager } from "../services/git-worktree.js";
 
+type ReplyTaskRunner = (
+  options: {
+    mimoNodePath: string;
+    mimoEntryPath: string;
+    task: TaskState;
+    runtimeDir: string;
+    timeoutMs: number;
+  },
+  onResult: (result: TaskResult) => void,
+  onError: (error: string) => void
+) => { cancel: () => void };
+
 export interface ReplyTaskDependencies {
-  runTask?: typeof runMimoTask;
+  runTask?: ReplyTaskRunner;
   runningTasks?: RunningTaskRegistry;
   taskQueue?: TaskQueue;
+  agentId?: string;
+  validateReplyTarget?: (task: TaskState) => string | null;
 }
 
 interface ReplyExecutionContext {
@@ -49,7 +63,7 @@ function buildBlockedWorktreeReplyError(error: unknown): string {
 
 function markMainRepoMutationDuringReply(result: TaskResult): TaskResult {
   const warning =
-    "Original repository status changed while a Worktree follow-up was running; blocking review because MiMo may have edited the main repository.";
+    "Original repository status changed while a Worktree follow-up was running; blocking review because the agent may have edited the main repository.";
   return {
     ...result,
     status: "failed",
@@ -74,6 +88,8 @@ export function createReplyTaskHandler(
   const runTask = dependencies.runTask ?? runMimoTask;
   const runningTasks = dependencies.runningTasks ?? globalRunningTasks;
   const taskQueue = dependencies.taskQueue ?? globalTaskQueue;
+  const expectedAgentId = dependencies.agentId;
+  const validateReplyTarget = dependencies.validateReplyTarget ?? validateMimoReplyTarget;
 
   function executeReply(taskId: string): Promise<void> {
     const task = taskStore.getTask(taskId);
@@ -111,6 +127,7 @@ export function createReplyTaskHandler(
         runningTasks.unregister(taskId);
         resolve();
       };
+
       const complete = (result: TaskResult) => {
         if (settled) return;
         try {
@@ -121,8 +138,11 @@ export function createReplyTaskHandler(
               resultToStore = markMainRepoMutationDuringReply(result);
             }
           }
+
           if (resultToStore.session_id) {
             taskStore.updateTaskSession(taskId, resultToStore.session_id);
+          } else if (resultToStore.agent_session_path) {
+            taskStore.updateTaskAgentSession(taskId, resultToStore.agent_session_path);
           }
           taskStore.updateTaskResult(taskId, resultToStore);
           taskStore.updateTaskStatus(taskId, resultToStore.status);
@@ -143,7 +163,7 @@ export function createReplyTaskHandler(
               };
               taskStore.updateTaskWorktree(taskId, worktreeState);
             } catch (err) {
-              process.stderr.write(`[reply-task] 获取 diff 摘要失败: ${err}\n`);
+              process.stderr.write(`[reply-task] failed to collect diff summary: ${err}\n`);
             }
           }
           refreshReviewPackage(taskStore, taskId);
@@ -151,6 +171,7 @@ export function createReplyTaskHandler(
           finish();
         }
       };
+
       const fail = (error: string) => {
         if (settled) return;
         try {
@@ -194,21 +215,21 @@ export function createReplyTaskHandler(
         return { error: `任务不存在: ${input.task_id}` };
       }
 
+      if (expectedAgentId && task.agent !== expectedAgentId) {
+        return { error: `Task ${task.task_id} belongs to agent ${task.agent}, not ${expectedAgentId}` };
+      }
+
       if (task.status !== "waiting" && task.status !== "review" && task.status !== "queued") {
         return { error: `任务状态不允许回复: ${task.status}` };
       }
 
-      if (!task.session_id) {
-        return { error: "任务没有会话 ID，无法回复" };
-      }
-
-      const sessionValidation = validateSessionId(task.session_id);
-      if (!sessionValidation.allowed) {
-        return { error: sessionValidation.reason };
+      const targetError = validateReplyTarget(task);
+      if (targetError) {
+        return { error: targetError };
       }
 
       if (task.current_round > task.config.max_rounds) {
-        return { error: `已达到最大沟通轮数: ${task.config.max_rounds}` };
+        return { error: `已达到最大沟通轮数 ${task.config.max_rounds}` };
       }
 
       try {
@@ -262,4 +283,16 @@ export function createReplyTaskHandler(
       return runningTasks.cancel(taskId);
     },
   };
+}
+
+function validateMimoReplyTarget(task: TaskState): string | null {
+  if (!task.session_id) {
+    return "任务没有 MiMo 会话 ID，无法回复";
+  }
+
+  const sessionValidation = validateSessionId(task.session_id);
+  if (!sessionValidation.allowed) {
+    return sessionValidation.reason ?? "Invalid MiMo session ID";
+  }
+  return null;
 }

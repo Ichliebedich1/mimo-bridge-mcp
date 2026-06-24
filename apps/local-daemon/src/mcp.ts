@@ -95,6 +95,7 @@ function createMcpServer(context: ToolContext): McpServer {
   registerJsonTool(server, "mimo_merge_task", "合并或丢弃任务的 Worktree 修改", context.tools.mergeTask);
   registerJsonTool(server, "agent_list", "列出可用执行 Agent，包括 MiMo 和 Reasonix TUI 探测状态", context.tools.agentList);
   registerJsonTool(server, "agent_start_task", "使用指定 Agent 创建并后台启动任务；P6 当前支持 mimo 与 reasonix-tui one-shot", context.tools.agentStartTask);
+  registerJsonTool(server, "agent_reply_task", "继续指定 Agent 任务；Reasonix TUI 使用记录的 session JSONL 恢复", context.tools.agentReplyTask);
   registerJsonTool(server, "agent_get_task", "按 agent_id 可选校验查询任意 Agent 任务，默认返回低上下文 Review Package", context.tools.agentGetTask);
   registerJsonTool(server, "agent_wait_task", "低 Token 等待任意 Agent 任务完成，完成后返回受限审查摘要", context.tools.agentWaitTask);
   server.tool("mimo_queue_status", "查询任务队列状态", {}, async () => {

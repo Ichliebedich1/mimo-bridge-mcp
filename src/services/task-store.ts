@@ -156,6 +156,16 @@ export class TaskStore {
     return task;
   }
 
+  updateTaskAgentSession(taskId: string, sessionPath: string): TaskState | null {
+    const task = this.getTask(taskId);
+    if (!task) return null;
+
+    task.agent_session_path = sessionPath;
+    task.current_round += 1;
+    this.saveTask(task);
+    return task;
+  }
+
   updateTaskResult(taskId: string, result: Partial<TaskState>): TaskState | null {
     const task = this.getTask(taskId);
     if (!task) return null;

@@ -10,7 +10,7 @@ P6 should first adapt Reasonix TUI, not Reasonix GUI. The TUI adapter should run
 
 ## Current Status
 
-P6.0-P6.4 Agent discovery, Reasonix one-shot execution, generic low-token task get/wait, Reasonix session mapping, first Admin UI integration, and agent-aware queue/path-conflict scheduling are implemented locally.
+P6.0-P6.5 Agent discovery, Reasonix one-shot execution, generic low-token task get/wait/reply, Reasonix session mapping, first Admin UI integration, and agent-aware queue/path-conflict scheduling are implemented locally.
 
 Implemented:
 
@@ -27,20 +27,23 @@ Implemented:
 - `src/tools/agent-start-task.ts`.
 - `src/tools/agent-get-task.ts`.
 - `src/tools/agent-wait-task.ts`.
+- `src/tools/agent-reply-task.ts`.
 - MCP tool `agent_start_task`.
-- MCP tools `agent_get_task` and `agent_wait_task`.
+- MCP tools `agent_get_task`, `agent_wait_task`, and `agent_reply_task`.
 - REST route `POST /api/agent-tasks`.
-- REST routes `GET /api/agent-tasks/:task_id` and `POST /api/agent-tasks/:task_id/wait`.
+- REST routes `GET /api/agent-tasks/:task_id`, `POST /api/agent-tasks/:task_id/wait`, and `POST /api/agent-tasks/:task_id/replies`.
 - Fake Reasonix one-shot Worktree Review Package test.
 - Controlled real Reasonix smoke task `task_f8b579217015` succeeded with `max_steps=20`, changed only `notes/result.txt`, had `risk_flags: []`, and its temporary Worktree was discarded afterward.
 - Reasonix session mapping: after a TUI run, Bridge scans only configured `REASONIX_HOME\projects` for in-window `.jsonl` session files, skips `.trash`, prefers task/workspace matches, and persists the best match as `agent_session_path`. Browser API responses sanitize this path.
 - Admin UI first slice: Create Task can select MiMo or Reasonix TUI; MiMo tasks still call `/api/tasks`, Reasonix tasks call `/api/agent-tasks`; list/detail pages show agent badges; System page shows `/api/agents` status.
 - Agent-aware queue/path conflict scheduling: `TaskQueue` stores `agentId`, `workspacePath`, and `editablePaths`; different agents can run in parallel only when editable paths do not overlap; same-agent tasks and unknown metadata remain queued.
+- Reasonix reply/continue: `agent_reply_task` resumes with `reasonix run --resume <agent_session_path>` after validating the session file is under configured `REASONIX_HOME`; REST and admin UI replies are wired.
 
 Not implemented yet:
 
-- Reasonix continue/reply support.
 - Rich Reasonix session/live parser beyond bounded process output.
+- Reasonix GUI shared-session opening/viewing.
+- Reasonix token/cost extraction if session JSONL exposes real data.
 
 Local discovery on this machine:
 
@@ -75,7 +78,6 @@ Local discovery on this machine:
 
 - `src/services/agent-runner.ts`
 - `src/services/reasonix-event-parser.ts`
-- `src/tools/agent-reply-task.ts`
 
 ## Existing Files To Modify
 
@@ -187,9 +189,11 @@ Status: implemented for one-shot runs. The first version does not parse session 
 
 After session mapping is reliable, add reply support:
 
-- Prefer `reasonix chat --resume <session_path>` or a documented resume mechanism.
-- If Reasonix supports `run --resume PATH <task>`, prefer that for headless continuation.
+- Prefer `reasonix run --resume PATH <task>` for headless continuation.
 - Keep the same Worktree and re-audit changes after each reply.
+- Validate the resume path is inside configured `REASONIX_HOME`.
+
+Status: complete for TUI resume. `agent_reply_task` uses the stored `agent_session_path`, advances the task round on successful follow-up, refreshes the Review Package, and keeps browser API responses sanitized.
 
 ### Phase 5: GUI Shared Session Viewing
 
@@ -211,11 +215,11 @@ Only after session mapping:
 
 ## Pending Work
 
-- Parse Reasonix session JSONL shape only when needed for richer live view or token/cost extraction.
+- Parse Reasonix session JSONL shape for richer live view and token/cost extraction if real fields exist.
 - Decide whether Bridge uses the user's existing `REASONIX_HOME` or a Bridge-managed Reasonix home.
 - Decide default Reasonix model for Bridge tasks.
 - Decide safe permission mode for non-interactive Reasonix execution.
-- Add fake Reasonix fixtures before using the real binary in tests.
+- Validate real Reasonix resume behavior beyond the current fake-runner proof when the local model budget allows it.
 
 ## Risks / Blockers
 

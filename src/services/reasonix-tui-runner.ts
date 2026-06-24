@@ -11,6 +11,7 @@ export interface ReasonixRunnerOptions {
   task: TaskState;
   runtimeDir: string;
   timeoutMs: number;
+  resumeSessionPath?: string | null;
 }
 
 export interface ReasonixRunnerHandle {
@@ -23,7 +24,7 @@ export function runReasonixTuiTask(
   onResult: (result: TaskResult) => void,
   onError: (error: string) => void
 ): ReasonixRunnerHandle {
-  const { agent, task, runtimeDir, timeoutMs } = options;
+  const { agent, task, runtimeDir, timeoutMs, resumeSessionPath } = options;
   if (!agent.command) {
     throw new Error("Reasonix command is not configured.");
   }
@@ -32,7 +33,7 @@ export function runReasonixTuiTask(
   const logPath = `${runtimeDir}/logs/${task.task_id}-round-${round}.jsonl`;
   const stderrLogPath = `${runtimeDir}/logs/${task.task_id}-round-${round}.stderr.log`;
   const briefPath = `${runtimeDir}/briefs/${task.task_id}-round-${round}.md`;
-  const args = buildReasonixRunArgs(agent, briefPath, task.config.workspace_path);
+  const args = buildReasonixRunArgs(agent, briefPath, task.config.workspace_path, resumeSessionPath);
 
   prepareReasonixWorkspace(task.config.workspace_path);
   writeReasonixEvent(logPath, "start", "Reasonix TUI task started.");
@@ -142,13 +143,21 @@ export function runReasonixTuiTask(
   };
 }
 
-function buildReasonixRunArgs(agent: AgentConfig, briefPath: string, workspacePath: string): string[] {
+function buildReasonixRunArgs(
+  agent: AgentConfig,
+  briefPath: string,
+  workspacePath: string,
+  resumeSessionPath?: string | null
+): string[] {
   const args = [...(agent.command_args ?? []), "run"];
   if (agent.default_model) {
     args.push("--model", agent.default_model);
   }
   if (agent.max_steps && Number.isInteger(agent.max_steps) && agent.max_steps > 0) {
     args.push("--max-steps", String(agent.max_steps));
+  }
+  if (resumeSessionPath) {
+    args.push("--resume", resumeSessionPath);
   }
   args.push([
     "你正在 MiMo Bridge 管控的任务 Worktree 中运行。",

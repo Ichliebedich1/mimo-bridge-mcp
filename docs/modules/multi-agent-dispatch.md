@@ -22,7 +22,7 @@ Reasonix should eventually reach the same project role as MiMo:
 
 ## Current Status
 
-P6.0-P6.4 are partially implemented. The runtime now has an Agent Registry, Reasonix TUI probe, Reasonix one-shot runner, generic low-token task get/wait tools, Reasonix session mapping through `agent_session_path`, a first Admin UI agent selector/badge pass, and an agent-aware queue that permits safe parallelism only for different agents editing non-overlapping paths. Existing `mimo_*` MCP tools remain compatible.
+P6.0-P6.5 are partially implemented. The runtime now has an Agent Registry, Reasonix TUI probe, Reasonix one-shot runner, generic low-token task get/wait/reply tools, Reasonix session mapping through `agent_session_path`, a first Admin UI agent selector/badge/reply pass, and an agent-aware queue that permits safe parallelism only for different agents editing non-overlapping paths. Existing `mimo_*` MCP tools remain compatible.
 
 Observed local Reasonix installation on this machine:
 
@@ -300,6 +300,14 @@ Acceptance:
 - Codex can send a follow-up to a Reasonix task.
 - The same session record is discoverable by Reasonix GUI or Bridge session viewer.
 
+Status:
+
+- Implemented for TUI resume.
+- `agent_reply_task` is exposed through STDIO MCP, HTTP MCP, and REST `POST /api/agent-tasks/:id/replies`.
+- Admin UI replies route to `/api/agent-tasks/:id/replies` for non-MiMo tasks.
+- Reasonix TUI uses `reasonix run --resume <agent_session_path>`; the session file must exist under configured `REASONIX_HOME`.
+- Follow-up runs advance `current_round`, refresh Review Package, and keep local session paths out of browser responses.
+
 ### P6.6 GUI Session Sharing
 
 Goal: GUI displays or opens TUI-created sessions without GUI automation.
@@ -359,4 +367,4 @@ Acceptance:
 5. Add real `reasonix-tui` health probe.
 6. Add one-shot `reasonix run` execution.
 7. Add Reasonix parser/live viewer integration.
-8. Add Reasonix continue/reply support now that one-shot execution and agent-aware queueing are stable.
+8. Add richer Reasonix live/session parsing now that one-shot execution, agent-aware queueing, and TUI resume are stable.

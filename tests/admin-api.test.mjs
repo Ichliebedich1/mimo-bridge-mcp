@@ -197,6 +197,12 @@ function createContext() {
           };
         },
       },
+      agentReplyTask: {
+        handler: async (input) => {
+          calls.push(["agentReplyTask", input]);
+          return { task_id: input.task_id, agent: input.agent_id ?? "reasonix-tui", status: "running" };
+        },
+      },
       getTask: {
         handler: async (input) => {
           calls.push(["getTask", input]);
@@ -434,6 +440,27 @@ test("admin API exposes low-token wait for generic agent tasks", async () => {
     assert.ok(captured);
     assert.strictEqual(captured[1].timeout_seconds, 30);
     assert.strictEqual(captured[1].agent_id, "reasonix-tui");
+  } finally {
+    fixture.cleanup();
+  }
+});
+
+test("admin API maps agent task replies to agentReplyTask", async () => {
+  const fixture = createContext();
+  try {
+    const result = await callApi(fixture.context, "POST", `/api/agent-tasks/${fixture.taskId}/replies`, {
+      agent_id: "reasonix-tui",
+      message: "continue",
+      priority: 4,
+    });
+    assert.strictEqual(result.statusCode, 200);
+    assert.strictEqual(result.body.ok, true);
+    assert.strictEqual(result.body.data.task_id, fixture.taskId);
+    assert.strictEqual(result.body.data.agent, "reasonix-tui");
+    const captured = fixture.calls.find(([name]) => name === "agentReplyTask");
+    assert.ok(captured);
+    assert.strictEqual(captured[1].message, "continue");
+    assert.strictEqual(captured[1].priority, 4);
   } finally {
     fixture.cleanup();
   }

@@ -17,6 +17,7 @@ import { createPendingReviewsHandler } from "./tools/pending-reviews.js";
 import { createAgentRegistry } from "./services/agent-registry.js";
 import { createAgentListHandler } from "./tools/agent-list.js";
 import { createAgentStartTaskHandler } from "./tools/agent-start-task.js";
+import { createAgentReplyTaskHandler } from "./tools/agent-reply-task.js";
 import { createAgentGetTaskHandler } from "./tools/agent-get-task.js";
 import { createAgentWaitTaskHandler } from "./tools/agent-wait-task.js";
 
@@ -40,6 +41,7 @@ async function main() {
   });
   const agentList = createAgentListHandler(agentRegistry);
   const agentStartTask = createAgentStartTaskHandler(config, config.agents, taskStore);
+  const agentReplyTask = createAgentReplyTaskHandler(config, config.agents, taskStore);
   const agentGetTask = createAgentGetTaskHandler(taskStore);
   const agentWaitTask = createAgentWaitTaskHandler(taskStore);
   const replyTask = createReplyTaskHandler(config, taskStore);
@@ -194,6 +196,17 @@ async function main() {
     }
   );
 
+  server.tool(
+    "agent_reply_task",
+    "继续指定 Agent 任务；Reasonix TUI 使用记录的 session JSONL 恢复",
+    agentReplyTask.schema.shape,
+    async (params) => {
+      const result = await agentReplyTask.handler(params);
+      return {
+        content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+      };
+    }
+  );
   server.tool(
     "agent_get_task",
     "按 agent_id 可选校验查询任意 Agent 任务，默认返回低上下文 Review Package",
