@@ -22,7 +22,7 @@ Reasonix should eventually reach the same project role as MiMo:
 
 ## Current Status
 
-P6.0-P6.17 are implemented locally. The runtime now has an Agent Registry, Reasonix TUI probe, Reasonix one-shot runner, generic low-token task get/wait/reply tools, generic lifecycle/status tools for cancel/finish/merge/delete/queue/token, safe client Agent commands including replies/recovery/listing/token status, Reasonix session mapping through `agent_session_path`, Admin UI agent selector/badge/reply support, agent-aware queue scheduling, Reasonix live/session parsing for the read-only live viewer, safe local folder opening, safe Reasonix GUI companion opening, explicit Reasonix token/cost extraction when session fields exist, bounded generic task listing/recovery, and generic Review Package summary fields. Existing `mimo_*` MCP tools remain compatible.
+P6.0-P6.18 are implemented locally. The runtime now has an Agent Registry, Reasonix TUI probe, Reasonix one-shot runner, generic low-token task get/wait/reply tools, generic lifecycle/status tools for cancel/finish/merge/delete/queue/token, safe client Agent commands including replies/recovery/listing/token status, Reasonix session mapping through `agent_session_path`, Admin UI agent selector/badge/reply/lifecycle support, agent-aware queue scheduling, Reasonix live/session parsing for the read-only live viewer, safe local folder opening, safe Reasonix GUI companion opening, explicit Reasonix token/cost extraction when session fields exist, bounded generic task listing/recovery, and generic Review Package summary fields. Existing `mimo_*` MCP tools remain compatible.
 
 Observed local Reasonix installation on this machine:
 
@@ -383,6 +383,30 @@ Status:
 - Verified with root/local-daemon/admin-ui builds.
 - Focused tests passed: `node --test tests\task-open-actions.test.mjs tests\admin-api.test.mjs tests\agent-registry.test.mjs` 43/43.
 - Boundary: `reasonix --help` currently exposes no stable GUI session-open argument, so this opens the shared GUI but does not focus a specific session.
+
+### P6.18 Admin UI Agent Lifecycle Parity
+
+Goal: make management-console lifecycle buttons use the same generic Agent routes as MCP/safe-client tools for non-MiMo tasks.
+
+Tasks:
+
+- Update Admin UI API helpers for cancel, finish, Worktree merge/discard, and delete.
+- Keep MiMo tasks on existing `/api/tasks/:id/...` routes for compatibility.
+- Route non-MiMo tasks to `/api/agent-tasks/:id/...` with `agent_id`.
+- Pass the selected task's `agent` from task detail action handlers.
+- Add focused tests for Reasonix route selection and MiMo fallback.
+
+Acceptance:
+
+- Reasonix lifecycle UI actions no longer borrow MiMo REST routes.
+- MiMo lifecycle UI actions remain unchanged.
+- `agent_id` mismatch protection stays active on generic routes.
+
+Status:
+
+- Implemented locally.
+- Verified with root/local-daemon/admin-ui builds.
+- Focused tests passed: `node --test tests\admin-ui-lifecycle-api.test.mjs tests\agent-lifecycle-task.test.mjs tests\admin-api.test.mjs` 37/37.
 
 ### P6.8 Token/Cost Integration
 

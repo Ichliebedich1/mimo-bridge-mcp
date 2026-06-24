@@ -10,7 +10,7 @@ P6 should first adapt Reasonix TUI, not Reasonix GUI. The TUI adapter should run
 
 ## Current Status
 
-P6.0-P6.17 Agent discovery, Reasonix one-shot execution, generic low-token task get/wait/reply, generic task lifecycle/status tools, safe client Agent commands including replies and token status, Reasonix session mapping, first Admin UI integration, agent-aware queue/path-conflict scheduling, Reasonix live/session parsing, safe session-folder opening, safe Reasonix GUI companion opening, explicit token/cost extraction, and generic Review Package summary fields are implemented locally.
+P6.0-P6.18 Agent discovery, Reasonix one-shot execution, generic low-token task get/wait/reply, generic task lifecycle/status tools, safe client Agent commands including replies and token status, Reasonix session mapping, Admin UI integration/lifecycle parity, agent-aware queue/path-conflict scheduling, Reasonix live/session parsing, safe session-folder opening, safe Reasonix GUI companion opening, explicit token/cost extraction, and generic Review Package summary fields are implemented locally.
 
 Implemented:
 
@@ -55,6 +55,7 @@ Implemented:
 - Generic lifecycle parity: Reasonix tasks can now be cancelled, accepted/abandoned, merged/discarded, deleted, and inspected in the queue through `agent_*` tools instead of borrowing `mimo_*` tool names. Optional `agent_id` guards reject mismatched tasks before mutating state.
 - Safe scripted invocation: `scripts/mimo-bridge-client.mjs` now exposes `agent-list`, `agent-start`, `agent-wait`, `agent-reply`, `agent-start-and-wait`, `agent-review`, `agent-cancel`, `agent-finish`, `agent-merge`, `agent-discard`, `agent-delete`, `agent-queue`, and `agent-token-status`, preserving UTF-8 JSON file/stdin handling for Reasonix tasks and follow-up messages.
 - Safe GUI companion opening: Admin UI can call `POST /api/tasks/:id/open` with `action=reasonix_gui` for Reasonix TUI tasks. The daemon launches an explicit `reasonix-gui` agent command when configured, otherwise infers `...\ReasonixDesktop\reasonix-desktop.exe` from Reasonix TUI `home_dir`/command. It sets the same `REASONIX_HOME`, does not accept browser-supplied paths or commands, and does not return raw local paths.
+- Admin UI lifecycle parity: task detail buttons now call generic `/api/agent-tasks/:id/...` lifecycle routes for Reasonix tasks and keep `/api/tasks/:id/...` for MiMo tasks.
 
 Not implemented yet:
 

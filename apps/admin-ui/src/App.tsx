@@ -234,13 +234,14 @@ function App() {
   }
 
   function confirmCancel(taskId: string) {
+    const agent = tasks.find((candidate) => candidate.id === taskId)?.agent ?? 'mimo';
     setConfirmAction({
       title: '确认取消任务？',
-      body: '会调用固定管理 API：POST /api/tasks/:id/cancel。已运行的任务会尽量终止，队列中的任务会被移除。',
+      body: '会按任务所属 Agent 调用固定管理 API。已运行的任务会尽量终止，队列中的任务会被移除。',
       confirmLabel: '确认取消',
       tone: 'danger',
       onConfirm: () =>
-        runAction('正在取消任务…', '任务已取消。', () => cancelTask(taskId), {
+        runAction('正在取消任务…', '任务已取消。', () => cancelTask(taskId, agent), {
           refreshTaskId: taskId,
         }),
     });
@@ -259,7 +260,7 @@ function App() {
       confirmLabel: '永久删除',
       tone: 'danger',
       onConfirm: async () => {
-        const result = await runAction('正在删除任务…', '任务及运行时文件已删除。', () => deleteTask(taskId));
+        const result = await runAction('正在删除任务…', '任务及运行时文件已删除。', () => deleteTask(taskId, task.agent));
         if (result) {
           setSelectedTaskId('');
           setPage('tasks');
@@ -269,33 +270,35 @@ function App() {
   }
 
   function confirmFinish(taskId: string, status: 'accepted' | 'abandoned') {
+    const agent = tasks.find((candidate) => candidate.id === taskId)?.agent ?? 'mimo';
     const accepted = status === 'accepted';
     setConfirmAction({
       title: accepted ? '确认验收任务？' : '确认放弃任务？',
       body: accepted
-        ? '会调用 POST /api/tasks/:id/finish，状态改为 accepted。请确认你已经看过 Review Package；界面不会自动替你判断。'
-        : '会调用 POST /api/tasks/:id/finish，状态改为 abandoned。此操作只标记任务结果，不会自动丢弃 Worktree。',
+        ? '会按任务所属 Agent 调用固定验收 API，状态改为 accepted。请确认你已经看过 Review Package；界面不会自动替你判断。'
+        : '会按任务所属 Agent 调用固定验收 API，状态改为 abandoned。此操作只标记任务结果，不会自动丢弃 Worktree。',
       confirmLabel: accepted ? '确认验收' : '确认放弃',
       tone: accepted ? 'normal' : 'danger',
       onConfirm: () =>
-        runAction(accepted ? '正在验收任务…' : '正在放弃任务…', accepted ? '任务已验收。' : '任务已放弃。', () => finishTask(taskId, status), {
+        runAction(accepted ? '正在验收任务…' : '正在放弃任务…', accepted ? '任务已验收。' : '任务已放弃。', () => finishTask(taskId, status, agent), {
           refreshTaskId: taskId,
         }),
     });
   }
 
   function confirmMergeAndAccept(taskId: string) {
+    const agent = tasks.find((candidate) => candidate.id === taskId)?.agent ?? 'mimo';
     setConfirmAction({
       title: '确认合并 Worktree 并验收？',
-      body: '会先调用 POST /api/tasks/:id/worktree(action=merge)，成功后再调用 finish(accepted)。如果任一步失败，界面会停止并展示错误。',
+      body: '会按任务所属 Agent 先合并 Worktree，成功后再标记为 accepted。如果任一步失败，界面会停止并展示错误。',
       confirmLabel: '合并并验收',
       onConfirm: () =>
         runAction(
           '正在合并 Worktree…',
           'Worktree 已合并，任务已验收。',
           async () => {
-            await worktreeTask(taskId, 'merge');
-            return finishTask(taskId, 'accepted');
+            await worktreeTask(taskId, 'merge', agent);
+            return finishTask(taskId, 'accepted', agent);
           },
           { refreshTaskId: taskId },
         ),
@@ -303,9 +306,10 @@ function App() {
   }
 
   function confirmDiscardAndAbandon(taskId: string) {
+    const agent = tasks.find((candidate) => candidate.id === taskId)?.agent ?? 'mimo';
     setConfirmAction({
       title: '确认丢弃 Worktree 并放弃？',
-      body: '会先调用 POST /api/tasks/:id/worktree(action=discard)，成功后再调用 finish(abandoned)。如果丢弃失败，不会假装已经放弃。',
+      body: '会按任务所属 Agent 先丢弃 Worktree，成功后再标记为 abandoned。如果丢弃失败，不会假装已经放弃。',
       confirmLabel: '丢弃并放弃',
       tone: 'danger',
       onConfirm: () =>
@@ -313,8 +317,8 @@ function App() {
           '正在丢弃 Worktree…',
           'Worktree 已丢弃，任务已放弃。',
           async () => {
-            await worktreeTask(taskId, 'discard');
-            return finishTask(taskId, 'abandoned');
+            await worktreeTask(taskId, 'discard', agent);
+            return finishTask(taskId, 'abandoned', agent);
           },
           { refreshTaskId: taskId },
         ),

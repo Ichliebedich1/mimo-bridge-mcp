@@ -300,20 +300,36 @@ export async function replyTask(taskId: string, message: string, priority = 5, a
   return unwrap(await postJson<TaskActionResult>('/api/tasks/' + encodedTaskId + '/replies', { message, priority }));
 }
 
-export async function cancelTask(taskId: string): Promise<TaskActionResult> {
-  return unwrap(await postJson<TaskActionResult>('/api/tasks/' + encodeURIComponent(taskId) + '/cancel', {}));
+export async function cancelTask(taskId: string, agent = 'mimo'): Promise<TaskActionResult> {
+  const encodedTaskId = encodeURIComponent(taskId);
+  if (agent && agent !== 'mimo') {
+    return unwrap(await postJson<TaskActionResult>('/api/agent-tasks/' + encodedTaskId + '/cancel', { agent_id: agent }));
+  }
+  return unwrap(await postJson<TaskActionResult>('/api/tasks/' + encodedTaskId + '/cancel', {}));
 }
 
-export async function deleteTask(taskId: string): Promise<TaskActionResult> {
-  return unwrap(await deleteJson<TaskActionResult>('/api/tasks/' + encodeURIComponent(taskId)));
+export async function deleteTask(taskId: string, agent = 'mimo'): Promise<TaskActionResult> {
+  const encodedTaskId = encodeURIComponent(taskId);
+  if (agent && agent !== 'mimo') {
+    return unwrap(await deleteJson<TaskActionResult>('/api/agent-tasks/' + encodedTaskId + '?agent_id=' + encodeURIComponent(agent)));
+  }
+  return unwrap(await deleteJson<TaskActionResult>('/api/tasks/' + encodedTaskId));
 }
 
-export async function finishTask(taskId: string, status: 'accepted' | 'abandoned'): Promise<TaskActionResult> {
-  return unwrap(await postJson<TaskActionResult>('/api/tasks/' + encodeURIComponent(taskId) + '/finish', { status }));
+export async function finishTask(taskId: string, status: 'accepted' | 'abandoned', agent = 'mimo'): Promise<TaskActionResult> {
+  const encodedTaskId = encodeURIComponent(taskId);
+  if (agent && agent !== 'mimo') {
+    return unwrap(await postJson<TaskActionResult>('/api/agent-tasks/' + encodedTaskId + '/finish', { status, agent_id: agent }));
+  }
+  return unwrap(await postJson<TaskActionResult>('/api/tasks/' + encodedTaskId + '/finish', { status }));
 }
 
-export async function worktreeTask(taskId: string, action: 'merge' | 'discard'): Promise<TaskActionResult> {
-  return unwrap(await postJson<TaskActionResult>('/api/tasks/' + encodeURIComponent(taskId) + '/worktree', { action }));
+export async function worktreeTask(taskId: string, action: 'merge' | 'discard', agent = 'mimo'): Promise<TaskActionResult> {
+  const encodedTaskId = encodeURIComponent(taskId);
+  if (agent && agent !== 'mimo') {
+    return unwrap(await postJson<TaskActionResult>('/api/agent-tasks/' + encodedTaskId + '/worktree', { action, agent_id: agent }));
+  }
+  return unwrap(await postJson<TaskActionResult>('/api/tasks/' + encodedTaskId + '/worktree', { action }));
 }
 
 export type TaskOpenAction = 'task_folder' | 'session_folder' | 'reasonix_gui';
