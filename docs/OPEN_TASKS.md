@@ -55,6 +55,7 @@
 - P6.16 generic Review Package summary: added `agent_summary` and `agent_summary_zh` to ReviewPackage while preserving `mimo_summary` and `mimo_summary_zh` for compatibility. Admin UI now prefers generic summary fields. Verified with root/local-daemon/admin-ui builds and 51/51 focused tests.
 - P6.16 package refresh: `npm.cmd run package:installer` regenerated the Windows 10/11 x64 installer EXE and portable ZIP; `npm.cmd run validate:release -- -SkipPackageBuild` passed. Installer manifest source commit is `fdfbc79`.
 - P6.17 Reasonix GUI companion opening: `POST /api/tasks/:id/open` now accepts fixed `action=reasonix_gui` for Reasonix TUI tasks. The daemon launches a configured `reasonix-gui` command, or infers `...\ReasonixDesktop\reasonix-desktop.exe` from the Reasonix TUI config, with the shared `REASONIX_HOME`; Admin UI task detail shows "打开 Reasonix GUI". This opens GUI for shared-session/manual viewing, not a deep link to a specific session. Verified with root/local-daemon/admin-ui builds and `node --test tests\task-open-actions.test.mjs tests\admin-api.test.mjs tests\agent-registry.test.mjs` passing 43/43.
+- P6.17 package refresh: `npm.cmd run package:installer` regenerated the Windows 10/11 x64 installer EXE and portable ZIP; `npm.cmd run validate:release -- -SkipPackageBuild` passed. Installer manifest source commit is `1bafa35`.
 ## Risks
 
 - The on-demand development Scheduled Task is not the final launcher or installer behavior.
@@ -69,7 +70,7 @@
 1. Use `mimo_wait_task` for all later MiMo work instead of repeated polling.
 2. After any interrupted MiMo wait or context compression, run `node scripts\mimo-bridge-client.mjs recover --limit 5 --max-chars 8000` before starting new work. If it returns 404, rebuild/restart the local daemon so it loads the recovery-inbox code.
 3. Validate the launcher and installer on clean Windows 10/11 x64 machines and after reboot/logon.
-4. Keep portable ZIP and EXE installer validation in the release checklist; latest local validation passed after P6.16, but clean-machine manual validation is still separate.
+4. Keep portable ZIP and EXE installer validation in the release checklist; latest local validation passed after P6.17, but clean-machine manual validation is still separate.
 5. Continue P6 with the design in `docs/modules/multi-agent-dispatch.md` and `docs/modules/reasonix-tui-adapter.md`: next slices are deeper MiMo adapter migration behind generic tools and final package rebuild/release validation. Revisit specific-session GUI opening only if Reasonix documents a stable command/deep link.
 6. Use `scripts/mimo-bridge-client.mjs` or `.ps1` for scripted agent-to-bridge calls; use `agent-*` commands for Reasonix/multi-agent work and do not return to inline JSON in PowerShell.
 7. When using `mimo_wait_task` from an MCP SDK script outside the safe client, pass request options such as `{ timeout: (timeout_seconds + 20) * 1000 }` to avoid client-side timeout. See `docs/modules/low-token-wait.md` for the 1800/3600s examples.
