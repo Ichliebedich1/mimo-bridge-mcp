@@ -16,6 +16,8 @@ Stage 2 lifecycle code is implemented: a thin launcher controller/CLI starts, st
 
 P5.3 portable ZIP and EXE installer generation are implemented. `npm.cmd run package:portable` creates `artifacts/MiMoBridge-portable-win10-win11-x64.zip`; `npm.cmd run package:installer` creates `artifacts/MiMoBridgeSetup-win10-win11-x64.exe`. Both target Windows 10/11 x64 and bundle `node.exe`, built daemon/UI artifacts, and production dependencies without MiMo credentials/tasks/Worktrees.
 
+Installer update hardening is implemented. The setup stub supports `-Help` and rejects unknown flags before installation begins. The PowerShell installer verifies the installed daemon is stopped before replacing app files, checks for locked native/runtime files, uses a staged payload plus rollback instead of deleting live directories first, writes setup logs under `%LOCALAPPDATA%\MiMoBridge\setup.log`, and leaves the previous install intact if shutdown or replacement cannot be proven safe.
+
 ## Entry Files
 
 - `apps/local-daemon/start-local.ps1`
@@ -63,6 +65,7 @@ Keep the existing React UI and Node daemon. Build a thin Windows launcher around
 
 
 - Validate clean-machine install, Chinese/space paths, no system Node, port conflict, reboot, Codex MCP, shortcut, opt-in autostart, and uninstall.
+- Validate upgrade over a running old installed daemon on a clean machine; expected behavior is a clean abort with the old install preserved if the daemon cannot be stopped.
 - Re-run portable smoke from the generated ZIP on a clean machine.
 - Verify whether direct start/restart stdout behaves normally in an interactive Windows console; the Codex shell harness can lose stdout capture after daemon spawn, while `status -Json` verifies the daemon is healthy.
 
@@ -92,7 +95,7 @@ $tests = Get-ChildItem -LiteralPath 'tests' -Filter '*.test.mjs' | Where-Object 
 node --test $tests
 ```
 
-Expected current counts: launcher plus installer plus release-validation focused regression 17/17; normal regression 248/248.
+Expected current counts: launcher plus installer plus release-validation focused regression 20/20; normal regression count varies as new tests are added, but `tests/runner-integration.test.mjs` remains excluded from normal Windows regression.
 
 Portable package generation:
 
@@ -111,6 +114,8 @@ Installer payload self-test:
 ```powershell
 artifacts\MiMoBridgeSetup-win10-win11-x64.exe -SelfTest
 ```
+
+`-SelfTest` now extracts the embedded payload to `%TEMP%`, checks required files and forbidden runtime data, starts a temporary daemon from the bundled `node.exe` on a self-test port, verifies `/api/health`, verifies `/` serves Admin UI HTML, then stops the temporary process.
 
 Release validation:
 

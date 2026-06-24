@@ -49,3 +49,13 @@
 
 - Decision: Reasonix support must add an Agent Registry and generic dispatch tools instead of replacing MiMo as the single configured provider.
 - Reason: the user wants Codex to assign work to both MiMo and Reasonix at the same time. A single `agentProvider` switch would block concurrent delegation and force unnecessary reconfiguration.
+
+## 2026-06-24: Reasonix TUI Is The First Reasonix Execution Path
+
+- Decision: P6 should first adapt Reasonix TUI as `reasonix-tui` through executable probing, `reasonix run`, session mapping, and output parsing. Reasonix GUI should initially be treated as a shared-session viewer/manual companion, not as the core automation runner.
+- Reason: the local Reasonix install exposes a stable TUI binary and `run` command, while GUI automation would be brittle and could steal focus. CLI and desktop share Reasonix home/session storage, so TUI-created sessions can be made visible to GUI without click automation.
+
+## 2026-06-24: Reasonix Should Target MiMo-Level Bridge Capability
+
+- Decision: Reasonix integration should aim for the same Bridge workflow as MiMo: start task, wait once, review package first, focused escalation, Codex-controlled merge/discard, live viewer output, safe deletion, and admin UI visibility.
+- Reason: the user wants Reasonix to become a peer execution agent, not a limited side integration.
