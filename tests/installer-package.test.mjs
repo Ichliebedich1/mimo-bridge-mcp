@@ -35,6 +35,10 @@ test("installer build wraps the portable payload in a Windows 10/11 x64 exe", as
   assert.match(stub, /powershell\.exe -NoProfile -ExecutionPolicy Bypass -File/);
   assert.match(stub, /has_mode_argument/);
   assert.match(stub, /L" -Quiet"/);
+  assert.match(stub, /validate_arguments/);
+  assert.match(stub, /Unknown setup option/);
+  assert.match(stub, /is_help_argument/);
+  assert.match(stub, /-SelfTestPort/);
 });
 
 test("installer preserves user data by default and leaves autostart opt-in", async () => {
@@ -45,6 +49,7 @@ test("installer preserves user data by default and leaves autostart opt-in", asy
   assert.match(installer, /User data is preserved/);
   assert.match(installer, /\[switch\]\$DeleteUserData/);
   assert.match(installer, /\[switch\]\$SelfTest/);
+  assert.match(installer, /\[int\]\$SelfTestPort = 33210/);
   assert.match(installer, /MiMo Bridge installer self-test passed/);
   assert.match(installer, /MiMo credentials, task logs, active tasks, and Worktrees are not bundled/);
   assert.match(installer, /MIMO_BRIDGE_NODE_PATH/);
@@ -53,4 +58,42 @@ test("installer preserves user data by default and leaves autostart opt-in", asy
   assert.ok(installer.includes("'set \"MIMO_BRIDGE_DATA_DIR={0}\"' -f $dataRoot"));
   assert.ok(installer.includes("'set \"MIMO_BRIDGE_CONFIG={0}\"' -f $configPath"));
   assert.match(installer, /\[Environment\]::UserInteractive/);
+});
+
+test("installer update path verifies stop before replacing app files", async () => {
+  const installer = await read("scripts/installer/install.ps1");
+  assert.match(installer, /Assert-InstalledDaemonStopped/);
+  assert.match(installer, /Invoke-LauncherCommand/);
+  assert.match(installer, /mimo-bridge-installer-launcher-/);
+  assert.match(installer, /call "' \+ \$Paths\.LauncherCmd \+ '"/);
+  assert.match(installer, /Test-HttpHealth/);
+  assert.match(installer, /Get-PortOwner/);
+  assert.match(installer, /Test-InstallFileLocked/);
+  assert.match(installer, /Close MiMo Bridge, or reboot Windows, then run this installer again/);
+  assert.match(installer, /No installed files were removed/);
+
+  const installBody = installer.slice(installer.indexOf("function Install-App"));
+  assert.match(installBody, /Assert-InstalledDaemonStopped -Paths \$paths/);
+  assert.match(installBody, /Install-StagedPayload -Paths \$paths -StageRoot \$payloadRoot/);
+  assert.doesNotMatch(installBody, /Remove-KnownChild -Parent \$paths\.InstallRoot -Name "app"/);
+  assert.doesNotMatch(installBody, /Copy-Directory -Source \$payloadRoot -Destination \$paths\.InstallRoot/);
+});
+
+test("installer uses staging and rollback for replacement", async () => {
+  const installer = await read("scripts/installer/install.ps1");
+  assert.match(installer, /function Install-StagedPayload/);
+  assert.match(installer, /Test-StagedPayload -StageRoot \$StageRoot/);
+  assert.match(installer, /mimo-bridge-install-backup-/);
+  assert.match(installer, /Move-ChildIfExists/);
+  assert.match(installer, /Rollback failed/);
+  assert.match(installer, /previous app backup is preserved/);
+});
+
+test("installer self-test starts temporary daemon and serves admin UI", async () => {
+  const installer = await read("scripts/installer/install.ps1");
+  assert.match(installer, /function Test-ExtractedPayloadSmoke/);
+  assert.match(installer, /Invoke-LauncherCommand -Paths/);
+  assert.match(installer, /Test-HttpHealth -Port \$Port/);
+  assert.match(installer, /Invoke-WebRequest -UseBasicParsing -Uri \("http:\/\/127\.0\.0\.1:\{0\}\/" -f \$Port\)/);
+  assert.match(installer, /Self-test Admin UI was not served as HTML/);
 });

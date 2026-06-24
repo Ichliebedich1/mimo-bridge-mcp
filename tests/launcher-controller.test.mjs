@@ -120,8 +120,9 @@ describe("launcher-controller", () => {
         sleep: async () => undefined,
         fetchHealth: async () => health.shift() ?? healthOk(3210),
         isPortOpen: async () => false,
-        runPowerShell: (script) => {
+        runPowerShell: (script, timeoutMs) => {
           scriptText = script;
+          assert.strictEqual(timeoutMs, 60_000);
           return { status: 0, stdout: "24680\n", stderr: "" };
         },
       },

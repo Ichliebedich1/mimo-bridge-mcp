@@ -19,6 +19,7 @@ import { getDefaultConfigPath, loadPersistentConfig, type PersistentConfig } fro
 const DEFAULT_PORT = 3210;
 const DEFAULT_HEALTH_TIMEOUT_MS = 15_000;
 const DEFAULT_STOP_TIMEOUT_MS = 10_000;
+const WINDOWS_DAEMON_SPAWN_TIMEOUT_MS = 60_000;
 const STATE_OWNER = "mimo-bridge-launcher";
 const AUTOSTART_TASK_NAME = "MiMoBridge-Launcher";
 
@@ -715,7 +716,7 @@ function startDaemonWithPowerShell(paths: LauncherPaths, nodePath: string, runPo
     "$stderrPath = " + psQuote(paths.stderrLogPath) + "\n" +
     "$process = Start-Process -FilePath $nodePath -ArgumentList $entryArg -WorkingDirectory $repoRoot -RedirectStandardOutput $stdoutPath -RedirectStandardError $stderrPath -WindowStyle Hidden -PassThru\n" +
     "$process.Id\n";
-  const result = runPowerShell(script, 20_000);
+  const result = runPowerShell(script, WINDOWS_DAEMON_SPAWN_TIMEOUT_MS);
   const pid = Number(result.stdout.trim());
   if (result.status !== 0 || !Number.isInteger(pid) || pid <= 0) {
     return { ok: false, error: result.stderr || result.error || "无法取得 daemon PID。", details: result };

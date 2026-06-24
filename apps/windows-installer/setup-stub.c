@@ -20,6 +20,26 @@ static int fail_message(const wchar_t *message) {
   return 1;
 }
 
+static int print_help(void) {
+  const wchar_t *message =
+    L"MiMo Bridge Setup\n\n"
+    L"Usage:\n"
+    L"  MiMoBridgeSetup-win10-win11-x64.exe\n"
+    L"  MiMoBridgeSetup-win10-win11-x64.exe -Quiet\n"
+    L"  MiMoBridgeSetup-win10-win11-x64.exe -SelfTest\n"
+    L"  MiMoBridgeSetup-win10-win11-x64.exe -Uninstall [-DeleteUserData]\n\n"
+    L"Options:\n"
+    L"  -Quiet              Install without prompts.\n"
+    L"  -NoDesktopShortcut  Do not create a desktop shortcut.\n"
+    L"  -Autostart          Enable per-user logon startup.\n"
+    L"  -InstallDir PATH    Override the per-user install directory.\n"
+    L"  -SelfTest           Validate embedded payload without installing.\n"
+    L"  -Help, --help, -h, /?  Show this help.\n";
+  fwprintf(stdout, L"%ls\n", message);
+  MessageBoxW(NULL, message, L"MiMo Bridge Setup", MB_OK);
+  return 0;
+}
+
 static int append_text(wchar_t *buffer, size_t capacity, const wchar_t *text) {
   size_t used = wcslen(buffer);
   size_t extra = wcslen(text);
@@ -80,11 +100,66 @@ static void cleanup_temp(const wchar_t *temp_dir, const wchar_t *install_script,
   RemoveDirectoryW(temp_dir);
 }
 
+static int is_help_argument(const wchar_t *arg) {
+  return _wcsicmp(arg, L"-Help") == 0 ||
+         _wcsicmp(arg, L"--help") == 0 ||
+         _wcsicmp(arg, L"-h") == 0 ||
+         _wcsicmp(arg, L"/?") == 0 ||
+         _wcsicmp(arg, L"/help") == 0;
+}
+
+static int is_known_switch_argument(const wchar_t *arg) {
+  return _wcsicmp(arg, L"-Quiet") == 0 ||
+         _wcsicmp(arg, L"-NoDesktopShortcut") == 0 ||
+         _wcsicmp(arg, L"-Autostart") == 0 ||
+         _wcsicmp(arg, L"-Uninstall") == 0 ||
+         _wcsicmp(arg, L"-DeleteUserData") == 0 ||
+         _wcsicmp(arg, L"-SelfTest") == 0;
+}
+
+static int is_known_value_argument(const wchar_t *arg) {
+  return _wcsicmp(arg, L"-InstallDir") == 0 ||
+         _wcsicmp(arg, L"-SelfTestPort") == 0;
+}
+
+static int validate_arguments(int argc, wchar_t **argv) {
+  for (int i = 1; i < argc; i++) {
+    if (is_help_argument(argv[i])) {
+      return 2;
+    }
+    if (is_known_switch_argument(argv[i])) {
+      continue;
+    }
+    if (is_known_value_argument(argv[i])) {
+      if (i + 1 >= argc) {
+        wchar_t message[512];
+        swprintf(message, 512, L"Missing value for setup option: %ls", argv[i]);
+        return fail_message(message);
+      }
+      i++;
+      continue;
+    }
+
+    wchar_t message[512];
+    swprintf(message, 512, L"Unknown setup option: %ls\n\nUse -Help to see supported options.", argv[i]);
+    return fail_message(message);
+  }
+  return 0;
+}
+
 int wmain(int argc, wchar_t **argv) {
   wchar_t temp_base[MAX_PATH];
   wchar_t temp_dir[MAX_PATH];
   wchar_t install_script[MAX_PATH];
   wchar_t payload_zip[MAX_PATH];
+
+  int validation = validate_arguments(argc, argv);
+  if (validation == 2) {
+    return print_help();
+  }
+  if (validation != 0) {
+    return validation;
+  }
 
   if (!GetTempPathW(MAX_PATH, temp_base)) {
     return fail_message(L"Cannot resolve TEMP directory.");

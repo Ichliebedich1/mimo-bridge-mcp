@@ -5,6 +5,7 @@ param(
   [switch]$Uninstall,
   [switch]$DeleteUserData,
   [switch]$SelfTest,
+  [int]$SelfTestPort = 33210,
   [string]$InstallDir
 )
 
@@ -14,6 +15,27 @@ $AppName = "MiMo Bridge"
 $AppId = "MiMoBridge"
 $AppVersion = "0.1.0"
 $TaskName = "MiMoBridge-Launcher"
+
+function Get-SetupLogPath {
+  try {
+    $localAppData = Get-LocalAppData
+    $dataRoot = Join-Path $localAppData "MiMoBridge"
+    New-Item -ItemType Directory -Force -Path $dataRoot | Out-Null
+    return Join-Path $dataRoot "setup.log"
+  } catch {
+    return Join-Path ([System.IO.Path]::GetTempPath()) "mimo-bridge-setup.log"
+  }
+}
+
+function Write-SetupLog {
+  param([Parameter(Mandatory = $true)][string]$Message)
+  $line = "[" + (Get-Date).ToUniversalTime().ToString("o") + "] " + $Message
+  try {
+    Add-Content -LiteralPath (Get-SetupLogPath) -Value $line -Encoding UTF8
+  } catch {
+    Write-Verbose $line
+  }
+}
 
 function Get-LocalAppData {
   $value = [Environment]::GetFolderPath("LocalApplicationData")
@@ -164,6 +186,238 @@ function Copy-Directory {
   }
 }
 
+function Invoke-LauncherCommand {
+  param(
+    [Parameter(Mandatory = $true)]$Paths,
+    [Parameter(Mandatory = $true)][string]$Command,
+    [int]$TimeoutMs = 20000
+  )
+  if (-not (Test-Path -LiteralPath $Paths.LauncherCmd)) {
+    return [pscustomobject]@{
+      Ran = $false
+      ExitCode = $null
+      Stdout = ""
+      Stderr = "Launcher command is missing: $($Paths.LauncherCmd)"
+      TimedOut = $false
+    }
+  }
+
+  $stdoutPath = Join-Path ([System.IO.Path]::GetTempPath()) ("mimo-bridge-installer-launcher-" + [guid]::NewGuid().ToString("N") + ".out")
+  $stderrPath = Join-Path ([System.IO.Path]::GetTempPath()) ("mimo-bridge-installer-launcher-" + [guid]::NewGuid().ToString("N") + ".err")
+  $wrapperPath = Join-Path ([System.IO.Path]::GetTempPath()) ("mimo-bridge-installer-launcher-" + [guid]::NewGuid().ToString("N") + ".cmd")
+  try {
+    $wrapper = "@echo off" + [Environment]::NewLine + 'call "' + $Paths.LauncherCmd + '" ' + $Command + " -Json" + [Environment]::NewLine
+    [System.IO.File]::WriteAllText($wrapperPath, $wrapper, [System.Text.Encoding]::ASCII)
+    $process = Start-Process -FilePath "cmd.exe" -ArgumentList @("/d", "/c", $wrapperPath) -WorkingDirectory $Paths.InstallRoot -RedirectStandardOutput $stdoutPath -RedirectStandardError $stderrPath -PassThru -WindowStyle Hidden
+    $timedOut = -not $process.WaitForExit($TimeoutMs)
+    if ($timedOut) {
+      try { Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue } catch { }
+    }
+    return [pscustomobject]@{
+      Ran = $true
+      ExitCode = if ($timedOut) { $null } else { $process.ExitCode }
+      Stdout = if (Test-Path -LiteralPath $stdoutPath) { Get-Content -LiteralPath $stdoutPath -Raw -ErrorAction SilentlyContinue } else { "" }
+      Stderr = if (Test-Path -LiteralPath $stderrPath) { Get-Content -LiteralPath $stderrPath -Raw -ErrorAction SilentlyContinue } else { "" }
+      TimedOut = $timedOut
+    }
+  } finally {
+    Remove-Item -LiteralPath $stdoutPath, $stderrPath, $wrapperPath -Force -ErrorAction SilentlyContinue
+  }
+}
+
+function Get-ConfiguredPort {
+  param([Parameter(Mandatory = $true)]$Paths)
+  if (Test-Path -LiteralPath $Paths.ConfigPath) {
+    try {
+      $config = Get-Content -LiteralPath $Paths.ConfigPath -Raw | ConvertFrom-Json
+      if ($null -ne $config.port) {
+        $port = [int]$config.port
+        if ($port -ge 1 -and $port -le 65535) {
+          return $port
+        }
+      }
+    } catch {
+      Write-SetupLog "Could not read configured port from $($Paths.ConfigPath): $($_.Exception.Message)"
+    }
+  }
+  return 3210
+}
+
+function Test-HttpHealth {
+  param(
+    [Parameter(Mandatory = $true)][int]$Port,
+    [int]$TimeoutSec = 2
+  )
+  try {
+    $response = Invoke-WebRequest -UseBasicParsing -Uri ("http://127.0.0.1:{0}/api/health" -f $Port) -TimeoutSec $TimeoutSec
+    if ($response.StatusCode -ne 200) {
+      return $false
+    }
+    $parsed = $response.Content | ConvertFrom-Json
+    return [bool]($parsed.ok -eq $true -and $parsed.data.daemon.status -eq "ok" -and $parsed.data.security.localhost_only -eq $true)
+  } catch {
+    return $false
+  }
+}
+
+function Get-PortOwner {
+  param([Parameter(Mandatory = $true)][int]$Port)
+  try {
+    $connection = Get-NetTCPConnection -LocalPort $Port -State Listen -ErrorAction SilentlyContinue | Select-Object -First 1
+    if (-not $connection) {
+      return $null
+    }
+    $process = Get-CimInstance Win32_Process -Filter ("ProcessId=" + $connection.OwningProcess) -ErrorAction SilentlyContinue
+    return [pscustomobject]@{
+      Pid = [int]$connection.OwningProcess
+      Name = if ($process) { $process.Name } else { $null }
+      CommandLine = if ($process) { $process.CommandLine } else { $null }
+    }
+  } catch {
+    return $null
+  }
+}
+
+function Test-InstallFileLocked {
+  param([Parameter(Mandatory = $true)][string]$InstallRoot)
+  if (-not (Test-Path -LiteralPath $InstallRoot)) {
+    return $false
+  }
+  $candidates = Get-ChildItem -LiteralPath $InstallRoot -Recurse -File -Force -ErrorAction SilentlyContinue |
+    Where-Object { $_.Name -in @("conpty.node", "node.exe", "index.js") }
+  if (-not $candidates) {
+    return $false
+  }
+  foreach ($candidate in $candidates) {
+    try {
+      $stream = [System.IO.File]::Open($candidate.FullName, [System.IO.FileMode]::Open, [System.IO.FileAccess]::ReadWrite, [System.IO.FileShare]::None)
+      $stream.Close()
+    } catch {
+      Write-SetupLog "Install file appears locked: $($candidate.FullName) - $($_.Exception.Message)"
+      return $true
+    }
+  }
+  return $false
+}
+
+function Assert-InstalledDaemonStopped {
+  param([Parameter(Mandatory = $true)]$Paths)
+  $port = Get-ConfiguredPort -Paths $Paths
+
+  if (Test-Path -LiteralPath $Paths.StopCmd) {
+    Write-SetupLog "Stopping installed daemon with $($Paths.StopCmd)"
+    $stop = Invoke-LauncherCommand -Paths $Paths -Command "stop" -TimeoutMs 30000
+    Write-SetupLog "Stop command ran=$($stop.Ran) exit=$($stop.ExitCode) timedOut=$($stop.TimedOut) stdout=$($stop.Stdout) stderr=$($stop.Stderr)"
+    if ($stop.TimedOut) {
+      throw "MiMo Bridge is still running and the installer could not stop it. Close MiMo Bridge, or reboot Windows, then run this installer again."
+    }
+  } elseif (Test-Path -LiteralPath $Paths.InstallRoot) {
+    Write-SetupLog "Stop launcher is missing; verifying port and file locks before upgrade."
+  }
+
+  $deadline = (Get-Date).AddSeconds(30)
+  do {
+    if (-not (Test-HttpHealth -Port $port)) {
+      $owner = Get-PortOwner -Port $port
+      if (-not $owner) {
+        break
+      }
+      $commandLine = [string]$owner.CommandLine
+      if ($commandLine -and $commandLine.IndexOf($Paths.InstallRoot, [System.StringComparison]::OrdinalIgnoreCase) -lt 0) {
+        break
+      }
+    }
+    Start-Sleep -Milliseconds 500
+  } while ((Get-Date) -lt $deadline)
+
+  if (Test-HttpHealth -Port $port) {
+    throw "MiMo Bridge is still responding on port $port. Close MiMo Bridge, or reboot Windows, then run this installer again."
+  }
+
+  $portOwner = Get-PortOwner -Port $port
+  if ($portOwner -and ([string]$portOwner.CommandLine).IndexOf($Paths.InstallRoot, [System.StringComparison]::OrdinalIgnoreCase) -ge 0) {
+    throw "MiMo Bridge still owns port $port (PID $($portOwner.Pid)). Close it, or reboot Windows, then run this installer again."
+  }
+
+  if (Test-InstallFileLocked -InstallRoot $Paths.InstallRoot) {
+    throw "Installed MiMo Bridge files are still locked. Close MiMo Bridge, or reboot Windows, then run this installer again. No installed files were removed."
+  }
+}
+
+function Test-StagedPayload {
+  param([Parameter(Mandatory = $true)][string]$StageRoot)
+  $requiredFiles = @(
+    "node\node.exe",
+    "app\apps\local-daemon\dist\apps\local-daemon\src\index.js",
+    "app\apps\local-daemon\dist\apps\local-daemon\src\launcher-cli.js",
+    "app\apps\local-daemon\launcher.ps1",
+    "app\apps\admin-ui\dist\index.html"
+  )
+  foreach ($relativePath in $requiredFiles) {
+    if (-not (Test-Path -LiteralPath (Join-Path $StageRoot $relativePath))) {
+      throw "Prepared installer payload missing required file: $relativePath"
+    }
+  }
+}
+
+function Move-ChildIfExists {
+  param(
+    [Parameter(Mandatory = $true)][string]$SourceParent,
+    [Parameter(Mandatory = $true)][string]$DestinationParent,
+    [Parameter(Mandatory = $true)][string]$Name
+  )
+  $source = Join-Path $SourceParent $Name
+  if (Test-Path -LiteralPath $source) {
+    Move-Item -LiteralPath $source -Destination (Join-Path $DestinationParent $Name)
+    return $true
+  }
+  return $false
+}
+
+function Install-StagedPayload {
+  param(
+    [Parameter(Mandatory = $true)]$Paths,
+    [Parameter(Mandatory = $true)][string]$StageRoot
+  )
+  Test-StagedPayload -StageRoot $StageRoot
+  New-Item -ItemType Directory -Force -Path $Paths.InstallRoot | Out-Null
+  $backupRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("mimo-bridge-install-backup-" + [guid]::NewGuid().ToString("N"))
+  New-Item -ItemType Directory -Force -Path $backupRoot | Out-Null
+  $itemsMovedToBackup = $false
+  $cleanupBackup = $true
+  try {
+    $itemsMovedToBackup = (Move-ChildIfExists -SourceParent $Paths.InstallRoot -DestinationParent $backupRoot -Name "app") -or $itemsMovedToBackup
+    $itemsMovedToBackup = (Move-ChildIfExists -SourceParent $Paths.InstallRoot -DestinationParent $backupRoot -Name "node") -or $itemsMovedToBackup
+    $itemsMovedToBackup = (Move-ChildIfExists -SourceParent $Paths.InstallRoot -DestinationParent $backupRoot -Name "data") -or $itemsMovedToBackup
+    foreach ($cmdFile in Get-ChildItem -LiteralPath $Paths.InstallRoot -Filter "*.cmd" -Force -ErrorAction SilentlyContinue) {
+      Move-Item -LiteralPath $cmdFile.FullName -Destination (Join-Path $backupRoot $cmdFile.Name)
+      $itemsMovedToBackup = $true
+    }
+
+    Copy-Directory -Source $StageRoot -Destination $Paths.InstallRoot -SkipTopLevelData $true
+  } catch {
+    if ($itemsMovedToBackup -or (Get-ChildItem -LiteralPath $backupRoot -Force -ErrorAction SilentlyContinue | Select-Object -First 1)) {
+      $cleanupBackup = $false
+      try {
+        Remove-KnownChild -Parent $Paths.InstallRoot -Name "app"
+        Remove-KnownChild -Parent $Paths.InstallRoot -Name "node"
+        Remove-KnownChild -Parent $Paths.InstallRoot -Name "data"
+        Get-ChildItem -LiteralPath $Paths.InstallRoot -Filter "*.cmd" -Force -ErrorAction SilentlyContinue | Remove-Item -Force -ErrorAction SilentlyContinue
+        Copy-Directory -Source $backupRoot -Destination $Paths.InstallRoot -SkipTopLevelData $false
+        $cleanupBackup = $true
+      } catch {
+        Write-SetupLog "Rollback failed. Backup preserved at $backupRoot. Error: $($_.Exception.Message)"
+        throw "Install failed and rollback could not be completed. The previous app backup is preserved at $backupRoot. Original error: $($_.Exception.Message)"
+      }
+    }
+    throw
+  } finally {
+    if ($cleanupBackup) {
+      Remove-Item -LiteralPath $backupRoot -Recurse -Force -ErrorAction SilentlyContinue
+    }
+  }
+}
+
 function Test-InstallerPayload {
   Assert-SupportedWindows
   $payloadZip = Join-Path $PSScriptRoot "MiMoBridge-payload.zip"
@@ -218,20 +472,82 @@ function Test-InstallerPayload {
       throw "Installer payload includes a sensitive file: $($sensitiveFiles.FullName)"
     }
 
+    Test-ExtractedPayloadSmoke -PayloadRoot $payloadRoot -Port $SelfTestPort
     Write-Host "MiMo Bridge installer self-test passed."
   } finally {
     Remove-Item -LiteralPath $tempRoot -Recurse -Force -ErrorAction SilentlyContinue
   }
 }
 
-function Stop-DaemonIfInstalled {
-  param([Parameter(Mandatory = $true)]$Paths)
-  if (Test-Path -LiteralPath $Paths.StopCmd) {
-    $process = Start-Process -FilePath "cmd.exe" -ArgumentList @("/c", $Paths.StopCmd) -WorkingDirectory $Paths.InstallRoot -PassThru -WindowStyle Hidden
-    if (-not $process.WaitForExit(15000)) {
-      try { Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue } catch { }
+function Test-ExtractedPayloadSmoke {
+  param(
+    [Parameter(Mandatory = $true)][string]$PayloadRoot,
+    [Parameter(Mandatory = $true)][int]$Port
+  )
+  if ($Port -lt 1 -or $Port -gt 65535) {
+    throw "SelfTestPort must be between 1 and 65535."
+  }
+  $dataRoot = Join-Path $PayloadRoot "data"
+  $configPath = Join-Path $dataRoot "config.json"
+  New-Item -ItemType Directory -Force -Path $dataRoot | Out-Null
+  $config = [ordered]@{
+    port = $Port
+    runtimeDir = Join-Path $dataRoot "runtime"
+  }
+  Write-Utf8NoBom -Path $configPath -Content (($config | ConvertTo-Json -Depth 4) + [Environment]::NewLine)
+
+  $nodePath = Join-Path $PayloadRoot "node\node.exe"
+  $appRoot = Join-Path $PayloadRoot "app"
+  $entryPath = Join-Path $appRoot "apps\local-daemon\dist\apps\local-daemon\src\index.js"
+  $stdoutPath = Join-Path $dataRoot "selftest-daemon.out.log"
+  $stderrPath = Join-Path $dataRoot "selftest-daemon.err.log"
+  if (-not (Test-Path -LiteralPath $nodePath)) {
+    throw "Self-test node.exe is missing: $nodePath"
+  }
+  if (-not (Test-Path -LiteralPath $entryPath)) {
+    throw "Self-test daemon entry is missing: $entryPath"
+  }
+
+  $env:MIMO_BRIDGE_DATA_DIR = $dataRoot
+  $env:MIMO_BRIDGE_CONFIG = $configPath
+  $env:MIMO_BRIDGE_NODE_PATH = $nodePath
+  $process = Start-Process -FilePath $nodePath -ArgumentList @($entryPath) -WorkingDirectory $appRoot -RedirectStandardOutput $stdoutPath -RedirectStandardError $stderrPath -PassThru -WindowStyle Hidden
+  try {
+    $deadline = (Get-Date).AddSeconds(60)
+    do {
+      if (Test-HttpHealth -Port $Port -TimeoutSec 2) {
+        break
+      }
+      Start-Sleep -Milliseconds 500
+    } while ((Get-Date) -lt $deadline)
+
+    if (-not (Test-HttpHealth -Port $Port -TimeoutSec 2)) {
+      $stdout = if (Test-Path -LiteralPath $stdoutPath) { Get-Content -LiteralPath $stdoutPath -Raw -ErrorAction SilentlyContinue } else { "" }
+      $stderr = if (Test-Path -LiteralPath $stderrPath) { Get-Content -LiteralPath $stderrPath -Raw -ErrorAction SilentlyContinue } else { "" }
+      throw "Self-test daemon did not pass /api/health on port $Port. stdout=$stdout stderr=$stderr"
+    }
+
+    $ui = Invoke-WebRequest -UseBasicParsing -Uri ("http://127.0.0.1:{0}/" -f $Port) -TimeoutSec 5
+    $contentType = [string]$ui.Headers["Content-Type"]
+    $content = [string]$ui.Content
+    if ($ui.StatusCode -ne 200 -or ($contentType -notmatch "text/html" -and $content -notmatch "<!doctype html|<html")) {
+      throw "Self-test Admin UI was not served as HTML."
+    }
+  } finally {
+    if ($process -and -not $process.HasExited) {
+      try {
+        Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
+        $process.WaitForExit(10000) | Out-Null
+      } catch {
+        Write-SetupLog "Self-test daemon stop failed: $($_.Exception.Message)"
+      }
     }
   }
+}
+
+function Stop-DaemonIfInstalled {
+  param([Parameter(Mandatory = $true)]$Paths)
+  Assert-InstalledDaemonStopped -Paths $Paths
 }
 
 function Write-InstalledLaunchers {
@@ -348,7 +664,7 @@ function Install-App {
   Write-Host "User data directory: $($paths.DataRoot)"
 
   New-Item -ItemType Directory -Force -Path $paths.InstallRoot, $paths.DataRoot | Out-Null
-  Stop-DaemonIfInstalled -Paths $paths
+  Assert-InstalledDaemonStopped -Paths $paths
 
   $payloadZip = Join-Path $PSScriptRoot "MiMoBridge-payload.zip"
   if (-not (Test-Path -LiteralPath $payloadZip)) {
@@ -362,11 +678,7 @@ function Install-App {
     if (-not (Test-Path -LiteralPath $payloadRoot)) {
       $payloadRoot = $tempRoot
     }
-    Remove-KnownChild -Parent $paths.InstallRoot -Name "app"
-    Remove-KnownChild -Parent $paths.InstallRoot -Name "node"
-    Remove-KnownChild -Parent $paths.InstallRoot -Name "data"
-    Get-ChildItem -LiteralPath $paths.InstallRoot -Filter "*.cmd" -Force -ErrorAction SilentlyContinue | Remove-Item -Force
-    Copy-Directory -Source $payloadRoot -Destination $paths.InstallRoot -SkipTopLevelData $true
+    Install-StagedPayload -Paths $paths -StageRoot $payloadRoot
   } finally {
     Remove-Item -LiteralPath $tempRoot -Recurse -Force -ErrorAction SilentlyContinue
   }
