@@ -234,6 +234,9 @@ export function createStartTaskHandler(
 
       const startedImmediately = taskQueue.enqueue({
         taskId,
+        agentId,
+        workspacePath: input.workspace_path,
+        editablePaths,
         priority: input.priority,
         enqueuedAt: Date.now(),
         execute: async () => {

@@ -22,7 +22,7 @@ Reasonix should eventually reach the same project role as MiMo:
 
 ## Current Status
 
-P6.0-P6.3 are partially implemented. The runtime now has an Agent Registry, Reasonix TUI probe, Reasonix one-shot runner, generic low-token task get/wait tools, Reasonix session mapping through `agent_session_path`, and a first Admin UI agent selector/badge pass. Existing `mimo_*` MCP tools remain compatible.
+P6.0-P6.4 are partially implemented. The runtime now has an Agent Registry, Reasonix TUI probe, Reasonix one-shot runner, generic low-token task get/wait tools, Reasonix session mapping through `agent_session_path`, a first Admin UI agent selector/badge pass, and an agent-aware queue that permits safe parallelism only for different agents editing non-overlapping paths. Existing `mimo_*` MCP tools remain compatible.
 
 Observed local Reasonix installation on this machine:
 
@@ -260,7 +260,7 @@ Status:
 - Controlled real Reasonix smoke succeeded with `max_steps=20`; `max_steps=5` was too low and caused a false failure.
 - Admin UI task creation/agent selector and agent badges are implemented in the first UI slice.
 
-### P6.3 Agent-Aware Queue
+### P6.4 Agent-Aware Queue
 
 Goal: allow MiMo and Reasonix to work in parallel safely.
 
@@ -276,7 +276,16 @@ Acceptance:
 - MiMo and Reasonix can run concurrently on different editable paths.
 - Overlap is blocked or queued deterministically.
 
-### P6.4 Reasonix Session Continuation
+Status:
+
+- Implemented as P6.4 first queue slice.
+- `TaskQueue` stores `agentId`, `workspacePath`, and `editablePaths`.
+- `globalTaskQueue` concurrency is 2 so a machine can run one MiMo task and one Reasonix task when safe.
+- Same-agent tasks always queue, even when their paths differ.
+- Different-agent tasks queue when editable paths overlap.
+- Missing agent/workspace/path metadata is treated conservatively and queues instead of running in parallel.
+
+### P6.5 Reasonix Session Continuation
 
 Goal: Reasonix reply/continue becomes closer to MiMo reply flow.
 
@@ -291,7 +300,7 @@ Acceptance:
 - Codex can send a follow-up to a Reasonix task.
 - The same session record is discoverable by Reasonix GUI or Bridge session viewer.
 
-### P6.5 GUI Session Sharing
+### P6.6 GUI Session Sharing
 
 Goal: GUI displays or opens TUI-created sessions without GUI automation.
 
@@ -306,7 +315,7 @@ Acceptance:
 - User can inspect Reasonix task session from GUI or the folder.
 - Bridge does not click GUI controls or steal focus.
 
-### P6.6 Token/Cost Integration
+### P6.7 Token/Cost Integration
 
 Goal: Reasonix token reporting joins TokenBudget if real data exists.
 
@@ -350,4 +359,4 @@ Acceptance:
 5. Add real `reasonix-tui` health probe.
 6. Add one-shot `reasonix run` execution.
 7. Add Reasonix parser/live viewer integration.
-8. Add agent-aware queue only after one-shot execution is stable.
+8. Add Reasonix continue/reply support now that one-shot execution and agent-aware queueing are stable.

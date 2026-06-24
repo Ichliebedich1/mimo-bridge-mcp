@@ -227,6 +227,9 @@ export function createReplyTaskHandler(
 
       const startedImmediately = taskQueue.enqueue({
         taskId,
+        agentId: task.agent,
+        workspacePath: task.config.workspace_path,
+        editablePaths: task.config.editable_paths,
         priority: input.priority,
         enqueuedAt: Date.now(),
         execute: async () => {

@@ -46,7 +46,7 @@ export type HealthResponse = {
 export type QueueStatusResponse = {
   running: number;
   queued: number;
-  queue: Array<{ taskId: string; priority: number; enqueuedAt: number }>;
+  queue: Array<{ taskId: string; agentId?: string; priority: number; enqueuedAt: number }>;
 };
 
 export type AgentStatusResponse = {

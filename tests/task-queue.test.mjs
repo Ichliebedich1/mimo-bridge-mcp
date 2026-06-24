@@ -234,6 +234,175 @@ describe("task-queue", () => {
     assert.strictEqual(queue.running, 0);
     assert.strictEqual(queue.isIdle, true);
   });
+
+  it("should run different agents in parallel when editable paths do not overlap", async () => {
+    const queue = new TaskQueue(2);
+    const executed = [];
+    let releaseFirst;
+
+    queue.enqueue({
+      taskId: "task_mimo",
+      agentId: "mimo",
+      workspacePath: testDir,
+      editablePaths: ["src/a"],
+      priority: 5,
+      enqueuedAt: Date.now(),
+      execute: async () => {
+        executed.push("task_mimo");
+        await new Promise((resolve) => {
+          releaseFirst = resolve;
+        });
+      },
+      cancel: () => {},
+    });
+
+    const startedImmediately = queue.enqueue({
+      taskId: "task_reasonix",
+      agentId: "reasonix-tui",
+      workspacePath: testDir,
+      editablePaths: ["src/b"],
+      priority: 5,
+      enqueuedAt: Date.now(),
+      execute: async () => {
+        executed.push("task_reasonix");
+      },
+      cancel: () => {},
+    });
+
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.strictEqual(startedImmediately, true);
+    assert.deepStrictEqual(executed, ["task_mimo", "task_reasonix"]);
+    assert.strictEqual(queue.running, 1);
+    releaseFirst();
+    await new Promise((resolve) => setImmediate(resolve));
+  });
+
+  it("should queue same-agent tasks even when paths differ", async () => {
+    const queue = new TaskQueue(2);
+    const executed = [];
+    let releaseFirst;
+
+    queue.enqueue({
+      taskId: "task_one",
+      agentId: "mimo",
+      workspacePath: testDir,
+      editablePaths: ["src/a"],
+      priority: 5,
+      enqueuedAt: Date.now(),
+      execute: async () => {
+        executed.push("task_one");
+        await new Promise((resolve) => {
+          releaseFirst = resolve;
+        });
+      },
+      cancel: () => {},
+    });
+
+    const startedImmediately = queue.enqueue({
+      taskId: "task_two",
+      agentId: "mimo",
+      workspacePath: testDir,
+      editablePaths: ["src/b"],
+      priority: 5,
+      enqueuedAt: Date.now(),
+      execute: async () => {
+        executed.push("task_two");
+      },
+      cancel: () => {},
+    });
+
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.strictEqual(startedImmediately, false);
+    assert.deepStrictEqual(executed, ["task_one"]);
+    assert.strictEqual(queue.size, 1);
+    releaseFirst();
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.deepStrictEqual(executed, ["task_one", "task_two"]);
+  });
+
+  it("should queue overlapping editable paths across different agents", async () => {
+    const queue = new TaskQueue(2);
+    const executed = [];
+    let releaseFirst;
+
+    queue.enqueue({
+      taskId: "task_parent",
+      agentId: "mimo",
+      workspacePath: testDir,
+      editablePaths: ["src"],
+      priority: 5,
+      enqueuedAt: Date.now(),
+      execute: async () => {
+        executed.push("task_parent");
+        await new Promise((resolve) => {
+          releaseFirst = resolve;
+        });
+      },
+      cancel: () => {},
+    });
+
+    const startedImmediately = queue.enqueue({
+      taskId: "task_child",
+      agentId: "reasonix-tui",
+      workspacePath: testDir,
+      editablePaths: ["src/components"],
+      priority: 5,
+      enqueuedAt: Date.now(),
+      execute: async () => {
+        executed.push("task_child");
+      },
+      cancel: () => {},
+    });
+
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.strictEqual(startedImmediately, false);
+    assert.deepStrictEqual(executed, ["task_parent"]);
+    assert.strictEqual(queue.size, 1);
+    releaseFirst();
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.deepStrictEqual(executed, ["task_parent", "task_child"]);
+  });
+
+  it("should queue tasks with unknown agent metadata conservatively", async () => {
+    const queue = new TaskQueue(2);
+    const executed = [];
+    let releaseFirst;
+
+    queue.enqueue({
+      taskId: "task_unknown_agent",
+      workspacePath: testDir,
+      editablePaths: ["src/a"],
+      priority: 5,
+      enqueuedAt: Date.now(),
+      execute: async () => {
+        executed.push("task_unknown_agent");
+        await new Promise((resolve) => {
+          releaseFirst = resolve;
+        });
+      },
+      cancel: () => {},
+    });
+
+    const startedImmediately = queue.enqueue({
+      taskId: "task_known_agent",
+      agentId: "reasonix-tui",
+      workspacePath: testDir,
+      editablePaths: ["src/b"],
+      priority: 5,
+      enqueuedAt: Date.now(),
+      execute: async () => {
+        executed.push("task_known_agent");
+      },
+      cancel: () => {},
+    });
+
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.strictEqual(startedImmediately, false);
+    assert.deepStrictEqual(executed, ["task_unknown_agent"]);
+    releaseFirst();
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.deepStrictEqual(executed, ["task_unknown_agent", "task_known_agent"]);
+  });
 });
 
 describe("concurrent start/reply with queue", () => {

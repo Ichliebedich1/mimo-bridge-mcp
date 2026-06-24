@@ -10,7 +10,7 @@ P6 should first adapt Reasonix TUI, not Reasonix GUI. The TUI adapter should run
 
 ## Current Status
 
-P6.0-P6.2 Agent discovery, Reasonix one-shot execution, generic low-token task get/wait, and Reasonix session mapping are implemented locally.
+P6.0-P6.4 Agent discovery, Reasonix one-shot execution, generic low-token task get/wait, Reasonix session mapping, first Admin UI integration, and agent-aware queue/path-conflict scheduling are implemented locally.
 
 Implemented:
 
@@ -35,12 +35,12 @@ Implemented:
 - Controlled real Reasonix smoke task `task_f8b579217015` succeeded with `max_steps=20`, changed only `notes/result.txt`, had `risk_flags: []`, and its temporary Worktree was discarded afterward.
 - Reasonix session mapping: after a TUI run, Bridge scans only configured `REASONIX_HOME\projects` for in-window `.jsonl` session files, skips `.trash`, prefers task/workspace matches, and persists the best match as `agent_session_path`. Browser API responses sanitize this path.
 - Admin UI first slice: Create Task can select MiMo or Reasonix TUI; MiMo tasks still call `/api/tasks`, Reasonix tasks call `/api/agent-tasks`; list/detail pages show agent badges; System page shows `/api/agents` status.
+- Agent-aware queue/path conflict scheduling: `TaskQueue` stores `agentId`, `workspacePath`, and `editablePaths`; different agents can run in parallel only when editable paths do not overlap; same-agent tasks and unknown metadata remain queued.
 
 Not implemented yet:
 
-- Agent-aware queue/path conflict scheduling.
 - Reasonix continue/reply support.
-- Agent-aware queue/path conflict scheduling.
+- Rich Reasonix session/live parser beyond bounded process output.
 
 Local discovery on this machine:
 
@@ -81,7 +81,7 @@ Local discovery on this machine:
 
 - `src/services/mimo-runner.ts`
 - `src/services/task-store.ts`
-- `src/services/task-queue.ts`
+- `src/services/task-queue.ts` already handles first-pass agent/path conflict scheduling.
 - `src/services/review-package.ts`
 - `src/types.ts`
 - `apps/local-daemon/src/daemon-config.ts`

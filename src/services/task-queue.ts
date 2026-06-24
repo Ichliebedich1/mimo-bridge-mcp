@@ -1,5 +1,8 @@
 export interface QueuedTask {
   taskId: string;
+  agentId?: string;
+  workspacePath?: string;
+  editablePaths?: string[];
   priority: number;
   enqueuedAt: number;
   execute: () => Promise<void>;
@@ -8,6 +11,7 @@ export interface QueuedTask {
 
 export class TaskQueue {
   private queue: QueuedTask[] = [];
+  private runningTasks: QueuedTask[] = [];
   private maxConcurrent: number;
   private runningCount: number = 0;
 
@@ -28,7 +32,7 @@ export class TaskQueue {
   }
 
   enqueue(task: QueuedTask): boolean {
-    const startsImmediately = this.runningCount < this.maxConcurrent && this.queue.length === 0;
+    const startsImmediately = this.canStart(task) && !this.hasEarlierRunnableBlocker(task);
     this.queue.push(task);
     this.queue.sort((a, b) => b.priority - a.priority);
     this.processNext();
@@ -57,9 +61,10 @@ export class TaskQueue {
     this.queue = [];
   }
 
-  getQueuedTasks(): Array<{ taskId: string; priority: number; enqueuedAt: number }> {
+  getQueuedTasks(): Array<{ taskId: string; agentId?: string; priority: number; enqueuedAt: number }> {
     return this.queue.map((t) => ({
       taskId: t.taskId,
+      agentId: t.agentId,
       priority: t.priority,
       enqueuedAt: t.enqueuedAt,
     }));
@@ -67,35 +72,90 @@ export class TaskQueue {
 
   onTaskComplete(taskId: string): void {
     this.runningCount = Math.max(0, this.runningCount - 1);
+    this.runningTasks = this.runningTasks.filter((task) => task.taskId !== taskId);
     this.processNext();
   }
 
   private processNext(): void {
-    if (this.runningCount >= this.maxConcurrent) {
-      return;
-    }
+    while (this.runningCount < this.maxConcurrent && this.queue.length > 0) {
+      const index = this.queue.findIndex((task) => this.canStart(task));
+      if (index < 0) {
+        return;
+      }
 
-    if (this.queue.length === 0) {
-      return;
-    }
+      const [task] = this.queue.splice(index, 1);
+      this.runningCount++;
+      this.runningTasks.push(task);
 
-    const task = this.queue.shift()!;
-    this.runningCount++;
-
-    let execution: Promise<void>;
-    try {
-      execution = task.execute();
-    } catch {
-      this.onTaskComplete(task.taskId);
-      return;
-    }
-
-    void execution
-      .catch(() => undefined)
-      .finally(() => {
+      let execution: Promise<void>;
+      try {
+        execution = task.execute();
+      } catch {
         this.onTaskComplete(task.taskId);
-      });
+        continue;
+      }
+
+      void execution
+        .catch(() => undefined)
+        .finally(() => {
+          this.onTaskComplete(task.taskId);
+        });
+    }
+  }
+
+  private canStart(task: QueuedTask): boolean {
+    if (this.runningCount >= this.maxConcurrent) {
+      return false;
+    }
+    return !this.runningTasks.some((running) => tasksConflict(running, task));
+  }
+
+  private hasEarlierRunnableBlocker(task: QueuedTask): boolean {
+    if (this.queue.length === 0) {
+      return false;
+    }
+    return this.queue.some((queued) => this.canStart(queued) && queued.priority >= task.priority);
   }
 }
 
-export const globalTaskQueue = new TaskQueue(1);
+export function tasksConflict(a: QueuedTask, b: QueuedTask): boolean {
+  if (a.taskId === b.taskId) {
+    return true;
+  }
+  if (!a.agentId || !b.agentId) {
+    return true;
+  }
+  if (a.agentId && b.agentId && a.agentId === b.agentId) {
+    return true;
+  }
+  if (!a.workspacePath || !b.workspacePath) {
+    return true;
+  }
+  if (normalizePath(a.workspacePath) !== normalizePath(b.workspacePath)) {
+    return false;
+  }
+
+  const aPaths = normalizeEditablePaths(a.editablePaths);
+  const bPaths = normalizeEditablePaths(b.editablePaths);
+  if (aPaths.length === 0 || bPaths.length === 0) {
+    return true;
+  }
+  return aPaths.some((left) => bPaths.some((right) => pathsOverlap(left, right)));
+}
+
+function normalizeEditablePaths(paths: string[] | undefined): string[] {
+  return (paths ?? []).map(normalizePath).filter(Boolean);
+}
+
+function normalizePath(value: string): string {
+  return value.replace(/\\/g, "/").replace(/\/+/g, "/").replace(/\/$/, "").toLowerCase();
+}
+
+function pathsOverlap(left: string, right: string): boolean {
+  if (left === "**" || right === "**") {
+    return true;
+  }
+  return left === right || left.startsWith(right + "/") || right.startsWith(left + "/");
+}
+
+export const globalTaskQueue = new TaskQueue(2);
