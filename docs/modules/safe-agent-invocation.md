@@ -51,6 +51,7 @@ The PowerShell wrapper locates Node, forwards arguments, and when stdin is piped
 node scripts/mimo-bridge-client.mjs health
 node scripts/mimo-bridge-client.mjs start --json .\runtime\client-requests\task.json
 node scripts/mimo-bridge-client.mjs wait --task-id task_xxx --timeout-seconds 1800
+node scripts/mimo-bridge-client.mjs reply --task-id task_xxx --json .\runtime\client-requests\reply.json
 node scripts/mimo-bridge-client.mjs start-and-wait --json .\runtime\client-requests\task.json --timeout-seconds 1800
 node scripts/mimo-bridge-client.mjs review --task-id task_xxx --detail-level review --max-chars 8000
 node scripts/mimo-bridge-client.mjs recover --limit 10 --max-chars 8000
@@ -58,6 +59,7 @@ node scripts/mimo-bridge-client.mjs recover --limit 10 --max-chars 8000
 node scripts/mimo-bridge-client.mjs agent-list
 node scripts/mimo-bridge-client.mjs agent-start --agent-id reasonix-tui --json .\runtime\client-requests\task.json
 node scripts/mimo-bridge-client.mjs agent-wait --agent-id reasonix-tui --task-id task_xxx --timeout-seconds 1800
+node scripts/mimo-bridge-client.mjs agent-reply --agent-id reasonix-tui --task-id task_xxx --json .\runtime\client-requests\reply.json
 node scripts/mimo-bridge-client.mjs agent-start-and-wait --agent-id reasonix-tui --json .\runtime\client-requests\task.json --timeout-seconds 1800
 node scripts/mimo-bridge-client.mjs agent-review --agent-id reasonix-tui --task-id task_xxx --detail-level review --max-chars 8000
 node scripts/mimo-bridge-client.mjs agent-cancel --agent-id reasonix-tui --task-id task_xxx
@@ -96,11 +98,12 @@ node scripts/mimo-bridge-client.mjs agent-queue --agent-id reasonix-tui
 - Output stays bounded and does not include full diff/log/source by default.
 - Generic Agent commands use fixed REST routes or `agent_wait_task`, preserve UTF-8 JSON input, and support `agent_id` mismatch guards.
 - Reasonix-safe commands include `agent-start`, `agent-wait`, `agent-review`, `agent-finish`, `agent-merge`, `agent-delete`, and `agent-queue`.
+- Reply commands include `reply` and `agent-reply`; short messages may use `--message`, but JSON file/stdin is preferred for long Chinese or multiline replies.
 - The PowerShell wrapper does not use `ConvertTo-Json`, `JSON.stringify`, or hard-coded task fields.
 
 ## Current Status
 
-Implemented and merged in P5.4, then extended in P6.10 for generic Agent/Reasonix-safe commands. MiMo produced the first implementation through task `task_2de8918c60dd`; Codex reviewed it, fixed stale MCP client exit handling, strengthened tests, merged the Worktree, and accepted the task. P6.10 adds `agent-*` commands so scripts and third-party agents no longer need to borrow `mimo_*` names for Reasonix tasks.
+Implemented and merged in P5.4, then extended in P6.10/P6.11 for generic Agent/Reasonix-safe commands. MiMo produced the first implementation through task `task_2de8918c60dd`; Codex reviewed it, fixed stale MCP client exit handling, strengthened tests, merged the Worktree, and accepted the task. P6.10 adds `agent-*` commands so scripts and third-party agents no longer need to borrow `mimo_*` names for Reasonix tasks. P6.11 adds safe `reply` and `agent-reply` commands.
 
 Run tests with:
 
@@ -108,7 +111,7 @@ Run tests with:
 node --test tests/mimo-bridge-client.test.mjs
 ```
 
-Latest focused verification: `node --test tests\mimo-bridge-client.test.mjs tests\agent-lifecycle-task.test.mjs tests\agent-get-wait-task.test.mjs tests\admin-api.test.mjs tests\stdio-protocol.test.mjs` passed 67/67 after root/local-daemon/admin-ui builds.
+Latest focused verification: `node --test tests\mimo-bridge-client.test.mjs tests\agent-reply-task.test.mjs tests\agent-lifecycle-task.test.mjs tests\admin-api.test.mjs tests\stdio-protocol.test.mjs` passed 67/67 after root/local-daemon/admin-ui builds.
 
 Additional verification:
 

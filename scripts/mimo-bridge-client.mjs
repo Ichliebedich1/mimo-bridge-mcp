@@ -275,6 +275,67 @@ async function agentReviewOperation({ args, baseUrl }) {
   }));
 }
 
+async function replyOperation({ args, baseUrl, stdin }) {
+  const taskId = String(args["task-id"] || args.task_id || "");
+  if (!taskId) {
+    return failure("reply", "Missing required option: --task-id");
+  }
+
+  let input;
+  try {
+    input = args.message ? { message: String(args.message) } : await readJsonInput(args, stdin);
+  } catch (error) {
+    return failure("reply", `Invalid JSON input: ${error instanceof Error ? error.message : String(error)}`);
+  }
+  if (!input.message) {
+    return failure("reply", "Missing required field: message or --message");
+  }
+
+  const response = await fetchJson(baseUrl, `/api/tasks/${encodeURIComponent(taskId)}/replies`, {
+    method: "POST",
+    body: JSON.stringify({
+      message: input.message,
+      ...(input.priority !== undefined ? { priority: input.priority } : {}),
+    }),
+  });
+  return normalizeRestEnvelope("reply", response, (data) => ({
+    task_id: data.task_id ?? taskId,
+    status: data.status,
+  }));
+}
+
+async function agentReplyOperation({ args, baseUrl, stdin }) {
+  const taskId = String(args["task-id"] || args.task_id || "");
+  if (!taskId) {
+    return failure("agent-reply", "Missing required option: --task-id");
+  }
+
+  let input;
+  try {
+    input = args.message ? { message: String(args.message) } : await readJsonInput(args, stdin);
+  } catch (error) {
+    return failure("agent-reply", `Invalid JSON input: ${error instanceof Error ? error.message : String(error)}`);
+  }
+  if (!input.message) {
+    return failure("agent-reply", "Missing required field: message or --message");
+  }
+
+  const agentId = getAgentId(args, input);
+  const response = await fetchJson(baseUrl, `/api/agent-tasks/${encodeURIComponent(taskId)}/replies`, {
+    method: "POST",
+    body: JSON.stringify({
+      message: input.message,
+      ...(input.priority !== undefined ? { priority: input.priority } : {}),
+      ...(agentId ? { agent_id: agentId } : {}),
+    }),
+  });
+  return normalizeRestEnvelope("agent-reply", response, (data) => ({
+    task_id: data.task_id ?? taskId,
+    agent: (data.agent ?? agentId) || undefined,
+    status: data.status,
+  }));
+}
+
 async function waitOperation({ args, baseUrl, waitForTaskImpl }) {
   const taskId = String(args["task-id"] || args.task_id || "");
   if (!taskId) {
@@ -442,12 +503,14 @@ function helpOperation() {
       "node scripts/mimo-bridge-client.mjs health",
       "node scripts/mimo-bridge-client.mjs start --json .\\runtime\\client-requests\\task.json",
       "node scripts/mimo-bridge-client.mjs wait --task-id task_xxx --timeout-seconds 1800",
+      "node scripts/mimo-bridge-client.mjs reply --task-id task_xxx --json .\\runtime\\client-requests\\reply.json",
       "node scripts/mimo-bridge-client.mjs start-and-wait --json .\\runtime\\client-requests\\task.json --timeout-seconds 1800",
       "node scripts/mimo-bridge-client.mjs review --task-id task_xxx --detail-level review --max-chars 8000",
       "node scripts/mimo-bridge-client.mjs recover --limit 10 --max-chars 8000",
       "node scripts/mimo-bridge-client.mjs agent-list",
       "node scripts/mimo-bridge-client.mjs agent-start --agent-id reasonix-tui --json .\\runtime\\client-requests\\task.json",
       "node scripts/mimo-bridge-client.mjs agent-wait --agent-id reasonix-tui --task-id task_xxx --timeout-seconds 1800",
+      "node scripts/mimo-bridge-client.mjs agent-reply --agent-id reasonix-tui --task-id task_xxx --json .\\runtime\\client-requests\\reply.json",
       "node scripts/mimo-bridge-client.mjs agent-start-and-wait --agent-id reasonix-tui --json .\\runtime\\client-requests\\task.json --timeout-seconds 1800",
       "node scripts/mimo-bridge-client.mjs agent-review --agent-id reasonix-tui --task-id task_xxx --detail-level review --max-chars 8000",
       "node scripts/mimo-bridge-client.mjs agent-finish --agent-id reasonix-tui --task-id task_xxx --status accepted",
@@ -476,8 +539,12 @@ export async function run(argv = process.argv.slice(2), options = {}) {
       return agentStartOperation({ args, baseUrl, stdin });
     case "wait":
       return waitOperation({ args, baseUrl, stdin, waitForTaskImpl });
+    case "reply":
+      return replyOperation({ args, baseUrl, stdin });
     case "agent-wait":
       return agentWaitOperation({ args, baseUrl, stdin, waitForTaskImpl });
+    case "agent-reply":
+      return agentReplyOperation({ args, baseUrl, stdin });
     case "start-and-wait":
       return startAndWaitOperation({ args, baseUrl, stdin, waitForTaskImpl });
     case "agent-start-and-wait":

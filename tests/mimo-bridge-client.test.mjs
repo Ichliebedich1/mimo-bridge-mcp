@@ -379,6 +379,71 @@ test("agent-review command fetches bounded generic review without local paths", 
   }
 });
 
+test("reply command posts message to MiMo task reply route", async () => {
+  let receivedBody = null;
+  const mock = await startMockServer((req, res) => {
+    if (req.method === "POST" && req.url === "/api/tasks/task_reply/replies") {
+      const chunks = [];
+      req.on("data", (data) => chunks.push(data));
+      req.on("end", () => {
+        receivedBody = JSON.parse(Buffer.concat(chunks).toString("utf8"));
+        res.writeHead(200, { "content-type": "application/json" });
+        res.end(JSON.stringify({ ok: true, data: { task_id: "task_reply", status: "running" } }));
+      });
+      return;
+    }
+    res.writeHead(404).end("{}");
+  });
+
+  try {
+    const result = await runClient(["reply", "--task-id", "task_reply"], {
+      stdin: JSON.stringify({ message: "继续处理\n多行中文", priority: 4 }),
+      env: { MIMO_BRIDGE_URL: mock.baseUrl },
+    });
+    assert.equal(result.code, 0);
+    const out = JSON.parse(result.stdout);
+    assert.equal(out.operation, "reply");
+    assert.equal(out.task_id, "task_reply");
+    assert.equal(out.status, "running");
+    assert.equal(receivedBody.message, "继续处理\n多行中文");
+    assert.equal(receivedBody.priority, 4);
+  } finally {
+    await closeServer(mock.server);
+  }
+});
+
+test("agent-reply command posts message to generic agent reply route", async () => {
+  let receivedBody = null;
+  const mock = await startMockServer((req, res) => {
+    if (req.method === "POST" && req.url === "/api/agent-tasks/task_agent_reply/replies") {
+      const chunks = [];
+      req.on("data", (data) => chunks.push(data));
+      req.on("end", () => {
+        receivedBody = JSON.parse(Buffer.concat(chunks).toString("utf8"));
+        res.writeHead(200, { "content-type": "application/json" });
+        res.end(JSON.stringify({ ok: true, data: { task_id: "task_agent_reply", agent: "reasonix-tui", status: "running" } }));
+      });
+      return;
+    }
+    res.writeHead(404).end("{}");
+  });
+
+  try {
+    const result = await runClient(["agent-reply", "--agent-id", "reasonix-tui", "--task-id", "task_agent_reply", "--message", "继续"], {
+      env: { MIMO_BRIDGE_URL: mock.baseUrl },
+    });
+    assert.equal(result.code, 0);
+    const out = JSON.parse(result.stdout);
+    assert.equal(out.operation, "agent-reply");
+    assert.equal(out.task_id, "task_agent_reply");
+    assert.equal(out.agent, "reasonix-tui");
+    assert.equal(receivedBody.message, "继续");
+    assert.equal(receivedBody.agent_id, "reasonix-tui");
+  } finally {
+    await closeServer(mock.server);
+  }
+});
+
 test("review command rejects missing task id", async () => {
   const result = await runClient(["review"]);
   assert.equal(result.code, 1);
