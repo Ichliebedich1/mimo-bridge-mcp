@@ -266,7 +266,8 @@ function fitReviewPackageToBudget(reviewPackage: ReviewPackage, maxChars: number
     if (size() > maxChars) delete result.scope_report;
   }
 
-  const stringFields: Array<keyof Pick<ReviewPackage, "mimo_summary" | "diff_stat" | "objective">> = [
+  const stringFields: Array<keyof Pick<ReviewPackage, "agent_summary" | "mimo_summary" | "diff_stat" | "objective">> = [
+    "agent_summary",
     "mimo_summary",
     "diff_stat",
     "objective",
@@ -288,6 +289,12 @@ function fitReviewPackageToBudget(reviewPackage: ReviewPackage, maxChars: number
       result.mimo_summary_zh = result.mimo_summary_zh.slice(0, Math.max(40, Math.floor(result.mimo_summary_zh.length / 2)));
     }
     if (size() > maxChars) delete result.mimo_summary_zh;
+  }
+  if (result.agent_summary_zh) {
+    while (size() > maxChars && result.agent_summary_zh.length > 40) {
+      result.agent_summary_zh = result.agent_summary_zh.slice(0, Math.max(40, Math.floor(result.agent_summary_zh.length / 2)));
+    }
+    if (size() > maxChars) delete result.agent_summary_zh;
   }
 
   return result;
@@ -401,6 +408,8 @@ export function generateReviewPackage(
     test_result: testResult,
     exit_code: task.exit_code ?? null,
     log_tail: logTail.text,
+    agent_summary: summaryText,
+    ...(summaryHasChinese ? { agent_summary_zh: summaryText } : {}),
     mimo_summary: summaryText,
     ...(summaryHasChinese ? { mimo_summary_zh: summaryText } : {}),
     risk_flags: [...new Set(riskFlags)],

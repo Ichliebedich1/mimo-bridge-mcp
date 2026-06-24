@@ -210,6 +210,7 @@ test("MiMo completion automatically persists a review package", async () => {
 
     const completed = fixture.store.getTask(started.task_id);
     assert.ok(completed.review_package);
+    assert.strictEqual(completed.review_package.agent_summary, "implementation complete");
     assert.strictEqual(completed.review_package.mimo_summary, "implementation complete");
     assert.strictEqual(completed.review_package.exit_code, 0);
   } finally {
@@ -486,6 +487,7 @@ test("review package includes objective_zh and mimo_summary_zh when content is C
     const result = await getTask.handler({ task_id: task.task_id, detail_level: "review" });
 
     assert.strictEqual(result.review_package.objective_zh, "修复登录页面的中文显示问题");
+    assert.strictEqual(result.review_package.agent_summary_zh, "已修复登录页面，测试通过");
     assert.strictEqual(result.review_package.mimo_summary_zh, "已修复登录页面，测试通过");
   } finally {
     rmSync(fixture.root, { recursive: true, force: true });
@@ -506,8 +508,10 @@ test("review package omits zh fields when content is English only", async () => 
     const result = await getTask.handler({ task_id: task.task_id, detail_level: "review" });
 
     assert.strictEqual(result.review_package.objective_zh, undefined);
+    assert.strictEqual(result.review_package.agent_summary_zh, undefined);
     assert.strictEqual(result.review_package.mimo_summary_zh, undefined);
     assert.strictEqual(result.review_package.objective, "fix login page rendering");
+    assert.strictEqual(result.review_package.agent_summary, "Fixed the login page. Tests pass.");
     assert.strictEqual(result.review_package.mimo_summary, "Fixed the login page. Tests pass.");
   } finally {
     rmSync(fixture.root, { recursive: true, force: true });

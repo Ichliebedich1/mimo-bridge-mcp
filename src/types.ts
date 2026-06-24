@@ -151,6 +151,8 @@ export interface ReviewPackage {
   test_result: string;
   exit_code: number | null;
   log_tail: string;
+  agent_summary: string;
+  agent_summary_zh?: string;
   mimo_summary: string;
   mimo_summary_zh?: string;
   risk_flags: string[];

@@ -78,7 +78,7 @@ This route avoids brittle GUI click automation while still moving toward shared 
 | Start task | `mimo_start_task` | `agent_start_task(agent_id="reasonix-tui")` | Add generic tools and Reasonix adapter |
 | Continue task | `mimo_reply_task` with session | Reasonix resume/continue | Phase 2 using `chat --resume` or session-aware run if supported |
 | Low-token wait | `mimo_wait_task` | `agent_wait_task` | Reuse daemon-side wait over generic task status |
-| Review package | MiMo summary/log/diff | Agent summary/log/diff | Add `agent_summary`, keep `mimo_summary` compatibility |
+| Review package | MiMo summary/log/diff | Agent summary/log/diff | `agent_summary` added, `mimo_summary` kept for compatibility |
 | Worktree isolation | Implemented | Same | Reuse Git Worktree module |
 | Queue control | One write task per MiMo | One write task per agent plus path conflict scheduling | Agent-aware queue |
 | Live viewer | MiMo text + folded tools | Reasonix text + folded tools | Add Reasonix output parser |
@@ -507,7 +507,7 @@ Status:
 - `agent_start_task` rejects unknown `agent_id`.
 - Fake Reasonix runner can complete, fail, timeout, and be cancelled.
 - Reasonix parser extracts visible text and tool summaries from fixture logs/session JSONL.
-- Review Package includes `agent_summary`.
+- Review Package includes `agent_summary` and legacy `mimo_summary`.
 - Old tasks with `mimo_summary` render correctly.
 - Disjoint MiMo/Reasonix fake tasks can run concurrently.
 - Overlapping editable paths are queued or rejected.

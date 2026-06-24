@@ -114,6 +114,8 @@ type ReviewPackageResponse = {
   test_result: string;
   exit_code: number | null;
   log_tail?: string;
+  agent_summary?: string;
+  agent_summary_zh?: string;
   mimo_summary: string;
   mimo_summary_zh?: string;
   risk_flags: string[];
@@ -469,7 +471,7 @@ function detailToUiTask(response: GetTaskResponse): Task {
     agent: response.agent ?? 'mimo',
     status: response.status,
     title: review.objective_zh || review.objective || response.task_id,
-    summary: review.mimo_summary_zh || review.mimo_summary || 'Review Package 已生成。',
+    summary: review.agent_summary_zh || review.agent_summary || review.mimo_summary_zh || review.mimo_summary || 'Review Package 已生成。',
     objective: review.objective_zh || review.objective,
     createdAt: formatDateTime(response.created_at),
     updatedAt: formatDateTime(response.updated_at) || formatDateTime(review.generated_at) || '来自 API',
