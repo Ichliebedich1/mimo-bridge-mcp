@@ -219,7 +219,7 @@ export function createReplyTaskHandler(
         return { error: `Task ${task.task_id} belongs to agent ${task.agent}, not ${expectedAgentId}` };
       }
 
-      if (task.status !== "waiting" && task.status !== "review" && task.status !== "queued") {
+      if (task.status !== "waiting" && task.status !== "review" && task.status !== "queued" && task.status !== "failed") {
         return { error: `任务状态不允许回复: ${task.status}` };
       }
 

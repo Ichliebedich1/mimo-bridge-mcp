@@ -26,7 +26,7 @@ import {
   type TaskOpenAction,
 } from './api';
 import { CODEX_NEW_THREAD_URL, copyCodexReviewPrompt, resolveCodexHandoffUrl } from './codex-handoff.mjs';
-import { canAbandonTaskStatus, canAcceptTaskStatus, canCancelTaskStatus, canDiscardWorktreeStatus } from './task-actions';
+import { canAbandonTaskStatus, canAcceptTaskStatus, canCancelTaskStatus, canDiscardWorktreeStatus, canReplyTaskStatus } from './task-actions';
 import type {
   ChangedFile,
   CreateTaskInput,
@@ -834,7 +834,7 @@ function TaskDetailPage({
     setShowLiveViewer(false);
   }, [task.id]);
 
-  const canReply = task.status === 'waiting' || task.status === 'review';
+  const canReply = canReplyTaskStatus(task.status);
   const canAccept = canAcceptTaskStatus(task.status);
   const canAbandon = canAbandonTaskStatus(task.status);
   const canDiscardWorktree = canDiscardWorktreeStatus(task.status) && task.hasWorktree;

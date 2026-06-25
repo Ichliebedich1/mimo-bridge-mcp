@@ -1,12 +1,17 @@
 import type { TaskStatus } from './types';
 
 const REVIEW_STATUSES = new Set<TaskStatus>(['review']);
+const REPLYABLE_STATUSES = new Set<TaskStatus>(['waiting', 'review', 'failed']);
 const ABANDONABLE_STATUSES = new Set<TaskStatus>(['review', 'failed', 'cancelled', 'abandoned']);
 const WORKTREE_DISCARD_STATUSES = new Set<TaskStatus>(['review', 'failed', 'cancelled', 'abandoned']);
 const CANCELABLE_STATUSES = new Set<TaskStatus>(['queued', 'running', 'waiting']);
 
 export function canAcceptTaskStatus(status: TaskStatus): boolean {
   return REVIEW_STATUSES.has(status);
+}
+
+export function canReplyTaskStatus(status: TaskStatus): boolean {
+  return REPLYABLE_STATUSES.has(status);
 }
 
 export function canAbandonTaskStatus(status: TaskStatus): boolean {
@@ -20,4 +25,3 @@ export function canDiscardWorktreeStatus(status: TaskStatus): boolean {
 export function canCancelTaskStatus(status: TaskStatus): boolean {
   return CANCELABLE_STATUSES.has(status);
 }
-

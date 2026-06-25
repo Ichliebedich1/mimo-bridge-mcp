@@ -6,6 +6,7 @@ import {
   canAcceptTaskStatus,
   canCancelTaskStatus,
   canDiscardWorktreeStatus,
+  canReplyTaskStatus,
 } from "../apps/admin-ui/src/task-actions.ts";
 
 test("admin UI action rules allow cleanup for failed and cancelled tasks", () => {
@@ -29,3 +30,11 @@ test("admin UI action rules keep accept and cancel scoped to valid states", () =
   }
 });
 
+test("admin UI action rules allow replies for failed tasks so agents can continue", () => {
+  for (const status of ["waiting", "review", "failed"]) {
+    assert.strictEqual(canReplyTaskStatus(status), true, status);
+  }
+  for (const status of ["queued", "running", "cancelled", "abandoned", "accepted"]) {
+    assert.strictEqual(canReplyTaskStatus(status), false, status);
+  }
+});

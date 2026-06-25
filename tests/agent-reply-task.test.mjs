@@ -166,3 +166,80 @@ test("agent_reply_task rejects Reasonix reply when no session path is recorded",
     rmSync(runtimeDir, { recursive: true, force: true });
   }
 });
+
+test("agent_reply_task allows failed Reasonix task to continue when session path exists", async () => {
+  const failedDir = join(testDir, "failed-resume");
+  if (existsSync(failedDir)) {
+    rmSync(failedDir, { recursive: true, force: true });
+  }
+  const repoDir = join(failedDir, "repo");
+  const runtimeDir = join(failedDir, "runtime");
+  const reasonixHome = join(failedDir, "ReasonixData");
+  initRepo(repoDir);
+  mkdirSync(runtimeDir, { recursive: true });
+  mkdirSync(reasonixHome, { recursive: true });
+
+  const store = new TaskStore(runtimeDir);
+  const runningTasks = new RunningTaskRegistry();
+  const taskQueue = new TaskQueue(1);
+  const config = {
+    mimoNodePath: process.execPath,
+    mimoEntryPath: join(__dirname, "fixtures", "fake-mimo.mjs"),
+    allowedRoots: [repoDir],
+    runtimeDir,
+    agents: [],
+  };
+  const agents = [
+    {
+      id: "reasonix-tui",
+      kind: "reasonix-tui",
+      display_name: "Reasonix TUI",
+      enabled: true,
+      command: process.execPath,
+      command_args: [join(__dirname, "fixtures", "fake-reasonix.mjs")],
+      home_dir: reasonixHome,
+      max_steps: 3,
+    },
+  ];
+
+  try {
+    const startHandler = createAgentStartTaskHandler(config, agents, store, { runningTasks, taskQueue });
+    const replyHandler = createAgentReplyTaskHandler(config, agents, store, { runningTasks, taskQueue });
+
+    const started = await startHandler.handler({
+      agent_id: "reasonix-tui",
+      objective: "Create initial Reasonix output",
+      workspace_path: repoDir,
+      editable_paths: ["src"],
+      readonly_paths: [],
+      acceptance_criteria: ["src/reasonix-output.txt exists"],
+      use_worktree: true,
+      runtime_timeout_seconds: 60,
+    });
+    assert.strictEqual(started.status, "running");
+
+    const firstRound = await waitForTerminal(store, started.task_id);
+    assert.ok(firstRound);
+    assert.strictEqual(firstRound.status, "review");
+    assert.ok(firstRound.agent_session_path);
+
+    store.updateTaskStatus(started.task_id, "failed", "paused after max steps");
+
+    const reply = await replyHandler.handler({
+      task_id: started.task_id,
+      agent_id: "reasonix-tui",
+      message: "Continue after max steps pause",
+      priority: 5,
+    });
+
+    assert.strictEqual(reply.status, "running");
+    const secondRound = await waitForTerminal(store, started.task_id);
+    assert.ok(secondRound);
+    assert.strictEqual(secondRound.status, "review");
+    assert.strictEqual(existsSync(join(secondRound.worktree.worktree_path, "src", "reasonix-followup.txt")), true);
+  } finally {
+    runningTasks.cancelAll();
+    taskQueue.cancelAll();
+    rmSync(failedDir, { recursive: true, force: true });
+  }
+});

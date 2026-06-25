@@ -74,3 +74,26 @@ test("pending review snapshot keeps MiMo review command for MiMo tasks", () => {
     rmSync(runtimeDir, { recursive: true, force: true });
   }
 });
+
+test("pending review snapshot includes failed tasks that still need Codex intervention", () => {
+  const runtimeDir = mkdtempSync(join(tmpdir(), "pending-reviews-failed-"));
+  const store = new TaskStore(runtimeDir);
+  try {
+    const failedTask = createTask(store, runtimeDir, "reasonix-tui", "reasonix failed task");
+    store.updateTaskStatus(failedTask.task_id, "failed", "Reasonix paused after max steps");
+
+    const result = getPendingReviewsSnapshot(store, {
+      agent_id: "reasonix-tui",
+      limit: 10,
+      max_chars: 8000,
+    });
+
+    assert.strictEqual(result.pending_count, 1);
+    assert.strictEqual(result.tasks[0].task_id, failedTask.task_id);
+    assert.strictEqual(result.tasks[0].status, "failed");
+    assert.strictEqual(result.tasks[0].attention_reason, "failed_needs_attention");
+    assert.match(result.tasks[0].review_command, /agent-review --agent-id reasonix-tui/);
+  } finally {
+    rmSync(runtimeDir, { recursive: true, force: true });
+  }
+});

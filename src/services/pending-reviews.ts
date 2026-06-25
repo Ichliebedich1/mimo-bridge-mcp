@@ -1,10 +1,12 @@
-import type { ReviewRecommendation, TaskState } from "../types.js";
+import type { ReviewRecommendation, TaskState, TaskStatus } from "../types.js";
 import type { TaskStore } from "./task-store.js";
+
+type RecoverableStatus = Extract<TaskStatus, "review" | "failed" | "cancelled" | "abandoned">;
 
 export interface PendingReviewSummary {
   task_id: string;
   agent: string;
-  status: "review";
+  status: RecoverableStatus;
   updated_at: string;
   current_round: number;
   objective: string;
@@ -12,6 +14,7 @@ export interface PendingReviewSummary {
   risk_flags: string[];
   review_recommendation: ReviewRecommendation | "unknown";
   has_worktree: boolean;
+  attention_reason: "needs_review" | "failed_needs_attention" | "terminal_worktree_cleanup";
   origin_codex_thread_id: string | null;
   origin_codex_thread_url: string | null;
   review_command: string;
@@ -46,7 +49,7 @@ export function getPendingReviewsSnapshot(
   const maxChars = clampInteger(options.max_chars, 1000, 20000, DEFAULT_MAX_CHARS);
   const pendingTasks = taskStore
     .listTasks(MAX_SCAN_LIMIT)
-    .filter((task): task is TaskState & { status: "review" } => task.status === "review")
+    .filter(isRecoverableTask)
     .filter((task) => !options.agent_id || task.agent === options.agent_id);
 
   const summaries = pendingTasks.map(toPendingReviewSummary);
@@ -70,7 +73,7 @@ export function getPendingReviewsSnapshot(
 export function getPendingReviewCount(taskStore: TaskStore, agentId?: string): number {
   return taskStore
     .listTasks(MAX_SCAN_LIMIT)
-    .filter((task) => task.status === "review")
+    .filter(isRecoverableTask)
     .filter((task) => !agentId || task.agent === agentId).length;
 }
 
@@ -89,17 +92,30 @@ function buildSnapshot(
     next_review_command: tasks[0]?.review_command ?? null,
     recovery_note:
       pendingCount === 0
-        ? "No tasks are waiting for Codex review."
-        : "Task(s) are waiting for Codex review. Start with the first review_command and keep using Review Package before focused escalation.",
+        ? "No tasks are waiting for Codex review or intervention."
+        : "Task(s) need Codex review or intervention. Start with the first review_command and keep using Review Package before focused escalation.",
   };
 }
 
-function toPendingReviewSummary(task: TaskState & { status: "review" }): PendingReviewSummary {
+function isRecoverableTask(task: TaskState): task is TaskState & { status: RecoverableStatus } {
+  if (task.status === "review") {
+    return true;
+  }
+  if (task.status === "failed") {
+    return Boolean(task.worktree || task.error || task.issues.length > 0 || (task.review_package?.risk_flags.length ?? 0) > 0);
+  }
+  if ((task.status === "cancelled" || task.status === "abandoned") && task.worktree) {
+    return true;
+  }
+  return false;
+}
+
+function toPendingReviewSummary(task: TaskState & { status: RecoverableStatus }): PendingReviewSummary {
   const reviewPackage = task.review_package;
   return {
     task_id: task.task_id,
     agent: task.agent,
-    status: "review",
+    status: task.status,
     updated_at: task.updated_at,
     current_round: task.current_round,
     objective: truncateText(task.config.objective, OBJECTIVE_PREVIEW_CHARS),
@@ -107,13 +123,24 @@ function toPendingReviewSummary(task: TaskState & { status: "review" }): Pending
     risk_flags: reviewPackage?.risk_flags ?? [],
     review_recommendation: reviewPackage?.review_recommendation ?? "unknown",
     has_worktree: Boolean(task.worktree),
+    attention_reason: getAttentionReason(task),
     origin_codex_thread_id: task.config.origin_codex_thread_id ?? null,
     origin_codex_thread_url: task.config.origin_codex_thread_url ?? null,
     review_command: buildReviewCommand(task),
   };
 }
 
-function buildReviewCommand(task: TaskState & { status: "review" }): string {
+function getAttentionReason(task: TaskState & { status: RecoverableStatus }): PendingReviewSummary["attention_reason"] {
+  if (task.status === "review") {
+    return "needs_review";
+  }
+  if (task.status === "failed") {
+    return "failed_needs_attention";
+  }
+  return "terminal_worktree_cleanup";
+}
+
+function buildReviewCommand(task: TaskState & { status: RecoverableStatus }): string {
   if (task.agent === "mimo") {
     return `node scripts\\mimo-bridge-client.mjs review --task-id ${task.task_id} --detail-level review --max-chars 8000`;
   }
