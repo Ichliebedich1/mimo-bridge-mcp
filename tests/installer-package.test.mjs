@@ -79,6 +79,36 @@ test("installer update path verifies stop before replacing app files", async () 
   assert.doesNotMatch(installBody, /Copy-Directory -Source \$payloadRoot -Destination \$paths\.InstallRoot/);
 });
 
+test("installer can safely stop an old installed daemon without launcher state", async () => {
+  const installer = await read("scripts/installer/install.ps1");
+  assert.match(installer, /function Test-InstalledDaemonOwner/);
+  assert.match(installer, /function Stop-InstalledDaemonOwner/);
+  assert.match(installer, /Cannot prove port owner is installed MiMo Bridge daemon because command line is unavailable/);
+  assert.match(installer, /Port owner is not a proven installed MiMo Bridge daemon/);
+  assert.match(installer, /Stopping installed MiMo Bridge daemon without launcher state/);
+  assert.match(installer, /Stop-Process -Id \(\[int\]\$Owner\.Pid\) -Force/);
+  assert.match(installer, /MiMo Bridge old daemon is running from the install folder/);
+
+  const ownerCheckBody = installer.slice(
+    installer.indexOf("function Test-InstalledDaemonOwner"),
+    installer.indexOf("function Stop-InstalledDaemonOwner"),
+  );
+  assert.match(ownerCheckBody, /\$installRoot/);
+  assert.match(ownerCheckBody, /"node\.exe"/);
+  assert.match(ownerCheckBody, /"local-daemon"/);
+  assert.match(ownerCheckBody, /"index\.js"/);
+
+  const stopBody = installer.slice(
+    installer.indexOf("function Assert-InstalledDaemonStopped"),
+    installer.indexOf("function Test-StagedPayload"),
+  );
+  assert.match(stopBody, /if \(\$stop\.ExitCode -ne 0\)/);
+  assert.match(stopBody, /Stop-InstalledDaemonOwner -Owner \$owner -Paths \$Paths/);
+  assert.match(stopBody, /Stop launcher is missing; verifying port and file locks before upgrade/);
+  assert.match(stopBody, /The installer will not stop an unrelated process/);
+  assert.match(stopBody, /No installed files were removed/);
+});
+
 test("installer uses staging and rollback for replacement", async () => {
   const installer = await read("scripts/installer/install.ps1");
   assert.match(installer, /function Install-StagedPayload/);

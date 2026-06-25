@@ -18,6 +18,8 @@ P5.3 portable ZIP and EXE installer generation are implemented. `npm.cmd run pac
 
 Installer update hardening is implemented. The setup stub supports `-Help` and rejects unknown flags before installation begins. The PowerShell installer verifies the installed daemon is stopped before replacing app files, checks for locked native/runtime files, uses a staged payload plus rollback instead of deleting live directories first, writes setup logs under `%LOCALAPPDATA%\MiMoBridge\setup.log`, and leaves the previous install intact if shutdown or replacement cannot be proven safe.
 
+Upgrade compatibility now covers older installs that are missing `%LOCALAPPDATA%\MiMoBridge\launcher-state.json`. During setup, the installer still calls the launcher first. If the launcher cannot prove ownership, setup checks the owner of the configured port and only stops it when the command line proves it is the old installed daemon from `%LOCALAPPDATA%\MiMoBridgeApp` (`node.exe`, `local-daemon`, and `index.js` under the install root). If ownership cannot be proven, setup keeps the old install intact and asks the user to close MiMo Bridge or reboot before retrying.
+
 ## Entry Files
 
 - `apps/local-daemon/start-local.ps1`
@@ -65,7 +67,7 @@ Keep the existing React UI and Node daemon. Build a thin Windows launcher around
 
 
 - Validate clean-machine install, Chinese/space paths, no system Node, port conflict, reboot, Codex MCP, shortcut, opt-in autostart, and uninstall.
-- Validate upgrade over a running old installed daemon on a clean machine; expected behavior is a clean abort with the old install preserved if the daemon cannot be stopped.
+- Validate upgrade over a running old installed daemon on a clean machine; expected behavior is automatic stop when the daemon is proven to come from the install root, or a clean abort with the old install preserved if ownership cannot be proven.
 - Re-run portable smoke from the generated ZIP on a clean machine.
 - Verify whether direct start/restart stdout behaves normally in an interactive Windows console; the Codex shell harness can lose stdout capture after daemon spawn, while `status -Json` verifies the daemon is healthy.
 

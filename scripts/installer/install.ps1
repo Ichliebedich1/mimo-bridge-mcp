@@ -278,6 +278,66 @@ function Get-PortOwner {
   }
 }
 
+function Test-InstalledDaemonOwner {
+  param(
+    [Parameter(Mandatory = $true)]$Owner,
+    [Parameter(Mandatory = $true)]$Paths
+  )
+  $commandLine = [string]$Owner.CommandLine
+  if (-not $commandLine) {
+    Write-SetupLog "Cannot prove port owner is installed MiMo Bridge daemon because command line is unavailable. pid=$($Owner.Pid) name=$($Owner.Name)"
+    return $false
+  }
+
+  $installRoot = [System.IO.Path]::GetFullPath([string]$Paths.InstallRoot).TrimEnd('\', '/')
+  $checks = @(
+    $installRoot,
+    "node.exe",
+    "local-daemon",
+    "index.js"
+  )
+  foreach ($check in $checks) {
+    if ($commandLine.IndexOf($check, [System.StringComparison]::OrdinalIgnoreCase) -lt 0) {
+      Write-SetupLog "Port owner is not a proven installed MiMo Bridge daemon. missing=$check pid=$($Owner.Pid) commandLine=$commandLine"
+      return $false
+    }
+  }
+
+  Write-SetupLog "Port owner is a proven installed MiMo Bridge daemon. pid=$($Owner.Pid) commandLine=$commandLine"
+  return $true
+}
+
+function Stop-InstalledDaemonOwner {
+  param(
+    [Parameter(Mandatory = $true)]$Owner,
+    [Parameter(Mandatory = $true)]$Paths,
+    [int]$WaitSeconds = 30
+  )
+  if (-not (Test-InstalledDaemonOwner -Owner $Owner -Paths $Paths)) {
+    return $false
+  }
+
+  Write-SetupLog "Stopping installed MiMo Bridge daemon without launcher state. pid=$($Owner.Pid)"
+  try {
+    Stop-Process -Id ([int]$Owner.Pid) -Force -ErrorAction Stop
+  } catch {
+    Write-SetupLog "Failed to stop installed MiMo Bridge daemon pid=$($Owner.Pid): $($_.Exception.Message)"
+    throw "MiMo Bridge old daemon is running from the install folder (PID $($Owner.Pid)), but the installer could not stop it. Restart Windows, then run this installer again. No installed files were removed."
+  }
+
+  $deadline = (Get-Date).AddSeconds($WaitSeconds)
+  do {
+    Start-Sleep -Milliseconds 500
+    $currentOwner = Get-PortOwner -Port (Get-ConfiguredPort -Paths $Paths)
+    if (-not $currentOwner -or [int]$currentOwner.Pid -ne [int]$Owner.Pid) {
+      Write-SetupLog "Installed MiMo Bridge daemon stopped. pid=$($Owner.Pid)"
+      return $true
+    }
+  } while ((Get-Date) -lt $deadline)
+
+  throw "MiMo Bridge old daemon is still running from the install folder (PID $($Owner.Pid)). Restart Windows, then run this installer again. No installed files were removed."
+}
+
 function Test-InstallFileLocked {
   param([Parameter(Mandatory = $true)][string]$InstallRoot)
   if (-not (Test-Path -LiteralPath $InstallRoot)) {
@@ -311,8 +371,18 @@ function Assert-InstalledDaemonStopped {
     if ($stop.TimedOut) {
       throw "MiMo Bridge is still running and the installer could not stop it. Close MiMo Bridge, or reboot Windows, then run this installer again."
     }
+    if ($stop.ExitCode -ne 0) {
+      $owner = Get-PortOwner -Port $port
+      if ($owner) {
+        Stop-InstalledDaemonOwner -Owner $owner -Paths $Paths | Out-Null
+      }
+    }
   } elseif (Test-Path -LiteralPath $Paths.InstallRoot) {
     Write-SetupLog "Stop launcher is missing; verifying port and file locks before upgrade."
+    $owner = Get-PortOwner -Port $port
+    if ($owner) {
+      Stop-InstalledDaemonOwner -Owner $owner -Paths $Paths | Out-Null
+    }
   }
 
   $deadline = (Get-Date).AddSeconds(30)
@@ -331,12 +401,18 @@ function Assert-InstalledDaemonStopped {
   } while ((Get-Date) -lt $deadline)
 
   if (Test-HttpHealth -Port $port) {
-    throw "MiMo Bridge is still responding on port $port. Close MiMo Bridge, or reboot Windows, then run this installer again."
+    $owner = Get-PortOwner -Port $port
+    $ownerText = if ($owner) { " PID $($owner.Pid), process $($owner.Name)." } else { "" }
+    throw "MiMo Bridge is still responding on port $port.$ownerText Close MiMo Bridge, or reboot Windows, then run this installer again. No installed files were removed."
   }
 
   $portOwner = Get-PortOwner -Port $port
   if ($portOwner -and ([string]$portOwner.CommandLine).IndexOf($Paths.InstallRoot, [System.StringComparison]::OrdinalIgnoreCase) -ge 0) {
-    throw "MiMo Bridge still owns port $port (PID $($portOwner.Pid)). Close it, or reboot Windows, then run this installer again."
+    throw "MiMo Bridge still owns port $port (PID $($portOwner.Pid)). Close it, or reboot Windows, then run this installer again. No installed files were removed."
+  }
+  if ($portOwner) {
+    $processText = if ($portOwner.Name) { ", process $($portOwner.Name)" } else { "" }
+    throw "Port $port is already in use by PID $($portOwner.Pid)$processText. The installer will not stop an unrelated process. Close that process or change the MiMo Bridge port, then run this installer again. No installed files were removed."
   }
 
   if (Test-InstallFileLocked -InstallRoot $Paths.InstallRoot) {

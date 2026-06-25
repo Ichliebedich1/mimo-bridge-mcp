@@ -145,6 +145,28 @@ To restart and open the Admin UI:
 powershell -ExecutionPolicy Bypass -File apps/local-daemon/launcher.ps1 restart -Open
 ```
 
+## Installer Stays At 0 Percent Or Text Keeps Flashing
+
+This can happen during an upgrade when an older installed daemon is still running from `%LOCALAPPDATA%\MiMoBridgeApp`, but the old launcher state file is missing. The old launcher reports the daemon as unmanaged, so the installer must prove the process really belongs to the installed MiMo Bridge before stopping it.
+
+Newer installers handle this automatically when the port owner command line clearly points to the installed daemon (`node.exe`, `local-daemon`, and `index.js` under `%LOCALAPPDATA%\MiMoBridgeApp`). If Windows policy prevents reading the command line, or if port 3210 belongs to another process, setup stops safely and keeps the old install.
+
+Recovery:
+
+```powershell
+# Check who owns the daemon port.
+Get-NetTCPConnection -LocalPort 3210 -State Listen | Select-Object -First 1
+
+# If it is the old MiMo Bridge daemon and setup cannot stop it, reboot Windows,
+# then run the installer again before opening MiMo Bridge.
+```
+
+The setup log is written to:
+
+```text
+%LOCALAPPDATA%\MiMoBridge\setup.log
+```
+
 ## How To Reset Local State
 
 Use caution. Local state can include task metadata and runtime data.
