@@ -31,17 +31,29 @@ export function buildCodexReviewPrompt(task) {
   const title = String(task.title || task.objective || task.id).trim();
   const objective = String(task.objective || task.title || "未提供目标").trim();
   const status = String(task.status || "unknown");
+  const agent = String(task.agent || "mimo").trim() || "mimo";
+  const agentLabel = agent === "mimo" ? "MiMo" : agent;
+  const reviewCommand =
+    agent === "mimo"
+      ? `node scripts\\mimo-bridge-client.mjs review --task-id ${task.id} --detail-level review --max-chars 8000`
+      : `node scripts\\mimo-bridge-client.mjs agent-review --agent-id ${agent} --task-id ${task.id} --detail-level review --max-chars 8000`;
+  const reviewTool =
+    agent === "mimo"
+      ? `mimo_get_task(task_id="${task.id}", detail_level="review", max_chars=8000)`
+      : `agent_get_task(agent_id="${agent}", task_id="${task.id}", detail_level="review", max_chars=8000)`;
 
   return [
-    `请接手并审查管理界面中的 MiMo 任务 ${task.id}。`,
+    `请接手并审查管理界面中的 ${agentLabel} 任务 ${task.id}。`,
     `任务：${title}`,
     `目标：${objective}`,
     `当前状态：${status}`,
+    `执行 Agent：${agent}`,
     "",
-    `请先调用 mimo_get_task(task_id="${task.id}", detail_level="review", max_chars=8000)。`,
+    `请先使用低上下文审查命令：${reviewCommand}`,
+    `如果直接调用 MCP 工具，请使用：${reviewTool}`,
     "先检查 editable_paths、changed_files、out_of_bounds_report、diff_stat、test_result 和 risk_flags。",
     "只有发现具体风险时，才按相关路径读取 focused diff、文件或日志尾部。",
-    "请负责最终验收；复杂或高风险部分由 Codex 直接执行，不必全部退回 MiMo。",
+    "请负责最终验收；复杂或高风险部分由 Codex 直接执行，不必全部退回执行 Agent。",
     "",
     "注意：后续任务摘要、测试结果、遗留问题应使用中文书写；文件名、命令、代码标识保持原文。",
   ].join("\n");

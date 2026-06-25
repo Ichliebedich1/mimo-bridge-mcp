@@ -12,6 +12,7 @@ import {
 
 const task = {
   id: "task_123456789abc",
+  agent: "mimo",
   status: "review",
   title: "实现共享任务看板",
   objective: "让 Codex 和 MiMo 协同完成任务",
@@ -23,9 +24,22 @@ test("Codex handoff prompt identifies the task and starts with bounded review ev
   assert.match(prompt, /task_123456789abc/);
   assert.match(prompt, /detail_level="review"/);
   assert.match(prompt, /max_chars=8000/);
+  assert.match(prompt, /mimo_get_task/);
   assert.match(prompt, /复杂或高风险部分.*Codex.*直接执行/);
   assert.doesNotMatch(prompt, /默认.*full/);
   assert.strictEqual(CODEX_NEW_THREAD_URL, "codex://threads/new");
+});
+
+test("Codex handoff prompt uses generic agent review commands for Reasonix tasks", () => {
+  const prompt = buildCodexReviewPrompt({
+    ...task,
+    agent: "reasonix-tui",
+  });
+
+  assert.match(prompt, /Reasonix TUI|reasonix-tui/);
+  assert.match(prompt, /agent-review --agent-id reasonix-tui --task-id task_123456789abc --detail-level review --max-chars 8000/);
+  assert.match(prompt, /agent_get_task\(agent_id="reasonix-tui", task_id="task_123456789abc", detail_level="review", max_chars=8000\)/);
+  assert.doesNotMatch(prompt, /mimo_get_task/);
 });
 
 test("Codex handoff copies the generated review prompt through the public helper", async () => {

@@ -4,6 +4,8 @@ This file is the project-local long-term memory. Update it after each meaningful
 
 ## Latest Status
 
+- P6.19 Admin UI Codex handoff is implemented locally. The "交给 Codex 审查" prompt is now agent-aware: MiMo tasks keep the `mimo_get_task` / safe-client `review` path, while Reasonix TUI tasks tell Codex to use `agent_get_task(agent_id="reasonix-tui", ...)` or `agent-review --agent-id reasonix-tui`. The task detail reply box also displays the actual agent name instead of always saying "回复 MiMo".
+- P6.19 verification passed: admin-ui build, root build, `node --test tests\codex-handoff.test.mjs tests\admin-ui-api.test.mjs`, and `node --test tests\codex-handoff.test.mjs tests\admin-ui-api.test.mjs tests\admin-ui-lifecycle-api.test.mjs tests\admin-api.test.mjs` passed 51/51.
 - P6.18 Admin UI Agent lifecycle parity is implemented locally. The management UI now routes non-MiMo cancel/finish/worktree/delete actions through `/api/agent-tasks/:id/...` with `agent_id`, while MiMo tasks keep the legacy `/api/tasks/:id/...` paths. This aligns UI lifecycle operations with the generic MCP/safe-client lifecycle tools already added in P6.9-P6.10.
 - P6.18 verification passed: root build, local-daemon build, admin-ui build, and `node --test tests\admin-ui-lifecycle-api.test.mjs tests\agent-lifecycle-task.test.mjs tests\admin-api.test.mjs` passed 37/37.
 - Release artifacts were refreshed after P6.18. `npm.cmd run package:installer` produced `artifacts\MiMoBridgeSetup-win10-win11-x64.exe` (55,604,736 bytes) and ignored local `artifacts\MiMoBridge-portable-win10-win11-x64.zip` (55,641,641 bytes). `npm.cmd run validate:release -- -SkipPackageBuild` passed; installer manifest source commit is `78dffac`.

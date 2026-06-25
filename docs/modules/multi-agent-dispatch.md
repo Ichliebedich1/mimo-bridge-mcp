@@ -22,7 +22,7 @@ Reasonix should eventually reach the same project role as MiMo:
 
 ## Current Status
 
-P6.0-P6.18 are implemented locally. The runtime now has an Agent Registry, Reasonix TUI probe, Reasonix one-shot runner, generic low-token task get/wait/reply tools, generic lifecycle/status tools for cancel/finish/merge/delete/queue/token, safe client Agent commands including replies/recovery/listing/token status, Reasonix session mapping through `agent_session_path`, Admin UI agent selector/badge/reply/lifecycle support, agent-aware queue scheduling, Reasonix live/session parsing for the read-only live viewer, safe local folder opening, safe Reasonix GUI companion opening, explicit Reasonix token/cost extraction when session fields exist, bounded generic task listing/recovery, and generic Review Package summary fields. Existing `mimo_*` MCP tools remain compatible.
+P6.0-P6.19 are implemented locally. The runtime now has an Agent Registry, Reasonix TUI probe, Reasonix one-shot runner, generic low-token task get/wait/reply tools, generic lifecycle/status tools for cancel/finish/merge/delete/queue/token, safe client Agent commands including replies/recovery/listing/token status, Reasonix session mapping through `agent_session_path`, Admin UI agent selector/badge/reply/lifecycle support, agent-aware Codex review handoff prompts, agent-aware queue scheduling, Reasonix live/session parsing for the read-only live viewer, safe local folder opening, safe Reasonix GUI companion opening, explicit Reasonix token/cost extraction when session fields exist, bounded generic task listing/recovery, and generic Review Package summary fields. Existing `mimo_*` MCP tools remain compatible.
 
 Observed local Reasonix installation on this machine:
 
@@ -407,6 +407,29 @@ Status:
 - Implemented locally.
 - Verified with root/local-daemon/admin-ui builds.
 - Focused tests passed: `node --test tests\admin-ui-lifecycle-api.test.mjs tests\agent-lifecycle-task.test.mjs tests\admin-api.test.mjs` 37/37.
+
+### P6.19 Admin UI Codex Handoff Parity
+
+Goal: when the management UI hands a task back to Codex for review, the copied prompt must tell Codex to use the correct low-context review path for the task's Agent.
+
+Tasks:
+
+- Keep MiMo prompts compatible with `mimo_get_task` and safe-client `review`.
+- Generate `agent_get_task(agent_id="reasonix-tui", ...)` and `agent-review --agent-id reasonix-tui` instructions for Reasonix TUI tasks.
+- Include the execution Agent in the handoff prompt so compressed/new Codex threads do not have to infer it.
+- Make the task detail reply box display the actual Agent name instead of always saying "回复 MiMo".
+
+Acceptance:
+
+- Reasonix review handoff no longer points Codex at MiMo-only review tools.
+- MiMo review handoff remains backward-compatible.
+- Handoff still preserves the low-token Review Package first workflow.
+
+Status:
+
+- Implemented locally.
+- Verified with admin-ui build and root build.
+- Focused tests passed: `node --test tests\codex-handoff.test.mjs tests\admin-ui-api.test.mjs tests\admin-ui-lifecycle-api.test.mjs tests\admin-api.test.mjs` 51/51.
 
 ### P6.8 Token/Cost Integration
 

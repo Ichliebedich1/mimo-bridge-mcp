@@ -95,6 +95,12 @@ const testLabels: Record<Task['testResult'], string> = {
   unknown: '暂无结果',
 };
 
+function agentDisplayName(agent: string) {
+  if (agent === 'mimo') return 'MiMo';
+  if (agent === 'reasonix-tui') return 'Reasonix TUI';
+  return agent;
+}
+
 function App() {
   const [page, setPage] = useState<Page>('overview');
   const [selectedTaskId, setSelectedTaskId] = useState<string>('');
@@ -1073,11 +1079,11 @@ function TaskDetailPage({
           )}
 
           <div className="reply-box">
-            <h3>回复 MiMo</h3>
+            <h3>回复 {agentDisplayName(task.agent)}</h3>
             <textarea
               disabled={!canReply || Boolean(actionBusy) || replying}
               onChange={(event) => setReplyMessage(event.target.value)}
-              placeholder="说明需要 MiMo 继续修复的问题，或给出下一步要求。"
+              placeholder={'说明需要 ' + agentDisplayName(task.agent) + ' 继续修复的问题，或给出下一步要求。'}
               rows={5}
               value={replyMessage}
             />
