@@ -2,10 +2,11 @@ import { spawn } from "node:child_process";
 import { existsSync, statSync } from "node:fs";
 import { basename, dirname, isAbsolute, relative, resolve } from "node:path";
 import type { TaskStore } from "../../../src/services/task-store.js";
+import { validateSessionId } from "../../../src/services/path-guard.js";
 import type { AgentConfig, TaskState } from "../../../src/types.js";
 import type { DaemonConfig } from "./daemon-config.js";
 
-export type TaskOpenAction = "task_folder" | "session_folder" | "reasonix_gui";
+export type TaskOpenAction = "task_folder" | "session_folder" | "reasonix_gui" | "mimo_session_terminal" | "reasonix_session_terminal";
 
 export interface OpenTaskTargetInput {
   task_id: string;
@@ -16,7 +17,7 @@ export interface OpenTaskTargetResult {
   task_id: string;
   action: TaskOpenAction;
   opened: boolean;
-  target_kind: "worktree" | "workspace" | "reasonix_session_folder" | "reasonix_gui";
+  target_kind: "worktree" | "workspace" | "reasonix_session_folder" | "reasonix_gui" | "mimo_session_terminal" | "reasonix_session_terminal";
   target_name: string;
   message: string;
 }
@@ -66,7 +67,7 @@ export function createOpenTaskTargetHandler(
         return resolved;
       }
 
-      const opened = resolved.kind === "reasonix_gui"
+      const opened = isExecutableTarget(resolved.kind)
         ? await openExecutable(resolved.path, resolved.args ?? [], { cwd: resolved.cwd, env: resolved.env })
         : await openPath(resolved.path);
       if (!opened.ok) {
@@ -98,6 +99,12 @@ export function resolveOpenTarget(
   }
   if (action === "reasonix_gui") {
     return resolveReasonixGuiTarget(config, task);
+  }
+  if (action === "mimo_session_terminal") {
+    return resolveMimoSessionTerminalTarget(config, task);
+  }
+  if (action === "reasonix_session_terminal") {
+    return resolveReasonixSessionTerminalTarget(config, task);
   }
   return { error: "Unsupported open action." };
 }
@@ -190,6 +197,86 @@ function resolveReasonixGuiTarget(config: DaemonConfig, task: TaskState): Resolv
   };
 }
 
+function resolveMimoSessionTerminalTarget(config: DaemonConfig, task: TaskState): ResolvedTarget | { error: string } {
+  if (task.agent !== "mimo") {
+    return { error: "Only MiMo tasks can open a MiMo session terminal." };
+  }
+  if (!task.session_id) {
+    return { error: "This MiMo task has no recorded session_id." };
+  }
+  const sessionValidation = validateSessionId(task.session_id);
+  if (!sessionValidation.allowed) {
+    return { error: sessionValidation.reason ?? "Invalid MiMo session_id." };
+  }
+  const mcpConfig = config.mcpConfig;
+  if (!mcpConfig) {
+    return { error: "MiMo configuration is unavailable." };
+  }
+  const nodePath = resolve(mcpConfig.mimoNodePath);
+  const entryPath = resolve(mcpConfig.mimoEntryPath);
+  if (!existsFile(nodePath)) {
+    return { error: "Configured MiMo Node executable does not exist." };
+  }
+  if (!existsFile(entryPath)) {
+    return { error: "Configured MiMo entry file does not exist." };
+  }
+
+  const cwdTarget = resolveTaskFolderTarget(config, task);
+  if ("error" in cwdTarget) {
+    return cwdTarget;
+  }
+
+  const command = buildCmdCommand(cwdTarget.path, [nodePath, entryPath, "-s", task.session_id]);
+  if ("error" in command) {
+    return command;
+  }
+  return {
+    kind: "mimo_session_terminal",
+    path: "cmd.exe",
+    args: ["/k", command.command],
+    cwd: cwdTarget.path,
+    env: process.env,
+  };
+}
+
+function resolveReasonixSessionTerminalTarget(config: DaemonConfig, task: TaskState): ResolvedTarget | { error: string } {
+  if (task.agent !== "reasonix-tui") {
+    return { error: "Only Reasonix TUI tasks can open a Reasonix session terminal." };
+  }
+  const sessionTarget = resolveReasonixSessionFile(config, task);
+  if ("error" in sessionTarget) {
+    return sessionTarget;
+  }
+  const agent = sessionTarget.agent;
+  if (!agent.command) {
+    return { error: "Reasonix command is not configured." };
+  }
+  const commandPath = resolve(agent.command);
+  if (!existsFile(commandPath)) {
+    return { error: "Reasonix executable does not exist." };
+  }
+  const cwdTarget = resolveTaskFolderTarget(config, task);
+  if ("error" in cwdTarget) {
+    return cwdTarget;
+  }
+
+  const command = buildCmdCommand(cwdTarget.path, [commandPath, ...(agent.command_args ?? []), "run", "--resume", sessionTarget.sessionPath]);
+  if ("error" in command) {
+    return command;
+  }
+  return {
+    kind: "reasonix_session_terminal",
+    path: "cmd.exe",
+    args: ["/k", command.command],
+    cwd: cwdTarget.path,
+    env: {
+      ...process.env,
+      ...(agent.home_dir ? { REASONIX_HOME: resolve(agent.home_dir) } : {}),
+      REASONIX_LANG: process.env.REASONIX_LANG || "zh",
+    },
+  };
+}
+
 function inferReasonixGuiCommand(agent: AgentConfig | undefined): string | null {
   if (agent?.home_dir) {
     return resolve(agent.home_dir, "..", "ReasonixDesktop", "reasonix-desktop.exe");
@@ -198,6 +285,51 @@ function inferReasonixGuiCommand(agent: AgentConfig | undefined): string | null 
     return resolve(dirname(dirname(agent.command)), "ReasonixDesktop", "reasonix-desktop.exe");
   }
   return null;
+}
+
+function resolveReasonixSessionFile(
+  config: DaemonConfig,
+  task: TaskState,
+): { agent: AgentConfig; sessionPath: string } | { error: string } {
+  if (!task.agent_session_path) {
+    return { error: "This Reasonix task has no recorded session file." };
+  }
+
+  const agent = config.agents.find((candidate) => candidate.id === task.agent);
+  if (!agent?.home_dir) {
+    return { error: "Reasonix home_dir is not configured; cannot validate session path." };
+  }
+
+  const sessionPath = resolve(task.agent_session_path);
+  if (!existsFile(sessionPath)) {
+    return { error: "Reasonix session file no longer exists." };
+  }
+  if (!isInside(agent.home_dir, sessionPath)) {
+    return { error: "Reasonix session file is outside configured REASONIX_HOME." };
+  }
+
+  return { agent, sessionPath };
+}
+
+function isExecutableTarget(kind: OpenTaskTargetResult["target_kind"]): boolean {
+  return kind === "reasonix_gui" || kind === "mimo_session_terminal" || kind === "reasonix_session_terminal";
+}
+
+function buildCmdCommand(cwd: string, commandAndArgs: string[]): { command: string } | { error: string } {
+  const parts = [`cd /d ${quoteCmdArg(cwd)}`];
+  const quoted = commandAndArgs.map(quoteCmdArg);
+  if (quoted.some((item) => item === null)) {
+    return { error: "Cannot open terminal because a command argument contains an unsafe quote character." };
+  }
+  parts.push(quoted.join(" "));
+  return { command: parts.join(" && ") };
+}
+
+function quoteCmdArg(value: string): string | null {
+  if (value.includes("\"")) {
+    return null;
+  }
+  return `"${value}"`;
 }
 
 function existsDirectory(path: string): boolean {

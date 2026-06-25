@@ -32,6 +32,7 @@ test("admin UI lifecycle API uses generic agent routes for non-MiMo tasks", asyn
     await finishTask("task_1", "accepted", "reasonix-tui");
     await worktreeTask("task_1", "merge", "reasonix-tui");
     await openTaskTarget("task_1", "session_folder", "reasonix-tui");
+    await openTaskTarget("task_1", "reasonix_session_terminal", "reasonix-tui");
     await deleteTask("task_1", "reasonix-tui");
 
     assert.deepStrictEqual(
@@ -40,6 +41,7 @@ test("admin UI lifecycle API uses generic agent routes for non-MiMo tasks", asyn
         ["POST", "/api/agent-tasks/task_1/cancel"],
         ["POST", "/api/agent-tasks/task_1/finish"],
         ["POST", "/api/agent-tasks/task_1/worktree"],
+        ["POST", "/api/agent-tasks/task_1/open"],
         ["POST", "/api/agent-tasks/task_1/open"],
         ["DELETE", "/api/agent-tasks/task_1?agent_id=reasonix-tui"],
       ]
@@ -51,6 +53,8 @@ test("admin UI lifecycle API uses generic agent routes for non-MiMo tasks", asyn
     assert.strictEqual(mock.calls[2].body.action, "merge");
     assert.strictEqual(mock.calls[3].body.agent_id, "reasonix-tui");
     assert.strictEqual(mock.calls[3].body.action, "session_folder");
+    assert.strictEqual(mock.calls[4].body.agent_id, "reasonix-tui");
+    assert.strictEqual(mock.calls[4].body.action, "reasonix_session_terminal");
   } finally {
     mock.restore();
   }
@@ -63,6 +67,7 @@ test("admin UI lifecycle API keeps MiMo tasks on legacy routes", async () => {
     await finishTask("task_1", "accepted", "mimo");
     await worktreeTask("task_1", "merge", "mimo");
     await openTaskTarget("task_1", "task_folder", "mimo");
+    await openTaskTarget("task_1", "mimo_session_terminal", "mimo");
     await deleteTask("task_1", "mimo");
 
     assert.deepStrictEqual(
@@ -72,6 +77,7 @@ test("admin UI lifecycle API keeps MiMo tasks on legacy routes", async () => {
         ["POST", "/api/tasks/task_1/finish"],
         ["POST", "/api/tasks/task_1/worktree"],
         ["POST", "/api/tasks/task_1/open"],
+        ["POST", "/api/tasks/task_1/open"],
         ["DELETE", "/api/tasks/task_1"],
       ]
     );
@@ -79,6 +85,7 @@ test("admin UI lifecycle API keeps MiMo tasks on legacy routes", async () => {
     assert.deepStrictEqual(mock.calls[1].body, { status: "accepted" });
     assert.deepStrictEqual(mock.calls[2].body, { action: "merge" });
     assert.deepStrictEqual(mock.calls[3].body, { action: "task_folder" });
+    assert.deepStrictEqual(mock.calls[4].body, { action: "mimo_session_terminal" });
   } finally {
     mock.restore();
   }

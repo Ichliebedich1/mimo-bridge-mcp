@@ -260,6 +260,115 @@ test("resolveOpenTarget rejects Reasonix GUI action for non-Reasonix tasks", () 
   }
 });
 
+test("resolveOpenTarget builds fixed MiMo session terminal command", () => {
+  const root = tmpDir();
+  try {
+    const repo = join(root, "repo");
+    const runtime = join(root, "runtime");
+    const mimoEntry = join(root, "mimo-cli.mjs");
+    mkdirSync(repo, { recursive: true });
+    writeFileSync(mimoEntry, "", "utf-8");
+    const store = new TaskStore(runtime);
+    const task = store.createTask({
+      objective: "open mimo terminal",
+      workspace_path: repo,
+      editable_paths: [],
+      readonly_paths: [],
+      acceptance_criteria: [],
+      max_rounds: 1,
+      runtime_timeout_seconds: 60,
+    }, { session_id: "ses_terminal_123" });
+
+    const resolved = resolveOpenTarget(
+      {
+        ...daemonConfig(root),
+        mcpConfig: {
+          ...daemonConfig(root).mcpConfig,
+          mimoEntryPath: mimoEntry,
+        },
+      },
+      task,
+      "mimo_session_terminal"
+    );
+    assert.ok(!("error" in resolved));
+    assert.strictEqual(resolved.kind, "mimo_session_terminal");
+    assert.strictEqual(resolved.path, "cmd.exe");
+    assert.strictEqual(resolved.cwd, resolve(repo));
+    assert.ok(resolved.args[1].includes("ses_terminal_123"));
+    assert.ok(resolved.args[1].includes(resolve(mimoEntry)));
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("resolveOpenTarget rejects MiMo terminal without a valid session id", () => {
+  const root = tmpDir();
+  try {
+    const repo = join(root, "repo");
+    const runtime = join(root, "runtime");
+    mkdirSync(repo, { recursive: true });
+    const store = new TaskStore(runtime);
+    const task = store.createTask({
+      objective: "blocked terminal",
+      workspace_path: repo,
+      editable_paths: [],
+      readonly_paths: [],
+      acceptance_criteria: [],
+      max_rounds: 1,
+      runtime_timeout_seconds: 60,
+    });
+
+    const resolved = resolveOpenTarget(daemonConfig(root), task, "mimo_session_terminal");
+    assert.ok("error" in resolved);
+    assert.match(resolved.error, /session_id/);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("resolveOpenTarget builds fixed Reasonix session terminal command", () => {
+  const root = tmpDir();
+  try {
+    const repo = join(root, "repo");
+    const runtime = join(root, "runtime");
+    const reasonixHome = join(root, "ReasonixData");
+    const reasonixBin = join(root, "bin", "reasonix.exe");
+    const sessionDir = join(reasonixHome, "projects", "repo", "sessions");
+    const sessionPath = join(sessionDir, "session.jsonl");
+    mkdirSync(repo, { recursive: true });
+    mkdirSync(join(root, "bin"), { recursive: true });
+    mkdirSync(sessionDir, { recursive: true });
+    writeFileSync(reasonixBin, "", "utf-8");
+    writeFileSync(sessionPath, "{}\n", "utf-8");
+    const store = new TaskStore(runtime);
+    const task = store.createTask({
+      objective: "open reasonix terminal",
+      workspace_path: repo,
+      editable_paths: [],
+      readonly_paths: [],
+      acceptance_criteria: [],
+      max_rounds: 1,
+      runtime_timeout_seconds: 60,
+    }, { agent: "reasonix-tui" });
+    store.updateTaskAgentSession(task.task_id, sessionPath);
+
+    const resolved = resolveOpenTarget(
+      daemonConfig(root, [{ id: "reasonix-tui", kind: "reasonix-tui", display_name: "Reasonix TUI", enabled: true, command: reasonixBin, home_dir: reasonixHome }]),
+      store.getTask(task.task_id),
+      "reasonix_session_terminal"
+    );
+    assert.ok(!("error" in resolved));
+    assert.strictEqual(resolved.kind, "reasonix_session_terminal");
+    assert.strictEqual(resolved.path, "cmd.exe");
+    assert.strictEqual(resolved.cwd, resolve(repo));
+    assert.ok(resolved.args[1].includes("--resume"));
+    assert.ok(resolved.args[1].includes(resolve(sessionPath)));
+    assert.strictEqual(resolved.env.REASONIX_HOME, resolve(reasonixHome));
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test("createOpenTaskTargetHandler opens resolved target without returning local path", async () => {
   const root = tmpDir();
   try {

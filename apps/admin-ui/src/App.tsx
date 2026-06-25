@@ -349,7 +349,16 @@ function App() {
   }
 
   async function handleOpenTaskTarget(taskId: string, action: TaskOpenAction) {
-    const label = action === 'reasonix_gui' ? 'Reasonix GUI' : action === 'session_folder' ? '会话文件夹' : '任务文件夹';
+    const label =
+      action === 'reasonix_gui'
+        ? 'Reasonix GUI'
+        : action === 'session_folder'
+          ? '会话文件夹'
+          : action === 'mimo_session_terminal'
+            ? 'MiMo CMD 会话'
+            : action === 'reasonix_session_terminal'
+              ? 'Reasonix CMD 会话'
+              : '任务文件夹';
     const agent = tasks.find((candidate) => candidate.id === taskId)?.agent ?? 'mimo';
     await runAction('正在打开' + label + '…', label + '已请求打开。', () => openTaskTarget(taskId, action, agent));
   }
@@ -1260,17 +1269,25 @@ function TaskDetailPage({
             <button className="button soft" disabled={Boolean(actionBusy)} onClick={() => void onOpenTaskTarget(task.id, 'task_folder')} type="button">
               打开任务文件夹
             </button>
+            {task.agent === 'mimo' && (
+              <button className="button soft" disabled={Boolean(actionBusy)} onClick={() => void onOpenTaskTarget(task.id, 'mimo_session_terminal')} type="button">
+                在 CMD 打开 MiMo 会话
+              </button>
+            )}
             {task.agent === 'reasonix-tui' && (
               <>
                 <button className="button soft" disabled={Boolean(actionBusy)} onClick={() => void onOpenTaskTarget(task.id, 'session_folder')} type="button">
                   打开会话文件夹
+                </button>
+                <button className="button soft" disabled={Boolean(actionBusy)} onClick={() => void onOpenTaskTarget(task.id, 'reasonix_session_terminal')} type="button">
+                  在 CMD 打开 Reasonix 会话
                 </button>
                 <button className="button soft" disabled={Boolean(actionBusy)} onClick={() => void onOpenTaskTarget(task.id, 'reasonix_gui')} type="button">
                   打开 Reasonix GUI
                 </button>
               </>
             )}
-            <span className="action-helper">由本地 daemon 按任务记录解析路径；浏览器不会传任意本地路径。</span>
+            <span className="action-helper">由本地 daemon 按任务记录解析路径或会话命令；浏览器不会传任意本地路径或任意命令。</span>
             <ActionGroup title="审查结论" helper="只对待审查任务开放；存在阻塞风险时保守禁用。">
               <button className="button primary" disabled={!canAccept || hasBlocker || !task.hasWorktree || Boolean(actionBusy)} onClick={() => onMergeAndAccept(task.id)} type="button">
                 合并 Worktree 并验收

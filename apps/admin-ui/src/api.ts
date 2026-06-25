@@ -364,7 +364,7 @@ export async function worktreeTask(taskId: string, action: 'merge' | 'discard', 
   return unwrap(await postJson<TaskActionResult>('/api/tasks/' + encodedTaskId + '/worktree', { action }));
 }
 
-export type TaskOpenAction = 'task_folder' | 'session_folder' | 'reasonix_gui';
+export type TaskOpenAction = 'task_folder' | 'session_folder' | 'reasonix_gui' | 'mimo_session_terminal' | 'reasonix_session_terminal';
 
 export async function openTaskTarget(taskId: string, action: TaskOpenAction, agent = 'mimo'): Promise<TaskActionResult> {
   const encodedTaskId = encodeURIComponent(taskId);
