@@ -347,8 +347,12 @@ export async function worktreeTask(taskId: string, action: 'merge' | 'discard', 
 
 export type TaskOpenAction = 'task_folder' | 'session_folder' | 'reasonix_gui';
 
-export async function openTaskTarget(taskId: string, action: TaskOpenAction): Promise<TaskActionResult> {
-  return unwrap(await postJson<TaskActionResult>('/api/tasks/' + encodeURIComponent(taskId) + '/open', { action }));
+export async function openTaskTarget(taskId: string, action: TaskOpenAction, agent = 'mimo'): Promise<TaskActionResult> {
+  const encodedTaskId = encodeURIComponent(taskId);
+  if (agent && agent !== 'mimo') {
+    return unwrap(await postJson<TaskActionResult>('/api/agent-tasks/' + encodedTaskId + '/open', { action, agent_id: agent }));
+  }
+  return unwrap(await postJson<TaskActionResult>('/api/tasks/' + encodedTaskId + '/open', { action }));
 }
 
 export async function resetTokenBudget(): Promise<TaskActionResult> {

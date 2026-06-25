@@ -22,7 +22,7 @@ Reasonix should eventually reach the same project role as MiMo:
 
 ## Current Status
 
-P6.0-P6.20 are implemented locally. The runtime now has an Agent Registry, Reasonix TUI probe, Reasonix one-shot runner, generic low-token task get/wait/reply tools, generic lifecycle/status tools for cancel/finish/merge/delete/queue/token, safe client Agent commands including replies/recovery/listing/token status, Reasonix session mapping through `agent_session_path`, Admin UI agent selector/badge/reply/lifecycle/detail-read support, agent-aware Codex review handoff prompts, agent-aware queue scheduling, Reasonix live/session parsing for the read-only live viewer, safe local folder opening, safe Reasonix GUI companion opening, explicit Reasonix token/cost extraction when session fields exist, bounded generic task listing/recovery, and generic Review Package summary fields. Existing `mimo_*` MCP tools remain compatible.
+P6.0-P6.21 are implemented locally. The runtime now has an Agent Registry, Reasonix TUI probe, Reasonix one-shot runner, generic low-token task get/wait/reply tools, generic lifecycle/status tools for cancel/finish/merge/delete/queue/token, safe client Agent commands including replies/recovery/listing/token status, Reasonix session mapping through `agent_session_path`, Admin UI agent selector/badge/reply/lifecycle/detail-read/open-action support, agent-aware Codex review handoff prompts, agent-aware queue scheduling, Reasonix live/session parsing for the read-only live viewer, safe local folder opening, safe Reasonix GUI companion opening, explicit Reasonix token/cost extraction when session fields exist, bounded generic task listing/recovery, and generic Review Package summary fields. Existing `mimo_*` MCP tools remain compatible.
 
 Observed local Reasonix installation on this machine:
 
@@ -453,6 +453,30 @@ Status:
 - Implemented locally.
 - Verified with admin-ui build and root build.
 - Focused tests passed: `node --test tests\admin-ui-task-detail-api.test.mjs tests\admin-ui-lifecycle-api.test.mjs tests\admin-api.test.mjs tests\agent-get-wait-task.test.mjs` 37/37.
+
+### P6.21 Admin UI Agent Open-Action Parity
+
+Goal: management-console local-open buttons should use generic Agent routes for non-MiMo tasks while preserving the fixed-action, no-arbitrary-path safety model.
+
+Tasks:
+
+- Add `POST /api/agent-tasks/:id/open`.
+- Validate optional `agent_id` through `agent_get_task` before resolving/opening a target.
+- Keep browser input limited to fixed actions: `task_folder`, `session_folder`, and `reasonix_gui`.
+- Route Reasonix task-folder/session-folder/GUI buttons through `/api/agent-tasks/:id/open`.
+- Keep MiMo open actions on `/api/tasks/:id/open`.
+
+Acceptance:
+
+- Reasonix local-open actions no longer borrow MiMo-only open routes.
+- Agent mismatch blocks the open action before target resolution.
+- Browser clients still never send arbitrary local paths or commands.
+
+Status:
+
+- Implemented locally.
+- Verified with root/local-daemon/admin-ui builds.
+- Focused tests passed: `node --test tests\admin-ui-lifecycle-api.test.mjs`, plus `node --test tests\admin-api.test.mjs tests\task-open-actions.test.mjs tests\agent-get-wait-task.test.mjs` 43/43.
 
 ### P6.8 Token/Cost Integration
 

@@ -4,6 +4,8 @@ This file is the project-local long-term memory. Update it after each meaningful
 
 ## Latest Status
 
+- P6.21 Admin UI open actions are implemented locally. `/api/agent-tasks/:id/open` now supports fixed local-open actions for non-MiMo tasks after an `agent_id` guard; the Admin UI routes Reasonix open-task-folder/session-folder/GUI actions through the generic Agent route while MiMo keeps `/api/tasks/:id/open`. Browser clients still send only fixed actions, never arbitrary paths or commands.
+- P6.21 verification passed: root build, local-daemon build, admin-ui build, `node --test tests\admin-ui-lifecycle-api.test.mjs`, and `node --test tests\admin-api.test.mjs tests\task-open-actions.test.mjs tests\agent-get-wait-task.test.mjs` passed 43/43.
 - P6.20 Admin UI task-detail reads are implemented locally. Detail refresh, focused file read, diff read, log tail, and full debug helpers now route non-MiMo tasks through `/api/agent-tasks/:id?...agent_id=...`, while MiMo tasks keep `/api/tasks/:id?...`. This removes another management-console dependency on MiMo-only read routes for Reasonix task review.
 - P6.20 verification passed: admin-ui build, root build, and `node --test tests\admin-ui-task-detail-api.test.mjs tests\admin-ui-lifecycle-api.test.mjs tests\admin-api.test.mjs tests\agent-get-wait-task.test.mjs` passed 37/37.
 - Release artifacts were refreshed after P6.20. `npm.cmd run package:installer` produced `artifacts\MiMoBridgeSetup-win10-win11-x64.exe` (55,604,736 bytes) and ignored local `artifacts\MiMoBridge-portable-win10-win11-x64.zip` (55,641,925 bytes). `npm.cmd run validate:release -- -SkipPackageBuild` passed; installer manifest source commit is `692a8d8`.

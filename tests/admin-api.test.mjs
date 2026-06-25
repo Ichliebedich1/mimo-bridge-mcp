@@ -584,6 +584,7 @@ test("admin API maps generic agent lifecycle routes to agent handlers", async ()
     await callApi(fixture.context, "POST", `${taskPath}/cancel`, { agent_id: "reasonix-tui" });
     await callApi(fixture.context, "POST", `${taskPath}/finish`, { agent_id: "reasonix-tui", status: "accepted" });
     await callApi(fixture.context, "POST", `${taskPath}/worktree`, { agent_id: "reasonix-tui", action: "merge" });
+    await callApi(fixture.context, "POST", `${taskPath}/open`, { agent_id: "reasonix-tui", action: "task_folder" });
     await callApi(fixture.context, "DELETE", `${taskPath}?agent_id=reasonix-tui`);
     await callApi(fixture.context, "GET", "/api/agent-queue?agent_id=reasonix-tui");
 
@@ -591,11 +592,33 @@ test("admin API maps generic agent lifecycle routes to agent handlers", async ()
     assert.ok(names.includes("agentCancelTask"));
     assert.ok(names.includes("agentFinishTask"));
     assert.ok(names.includes("agentMergeTask"));
+    assert.ok(names.includes("agentGetTask"));
     assert.ok(names.includes("agentDeleteTask"));
     assert.ok(names.includes("agentQueueStatus"));
     assert.strictEqual(fixture.calls.find(([name]) => name === "agentFinishTask")[1].status, "accepted");
     assert.strictEqual(fixture.calls.find(([name]) => name === "agentMergeTask")[1].action, "merge");
+    assert.strictEqual(fixture.calls.find(([name]) => name === "agentGetTask")[1].detail_level, "summary");
     assert.strictEqual(fixture.calls.find(([name]) => name === "agentQueueStatus")[1].agent_id, "reasonix-tui");
+  } finally {
+    fixture.cleanup();
+  }
+});
+
+test("admin API validates agent before generic open action", async () => {
+  const fixture = createContext();
+  try {
+    fixture.context.tools.agentGetTask.handler = async (input) => {
+      fixture.calls.push(["agentGetTask", input]);
+      return { error: `Task ${input.task_id} belongs to agent reasonix-tui, not ${input.agent_id}` };
+    };
+    const result = await callApi(fixture.context, "POST", `/api/agent-tasks/${fixture.taskId}/open`, {
+      agent_id: "wrong-agent",
+      action: "task_folder",
+    });
+    assert.strictEqual(result.statusCode, 400);
+    assert.strictEqual(result.body.ok, false);
+    assert.match(result.body.error, /wrong-agent/);
+    assert.strictEqual(fixture.calls.filter(([name]) => name === "agentGetTask").length, 1);
   } finally {
     fixture.cleanup();
   }

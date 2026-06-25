@@ -216,6 +216,32 @@ export async function handleAdminApi(
         return true;
       }
 
+      if (req.method === "POST" && action === "open") {
+        const body = OpenTaskBodySchema.merge(AgentActionBodySchema).parse(await readJsonBody(req));
+        const agentCheck = await context.tools.agentGetTask.handler({
+          task_id: taskId,
+          agent_id: body.agent_id,
+          detail_level: "summary",
+          max_chars: 1000,
+          log_tail_lines: 20,
+          include_diff: false,
+          include_logs: false,
+          include_files: false,
+          file_paths: [],
+          diff_paths: [],
+        });
+        if ("error" in agentCheck) {
+          sendJson(res, toolStatusCode(agentCheck), wrapToolResult(agentCheck));
+          return true;
+        }
+        const data = await createOpenTaskTargetHandler(config, context.taskStore).handler({
+          task_id: taskId,
+          action: body.action,
+        });
+        sendJson(res, toolStatusCode(data), wrapToolResult(data));
+        return true;
+      }
+
       if (req.method === "DELETE" && action === "") {
         const agentId = url.searchParams.get("agent_id") ?? undefined;
         const data = await context.tools.agentDeleteTask.handler({

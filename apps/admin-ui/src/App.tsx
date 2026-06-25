@@ -237,7 +237,8 @@ function App() {
 
   async function handleOpenTaskTarget(taskId: string, action: TaskOpenAction) {
     const label = action === 'reasonix_gui' ? 'Reasonix GUI' : action === 'session_folder' ? '会话文件夹' : '任务文件夹';
-    await runAction('正在打开' + label + '…', label + '已请求打开。', () => openTaskTarget(taskId, action));
+    const agent = tasks.find((candidate) => candidate.id === taskId)?.agent ?? 'mimo';
+    await runAction('正在打开' + label + '…', label + '已请求打开。', () => openTaskTarget(taskId, action, agent));
   }
 
   function confirmCancel(taskId: string) {
