@@ -1,5 +1,11 @@
 # MiMo Bridge MCP Long-Term Memory
 
+## Active Checkpoint 2026-06-26
+
+- Active P6.26 goal: run a real MiMo + Reasonix collaboration flow and finish five items before final EXE packaging. Requirements: stronger task-complete wake/recovery; Admin UI pasted image and file attachment support; MiMo safe CMD session open action; Reasonix TUI GUI/session fallback open action; commit after each completed slice and build final installer EXE.
+- Current live checks before work: daemon health ok on 127.0.0.1:3210, MiMo and Reasonix configured, queue empty, `recover` and `agent-recover --agent-id reasonix-tui` returned no pending reviews, git worktree clean, branch `master` is ahead of origin by 1.
+- Implementation approach: delegate non-overlapping work via safe-client JSON files, use one-shot long waits instead of repeated polling, review only Review Packages first, and update this file before/after major slices. Likely split: MiMo handles backend safe terminal-open actions/tests; Reasonix handles Admin UI attachment/upload UX and action buttons; Codex owns integration, wake/recovery design, review, tests, docs, commits, and final package.
+
 This file is the project-local long-term memory. Update it after each meaningful phase so another agent can continue without relying on chat context.
 
 ## Latest Status
