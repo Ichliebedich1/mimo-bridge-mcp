@@ -18,6 +18,7 @@
 - Installer package script: `npm.cmd run package:installer` creates `artifacts/MiMoBridgeSetup-win10-win11-x64.exe` by embedding the portable payload and installer script in a MinGW resource-stub EXE.
 - Installer self-test: `artifacts/MiMoBridgeSetup-win10-win11-x64.exe -SelfTest` validates the embedded payload without installing.
 - Release validation script: `npm.cmd run validate:release` rebuilds release artifacts, runs installer SelfTest, checks manifests and sensitive-file exclusions, and writes `artifacts/release-validation.json`.
+- Installer upgrade compatibility for old installs without `launcher-state.json`: setup now safely stops a running old daemon only when the port owner command line proves it comes from `%LOCALAPPDATA%\MiMoBridgeApp`; otherwise it keeps the old install and asks the user to close MiMo Bridge or reboot. Packaged EXE after this fix: `artifacts\MiMoBridgeSetup-win10-win11-x64.exe` (55,608,320 bytes), manifest source commit `f3d61e3`.
 - Local installer repair smoke: EXE-installed app under `%LOCALAPPDATA%\MiMoBridgeApp` starts with bundled Node; `/api/health` returns ok, MCP ready, MiMo configured, and an empty queue.
 - Portable smoke: package-local config on port 3211 started successfully, `/api/health` returned ok/MCP ready/MiMo configured, then the smoke daemon was stopped.
 - Follow-up MiMo rounds stay inside their task Worktree and are re-audited.
