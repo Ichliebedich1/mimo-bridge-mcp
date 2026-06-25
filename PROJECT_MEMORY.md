@@ -2,9 +2,9 @@
 
 ## Active Checkpoint 2026-06-26
 
-- Active P6.26 goal: run a real MiMo + Reasonix collaboration flow and finish five items before final EXE packaging. Requirements: stronger task-complete wake/recovery; Admin UI pasted image and file attachment support; MiMo safe CMD session open action; Reasonix TUI GUI/session fallback open action; commit after each completed slice and build final installer EXE.
-- Current live checks before work: daemon health ok on 127.0.0.1:3210, MiMo and Reasonix configured, queue empty, `recover` and `agent-recover --agent-id reasonix-tui` returned no pending reviews, git worktree clean, branch `master` is ahead of origin by 1.
-- Implementation approach: delegate non-overlapping work via safe-client JSON files, use one-shot long waits instead of repeated polling, review only Review Packages first, and update this file before/after major slices. Likely split: MiMo handles backend safe terminal-open actions/tests; Reasonix handles Admin UI attachment/upload UX and action buttons; Codex owns integration, wake/recovery design, review, tests, docs, commits, and final package.
+- P6.26 goal completed: real MiMo + Reasonix collaboration flow finished the five requested items and produced the final EXE. Completed items: stronger task-complete wake/recovery; Admin UI pasted image and file attachment support; MiMo safe CMD session open action; Reasonix TUI GUI/session fallback open action; commit after each completed slice; final installer EXE build.
+- Current live checks after final packaging: daemon health ok on 127.0.0.1:3210, MiMo and Reasonix configured, queue empty, `node scripts\mimo-review-wakeup.mjs --limit 5 --max-chars 8000` returned `pending_count: 0`, git worktree clean before this doc refresh, branch `master` is ahead of origin by 6.
+- Final P6.26 artifacts: `artifacts\MiMoBridgeSetup-win10-win11-x64.exe` is 55,631,872 bytes and `artifacts\MiMoBridge-portable-win10-win11-x64.zip` is 55,665,889 bytes. `npm.cmd run validate:release -- -SkipPackageBuild` passed during final packaging.
 
 This file is the project-local long-term memory. Update it after each meaningful phase so another agent can continue without relying on chat context.
 

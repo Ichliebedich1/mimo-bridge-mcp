@@ -2,7 +2,7 @@
 
 ## Scope
 
-MiMo Bridge MCP after P0-P6.25 implementation, TokenBudget real-event hookup, documentation cleanup, Windows 10/11 x64 packaging preparation, Reasonix TUI multi-agent parity slices, failed-task intervention UX, and low-cost model routing/profile configuration.
+MiMo Bridge MCP after P0-P6.26 implementation, TokenBudget real-event hookup, documentation cleanup, Windows 10/11 x64 packaging preparation, Reasonix TUI multi-agent parity slices, failed-task intervention UX, low-cost model routing/profile configuration, bounded completion wake/recovery, task attachments, and safe session terminal actions.
 
 ## Task Goal
 
@@ -10,7 +10,8 @@ Let Codex split and review work while MiMo performs bounded coding tasks through
 
 ## Current Progress
 
-- Branch: `master`.
+- Branch: `master` (`master...origin/master [ahead 6]` before this documentation refresh).
+- Latest live verification after final P6.26 packaging: daemon health ok on `127.0.0.1:3210`, MCP status ready, MiMo and Reasonix configured, queue running/queued counts are 0, and `node scripts\mimo-review-wakeup.mjs --limit 5 --max-chars 8000` returned `pending_count: 0`.
 - Latest local phase: P6.26 task-completion wake/recovery and MiMo model compatibility are implemented locally. Added `scripts/mimo-review-wakeup.mjs` as a low-context one-shot recovery command for both MiMo and Reasonix; it reports only pending task IDs, agent/status, risk flags, recommendation, and next review command. The Codex App heartbeat automation `mimo-bridge-review-wakeup` now runs this script every 5 minutes to bring the current thread back when tasks complete/fail after Codex stops waiting. Boundary: this is not a daemon-native hard push into Codex; it is a safe recovery inbox plus app heartbeat, so reviews remain bounded and Codex does not poll full task state. MiMo runner now maps UI model labels to CLI provider/model names (`mimo-v2.5-flash -> xiaomi/mimo-v2.5`, `mimo-v2.5-pro -> xiaomi/mimo-v2.5-pro`) and maps reasoning effort to `--variant`. This fixes the `ProviderModelNotFoundError` seen when MiMo CLI received raw `mimo-v2.5-flash`.
 - P6.26 verification so far: `npm.cmd run build`, `node --test tests\mimo-runner.test.mjs tests\model-routing.test.mjs tests\agent-start-task.test.mjs`, and `node scripts\mimo-review-wakeup.mjs --limit 5 --max-chars 8000` passed. Historical pending tasks `task_8ee96c2c4189` and `task_dcd3b5a75a14` were reviewed via Review Package and are obsolete drafts because their useful changes were manually implemented and committed in later slices.
 - P6.26 final packaging is complete. `npm.cmd run package:installer` produced `artifacts\MiMoBridgeSetup-win10-win11-x64.exe` (55,631,872 bytes) and portable ZIP `artifacts\MiMoBridge-portable-win10-win11-x64.zip` (55,665,889 bytes, ignored). `npm.cmd run validate:release -- -SkipPackageBuild` passed; installer manifest source commit is `1fdeb68`.
