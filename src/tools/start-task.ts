@@ -11,6 +11,7 @@ import { GitWorktreeManager } from "../services/git-worktree.js";
 import { refreshReviewPackage } from "../services/review-package.js";
 import { computeTaskScope } from "../services/task-scope.js";
 import { resolveRouting } from "../services/model-routing.js";
+import { persistTaskAttachments, taskHasImageAttachment } from "../services/task-attachments.js";
 
 type StartTaskRunner = (
   options: {
@@ -50,6 +51,13 @@ export const StartTaskSchema = z.object({
   model: z.string().optional(),
   reasoning_effort: z.enum(["low", "medium", "high"]).optional(),
   has_images: z.boolean().default(false),
+  attachments: z.array(z.object({
+    name: z.string().min(1).max(160),
+    mime_type: z.string().optional(),
+    size_bytes: z.number().int().min(0).optional(),
+    base64: z.string().min(1),
+    kind: z.enum(["image", "file"]).optional(),
+  })).default([]),
   origin_codex_thread_id: z.string().optional(),
   origin_codex_thread_url: z.string().optional(),
   origin_source: z.string().optional(),
@@ -189,12 +197,13 @@ export function createStartTaskHandler(
         return { error: scopeResult.error };
       }
 
+      const hasImages = input.has_images || taskHasImageAttachment(input.attachments);
       const routingResult = resolveRouting(agentKind, {
         routing_mode: input.routing_mode,
         task_scenario: input.task_scenario,
         model: input.model,
         reasoning_effort: input.reasoning_effort,
-        has_images: input.has_images,
+        has_images: hasImages,
       }, config.routingProfiles);
       if (!routingResult.ok) {
         return { error: routingResult.error };
@@ -210,10 +219,19 @@ export function createStartTaskHandler(
         runtime_timeout_seconds: input.runtime_timeout_seconds,
         scope: scopeResult.snapshot,
         routing: routingResult.config,
+        attachments: [],
         origin_codex_thread_id: input.origin_codex_thread_id,
         origin_codex_thread_url: input.origin_codex_thread_url,
         origin_source: input.origin_source,
       }, { agent: agentId });
+
+      const attachmentResult = persistTaskAttachments(config.runtimeDir, task.task_id, input.attachments);
+      if (!attachmentResult.ok) {
+        taskStore.updateTaskStatus(task.task_id, "failed", attachmentResult.error);
+        return { error: attachmentResult.error };
+      }
+      task.config.attachments = attachmentResult.attachments;
+      taskStore.saveTask(task);
 
       let worktreePath = input.workspace_path;
       let worktreeState: WorktreeState | null = null;

@@ -29,6 +29,13 @@ const StartTaskBodySchema = z.object({
   model: z.string().optional(),
   reasoning_effort: z.enum(["low", "medium", "high"]).optional(),
   has_images: z.boolean().default(false),
+  attachments: z.array(z.object({
+    name: z.string().min(1).max(160),
+    mime_type: z.string().optional(),
+    size_bytes: z.number().int().min(0).optional(),
+    base64: z.string().min(1),
+    kind: z.enum(["image", "file"]).optional(),
+  })).default([]),
   origin_codex_thread_id: z.string().optional(),
   origin_codex_thread_url: z.string().optional(),
   origin_source: z.string().optional(),

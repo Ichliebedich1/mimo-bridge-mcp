@@ -68,6 +68,19 @@ export function buildTaskBrief(config: TaskConfig): string {
     lines.push("");
   }
 
+  if (config.attachments && config.attachments.length > 0) {
+    lines.push("## 附件");
+    lines.push("");
+    lines.push("本任务包含由 MiMo Bridge 保存到运行目录的附件。请按需读取这些文件；不要假设浏览器原始本地路径存在。");
+    lines.push("");
+    for (const attachment of config.attachments) {
+      lines.push(`- \`${attachment.path}\` (${attachment.name}, ${attachment.mime_type}, ${attachment.size_bytes} bytes, ${attachment.kind})`);
+    }
+    lines.push("");
+    lines.push("如果附件是图片，请结合任务目标进行多模态分析；如果当前 Agent 无法读取图片，请在总结里明确说明。");
+    lines.push("");
+  }
+
   if (config.acceptance_criteria.length > 0) {
     lines.push("## 验收条件");
     lines.push("");

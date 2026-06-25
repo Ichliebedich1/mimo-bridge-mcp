@@ -1173,6 +1173,15 @@ test("admin API POST /api/tasks passes routing fields to MiMo handler", async ()
       model: "mimo-v2.5-pro",
       reasoning_effort: "high",
       has_images: false,
+      attachments: [
+        {
+          name: "screen.png",
+          mime_type: "image/png",
+          size_bytes: 5,
+          base64: "aGVsbG8=",
+          kind: "image",
+        },
+      ],
     });
 
     assert.strictEqual(result.statusCode, 200);
@@ -1183,6 +1192,7 @@ test("admin API POST /api/tasks passes routing fields to MiMo handler", async ()
     assert.strictEqual(captured[1].model, "mimo-v2.5-pro");
     assert.strictEqual(captured[1].reasoning_effort, "high");
     assert.strictEqual(captured[1].has_images, false);
+    assert.strictEqual(captured[1].attachments[0].name, "screen.png");
   } finally {
     fixture.cleanup();
   }

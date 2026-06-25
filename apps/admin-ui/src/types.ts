@@ -37,6 +37,14 @@ export type RoutingProfiles = {
   };
 };
 
+export type CreateTaskAttachment = {
+  name: string;
+  mime_type: string;
+  size_bytes: number;
+  base64: string;
+  kind: 'image' | 'file';
+};
+
 export type RiskFlag =
   | 'OUT_OF_BOUNDS_CHANGES'
   | 'OUT_OF_SCOPE_CHANGES'
@@ -113,6 +121,7 @@ export type CreateTaskInput = {
   model?: string;
   reasoning_effort?: ReasoningEffort;
   has_images?: boolean;
+  attachments?: CreateTaskAttachment[];
 };
 
 export type TaskActionResult = {

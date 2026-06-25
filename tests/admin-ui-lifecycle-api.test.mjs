@@ -111,6 +111,15 @@ test("admin UI create task API sends routing fields to MiMo and Reasonix routes"
     model: "mimo-v2.5-pro",
     reasoning_effort: "high",
     has_images: false,
+    attachments: [
+      {
+        name: "screen.png",
+        mime_type: "image/png",
+        size_bytes: 5,
+        base64: "aGVsbG8=",
+        kind: "image",
+      },
+    ],
   };
 
   try {
@@ -129,6 +138,7 @@ test("admin UI create task API sends routing fields to MiMo and Reasonix routes"
     assert.strictEqual(mock.calls[0].body.task_scenario, "complex");
     assert.strictEqual(mock.calls[0].body.model, "mimo-v2.5-pro");
     assert.strictEqual(mock.calls[0].body.reasoning_effort, "high");
+    assert.strictEqual(mock.calls[0].body.attachments[0].name, "screen.png");
     assert.strictEqual(mock.calls[1].body.agent_id, "reasonix-tui");
     assert.strictEqual(mock.calls[1].body.model, "deepseek-v4-pro");
   } finally {

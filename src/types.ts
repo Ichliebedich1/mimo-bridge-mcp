@@ -100,6 +100,25 @@ export interface RoutingConfig extends RoutingSelection {
   routing_reason: string;
 }
 
+export type TaskAttachmentKind = "image" | "file";
+
+export interface TaskAttachment {
+  id: string;
+  name: string;
+  mime_type: string;
+  size_bytes: number;
+  path: string;
+  kind: TaskAttachmentKind;
+}
+
+export interface TaskAttachmentInput {
+  name: string;
+  mime_type?: string;
+  size_bytes?: number;
+  base64: string;
+  kind?: TaskAttachmentKind;
+}
+
 export interface TaskConfig {
   objective: string;
   workspace_path: string;
@@ -110,6 +129,7 @@ export interface TaskConfig {
   runtime_timeout_seconds: number;
   scope?: TaskScopeSnapshot;
   routing?: RoutingConfig;
+  attachments?: TaskAttachment[];
   origin_codex_thread_id?: string;
   origin_codex_thread_url?: string;
   origin_source?: string;
@@ -264,6 +284,7 @@ export interface StartTaskInput {
   model?: string;
   reasoning_effort?: ReasoningEffort;
   has_images?: boolean;
+  attachments?: TaskAttachmentInput[];
   origin_codex_thread_id?: string;
   origin_codex_thread_url?: string;
   origin_source?: string;

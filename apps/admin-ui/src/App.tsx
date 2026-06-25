@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
+import { useEffect, useMemo, useState, type ClipboardEvent, type FormEvent, type ReactNode } from 'react';
 import {
   cancelTask,
   createTask,
@@ -31,6 +31,7 @@ import { CODEX_NEW_THREAD_URL, copyCodexReviewPrompt, resolveCodexHandoffUrl } f
 import { canAbandonTaskStatus, canAcceptTaskStatus, canCancelTaskStatus, canDiscardWorktreeStatus, canReplyTaskStatus } from './task-actions';
 import type {
   ChangedFile,
+  CreateTaskAttachment,
   CreateTaskInput,
   FocusedTaskResult,
   FullTaskResult,
@@ -740,6 +741,7 @@ function CreateTaskPage({
   const [model, setModel] = useState('');
   const [reasoningEffort, setReasoningEffort] = useState<ReasoningEffort>('medium');
   const [hasImages, setHasImages] = useState(false);
+  const [attachments, setAttachments] = useState<CreateTaskAttachment[]>([]);
   const [formError, setFormError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
@@ -758,11 +760,12 @@ function CreateTaskPage({
   }, [agentId, agentOptions]);
 
   useEffect(() => {
-    if (hasImages) {
+    if (hasImages || attachments.some((attachment) => attachment.kind === 'image')) {
       setTaskScenario('multimodal');
       setRoutingMode('auto');
+      setHasImages(true);
     }
-  }, [hasImages]);
+  }, [attachments, hasImages]);
 
   useEffect(() => {
     if (routingMode === 'manual' && (!model || !allowedModels.includes(model))) {
@@ -794,7 +797,8 @@ function CreateTaskPage({
       setFormError('repo-wide 模式需要勾选确认复选框。');
       return;
     }
-    if (hasImages && routingMode === 'manual') {
+    const attachmentHasImages = attachments.some((attachment) => attachment.kind === 'image');
+    if ((hasImages || attachmentHasImages) && routingMode === 'manual') {
       setFormError('多模态任务请使用 Auto 模式，系统会强制选择 MiMo flash。');
       return;
     }
@@ -821,7 +825,8 @@ function CreateTaskPage({
       task_scenario: hasImages ? 'multimodal' : taskScenario,
       model: effectiveModel,
       reasoning_effort: effectiveEffort,
-      has_images: hasImages,
+      has_images: hasImages || attachmentHasImages,
+      attachments,
     };
 
     setSubmitting(true);
@@ -830,6 +835,37 @@ function CreateTaskPage({
     } finally {
       setSubmitting(false);
     }
+  }
+
+  async function addFiles(files: FileList | File[]) {
+    setFormError(null);
+    try {
+      const next = await Promise.all(Array.from(files).map(readFileAttachment));
+      setAttachments((current) => [...current, ...next].slice(0, 10));
+      if (next.some((attachment) => attachment.kind === 'image')) {
+        setHasImages(true);
+      }
+    } catch (error) {
+      setFormError('读取附件失败：' + errorMessage(error));
+    }
+  }
+
+  function handlePaste(event: ClipboardEvent<HTMLTextAreaElement>) {
+    const files = event.clipboardData.files;
+    if (files.length > 0) {
+      event.preventDefault();
+      void addFiles(files);
+    }
+  }
+
+  function removeAttachment(index: number) {
+    setAttachments((current) => {
+      const next = current.filter((_, itemIndex) => itemIndex !== index);
+      if (!next.some((attachment) => attachment.kind === 'image')) {
+        setHasImages(false);
+      }
+      return next;
+    });
   }
 
   return (
@@ -907,8 +943,51 @@ function CreateTaskPage({
           )}
           <label>
             <span>任务目标 *</span>
-            <textarea value={objective} onChange={(event) => setObjective(event.target.value)} placeholder="例如：为管理页面接入真实取消/验收 API，并补充错误提示。" rows={5} />
+            <textarea
+              value={objective}
+              onChange={(event) => setObjective(event.target.value)}
+              onPaste={handlePaste}
+              placeholder="例如：为管理页面接入真实取消/验收 API，并补充错误提示。也可以直接在这里粘贴截图。"
+              rows={5}
+            />
           </label>
+          <div className="attachment-box">
+            <div className="attachment-head">
+              <div>
+                <strong>任务附件</strong>
+                <p>可粘贴截图，或选择图片/文件。附件会保存到任务运行目录，不上传原始本地路径。</p>
+              </div>
+              <label className="button soft file-picker">
+                选择附件/图片
+                <input
+                  multiple
+                  onChange={(event) => {
+                    if (event.target.files?.length) {
+                      void addFiles(event.target.files);
+                      event.target.value = '';
+                    }
+                  }}
+                  type="file"
+                />
+              </label>
+            </div>
+            {attachments.length === 0 ? (
+              <div className="attachment-empty">暂无附件。截图可以直接 Ctrl+V 粘贴到任务目标框。</div>
+            ) : (
+              <div className="attachment-list">
+                {attachments.map((attachment, index) => (
+                  <div className="attachment-item" key={attachment.name + index}>
+                    <span>{attachment.kind === 'image' ? '图片' : '文件'}</span>
+                    <strong>{attachment.name}</strong>
+                    <small>{attachment.mime_type} · {formatBytes(attachment.size_bytes)}</small>
+                    <button className="link-button danger-link" onClick={() => removeAttachment(index)} type="button">
+                      移除
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
           <label>
             <span>工作区路径 *</span>
             <input value={workspacePath} onChange={(event) => setWorkspacePath(event.target.value)} placeholder="C:\Users\...\mimo-bridge-mcp" />
@@ -2044,6 +2123,39 @@ function splitLines(value: string): string[] {
     .split(/\r?\n/)
     .map((line) => line.trim())
     .filter(Boolean);
+}
+
+function readFileAttachment(file: File): Promise<CreateTaskAttachment> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(reader.error ?? new Error('文件读取失败'));
+    reader.onload = () => {
+      const result = String(reader.result ?? '');
+      const base64 = result.includes(',') ? result.slice(result.indexOf(',') + 1) : result;
+      const mimeType = file.type || 'application/octet-stream';
+      resolve({
+        name: file.name || (mimeType.startsWith('image/') ? 'pasted-image.png' : 'attachment.bin'),
+        mime_type: mimeType,
+        size_bytes: file.size,
+        base64,
+        kind: mimeType.startsWith('image/') ? 'image' : 'file',
+      });
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+function formatBytes(bytes: number): string {
+  if (!Number.isFinite(bytes) || bytes < 0) {
+    return '未知大小';
+  }
+  if (bytes < 1024) {
+    return bytes + ' B';
+  }
+  if (bytes < 1024 * 1024) {
+    return (bytes / 1024).toFixed(1) + ' KB';
+  }
+  return (bytes / 1024 / 1024).toFixed(1) + ' MB';
 }
 
 function formatClock(): string {

@@ -167,4 +167,33 @@ describe("prompt-builder", () => {
     assert.ok(brief.includes("suggested"));
     assert.ok(brief.includes("如需扩大修改范围，请在总结中申请"));
   });
+
+  it("should include task attachments in brief", () => {
+    const config = {
+      objective: "分析截图",
+      workspace_path: "C:\\test",
+      editable_paths: [],
+      readonly_paths: [],
+      acceptance_criteria: [],
+      max_rounds: 5,
+      runtime_timeout_seconds: 900,
+      attachments: [
+        {
+          id: "att_1",
+          name: "screen.png",
+          mime_type: "image/png",
+          size_bytes: 123,
+          path: "C:\\runtime\\attachments\\task_abc\\screen.png",
+          kind: "image",
+        },
+      ],
+    };
+
+    const brief = buildTaskBrief(config);
+
+    assert.ok(brief.includes("## 附件"));
+    assert.ok(brief.includes("screen.png"));
+    assert.ok(brief.includes("image/png"));
+    assert.ok(brief.includes("如果附件是图片"));
+  });
 });
