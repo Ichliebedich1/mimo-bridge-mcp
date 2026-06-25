@@ -2,6 +2,7 @@ import { z } from "zod";
 import type { Config } from "../config.js";
 import type { TaskStore } from "../services/task-store.js";
 import { GitWorktreeManager } from "../services/git-worktree.js";
+import { isAbsolute, relative, resolve } from "node:path";
 
 export const MergeTaskSchema = z.object({
   task_id: z.string().min(1, "任务 ID 不能为空"),
@@ -35,9 +36,9 @@ export function createMergeTaskHandler(taskStore: TaskStore, config: Pick<Config
       try {
         const worktreeState = task.worktree;
         const gitManager = new GitWorktreeManager(worktreeState.repo_path, config.runtimeDir);
-        gitManager.assertWorktreeState(input.task_id, worktreeState);
 
         if (input.action === "merge") {
+          gitManager.assertWorktreeState(input.task_id, worktreeState);
           const summary = gitManager.getDiffSummaryForState(
             input.task_id,
             worktreeState,
@@ -71,6 +72,10 @@ export function createMergeTaskHandler(taskStore: TaskStore, config: Pick<Config
             target_branch: worktreeState.base_branch,
           };
         } else {
+          const safetyError = validateDiscardTarget(input.task_id, worktreeState.worktrees_root, worktreeState.worktree_path);
+          if (safetyError) {
+            return { error: safetyError };
+          }
           gitManager.discardWorktree(input.task_id, worktreeState.branch_name);
           taskStore.clearTaskWorktree(input.task_id);
 
@@ -86,4 +91,26 @@ export function createMergeTaskHandler(taskStore: TaskStore, config: Pick<Config
       }
     },
   };
+}
+
+function validateDiscardTarget(taskId: string, worktreesRoot: string, worktreePath: string): string | null {
+  const root = resolve(worktreesRoot);
+  const target = resolve(worktreePath);
+  const expected = resolve(root, taskId);
+  const rel = relative(root, target);
+
+  if (!rel || rel.startsWith("..") || isAbsolute(rel)) {
+    return "Worktree 路径不在保存的根目录内，拒绝清理";
+  }
+  if (!samePath(target, expected)) {
+    return "Worktree 路径与任务 ID 不匹配，拒绝清理";
+  }
+  return null;
+}
+
+function samePath(left: string, right: string): boolean {
+  if (process.platform === "win32") {
+    return left.toLowerCase() === right.toLowerCase();
+  }
+  return left === right;
 }

@@ -26,6 +26,7 @@ import {
   type TaskOpenAction,
 } from './api';
 import { CODEX_NEW_THREAD_URL, copyCodexReviewPrompt, resolveCodexHandoffUrl } from './codex-handoff.mjs';
+import { canAbandonTaskStatus, canAcceptTaskStatus, canCancelTaskStatus, canDiscardWorktreeStatus } from './task-actions';
 import type {
   ChangedFile,
   CreateTaskInput,
@@ -72,9 +73,9 @@ const statusMeta: Record<TaskStatus, { label: string; tone: string; helper: stri
   waiting: { label: '等待回复', tone: 'amber', helper: '可回复、取消' },
   review: { label: '待审查', tone: 'purple', helper: '可审查、回复、合并、验收或放弃' },
   accepted: { label: '已验收', tone: 'green', helper: '只读查看；存在 Worktree 时可合并' },
-  failed: { label: '失败', tone: 'red', helper: '查看 Review Package、日志和失败原因' },
-  cancelled: { label: '已取消', tone: 'neutral', helper: '只读查看' },
-  abandoned: { label: '已放弃', tone: 'neutral', helper: '只读查看' },
+  failed: { label: '失败', tone: 'red', helper: '查看失败原因；如仍有 Worktree，可丢弃后删除' },
+  cancelled: { label: '已取消', tone: 'neutral', helper: '如仍有 Worktree，可丢弃后删除' },
+  abandoned: { label: '已放弃', tone: 'neutral', helper: '如仍有 Worktree，可丢弃后删除' },
 };
 
 const riskMeta: Record<RiskFlag, { label: string; severity: 'blocker' | 'attention' }> = {
@@ -99,6 +100,18 @@ function agentDisplayName(agent: string) {
   if (agent === 'mimo') return 'MiMo';
   if (agent === 'reasonix-tui') return 'Reasonix TUI';
   return agent;
+}
+
+function ActionGroup({ title, helper, children }: { title: string; helper: string; children: ReactNode }) {
+  return (
+    <div className="action-group">
+      <div className="action-group-header">
+        <strong>{title}</strong>
+        <span>{helper}</span>
+      </div>
+      <div className="action-group-controls">{children}</div>
+    </div>
+  );
 }
 
 function App() {
@@ -317,7 +330,7 @@ function App() {
     const agent = tasks.find((candidate) => candidate.id === taskId)?.agent ?? 'mimo';
     setConfirmAction({
       title: '确认丢弃 Worktree 并放弃？',
-      body: '会按任务所属 Agent 先丢弃 Worktree，成功后再标记为 abandoned。如果丢弃失败，不会假装已经放弃。',
+      body: '会按任务所属 Agent 先丢弃 Worktree，成功后把任务标记为 abandoned。失败任务和已取消任务也可以用这个动作清理残留 Worktree。',
       confirmLabel: '丢弃并放弃',
       tone: 'danger',
       onConfirm: () =>
@@ -822,8 +835,10 @@ function TaskDetailPage({
   }, [task.id]);
 
   const canReply = task.status === 'waiting' || task.status === 'review';
-  const canReview = task.status === 'review';
-  const canCancel = task.status === 'queued' || task.status === 'running' || task.status === 'waiting';
+  const canAccept = canAcceptTaskStatus(task.status);
+  const canAbandon = canAbandonTaskStatus(task.status);
+  const canDiscardWorktree = canDiscardWorktreeStatus(task.status) && task.hasWorktree;
+  const canCancel = canCancelTaskStatus(task.status);
   const hasBlocker = task.riskFlags.some((risk) => riskMeta[risk].severity === 'blocker');
   const hasAttention = task.riskFlags.length > 0 && !hasBlocker;
   const canDelete = task.canDelete;
@@ -1052,24 +1067,30 @@ function TaskDetailPage({
               </>
             )}
             <span className="action-helper">由本地 daemon 按任务记录解析路径；浏览器不会传任意本地路径。</span>
-            <button className="button primary" disabled={!canReview || hasBlocker || !task.hasWorktree || Boolean(actionBusy)} onClick={() => onMergeAndAccept(task.id)} type="button">
-              合并 Worktree 并验收
-            </button>
-            <button className="button primary" disabled={!canReview || hasBlocker || Boolean(actionBusy)} onClick={() => onFinish(task.id, 'accepted')} type="button">
-              验收任务
-            </button>
-            <button className="button danger" disabled={!canReview || !task.hasWorktree || Boolean(actionBusy)} onClick={() => onDiscardAndAbandon(task.id)} type="button">
-              丢弃 Worktree 并放弃
-            </button>
-            <button className="button danger" disabled={!canReview || Boolean(actionBusy)} onClick={() => onFinish(task.id, 'abandoned')} type="button">
-              放弃任务
-            </button>
-            <button className="button ghost" disabled={!canCancel || Boolean(actionBusy)} onClick={() => onCancel(task.id)} type="button">
-              取消任务
-            </button>
-            <button className="button danger" disabled={!canDelete || Boolean(actionBusy)} onClick={() => onDeleteTask(task.id)} type="button">
-              删除任务
-            </button>
+            <ActionGroup title="审查结论" helper="只对待审查任务开放；存在阻塞风险时保守禁用。">
+              <button className="button primary" disabled={!canAccept || hasBlocker || !task.hasWorktree || Boolean(actionBusy)} onClick={() => onMergeAndAccept(task.id)} type="button">
+                合并 Worktree 并验收
+              </button>
+              <button className="button primary" disabled={!canAccept || hasBlocker || Boolean(actionBusy)} onClick={() => onFinish(task.id, 'accepted')} type="button">
+                验收任务
+              </button>
+            </ActionGroup>
+            <ActionGroup title="清理 Worktree" helper="失败、取消或放弃后，如果仍有 Worktree，可以先丢弃再安全删除任务。">
+              <button className="button danger" disabled={!canDiscardWorktree || Boolean(actionBusy)} onClick={() => onDiscardAndAbandon(task.id)} type="button">
+                丢弃 Worktree 并放弃
+              </button>
+              <button className="button danger" disabled={!canAbandon || Boolean(actionBusy)} onClick={() => onFinish(task.id, 'abandoned')} type="button">
+                放弃任务
+              </button>
+            </ActionGroup>
+            <ActionGroup title="队列与删除" helper={canDelete ? '此任务已无 Worktree，可安全删除。' : '删除前必须是结束状态，并且没有 Worktree。'}>
+              <button className="button ghost" disabled={!canCancel || Boolean(actionBusy)} onClick={() => onCancel(task.id)} type="button">
+                取消任务
+              </button>
+              <button className="button danger" disabled={!canDelete || Boolean(actionBusy)} onClick={() => onDeleteTask(task.id)} type="button">
+                删除任务
+              </button>
+            </ActionGroup>
           </div>
 
           {handoffMessage && <div className="success-note handoff-note">{handoffMessage}</div>}

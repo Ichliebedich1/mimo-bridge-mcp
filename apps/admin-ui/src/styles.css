@@ -493,6 +493,35 @@ td span,
   line-height: 1.5;
 }
 
+.action-group {
+  display: grid;
+  gap: 10px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  padding: 12px;
+  background: #f8fafc;
+}
+
+.action-group-header {
+  display: grid;
+  gap: 4px;
+}
+
+.action-group-header strong {
+  color: var(--ink);
+}
+
+.action-group-header span {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.action-group-controls {
+  display: grid;
+  gap: 8px;
+}
+
 .pill {
   display: inline-flex;
   align-items: center;

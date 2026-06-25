@@ -636,8 +636,21 @@ export class GitWorktreeManager {
 
   discardWorktree(taskId: string, branchName: string = `task/${taskId}`): void {
     this.removeWorktree(taskId, true);
+    this.pruneWorktrees();
 
     this.deleteBranch(branchName);
+  }
+
+  pruneWorktrees(): void {
+    try {
+      execFileSync("git", ["worktree", "prune"], {
+        cwd: this.repoPath,
+        encoding: "utf-8",
+        timeout: 30000,
+      });
+    } catch {
+      // Prune is best-effort cleanup for stale worktree metadata.
+    }
   }
 
   deleteBranch(branchName: string): void {
