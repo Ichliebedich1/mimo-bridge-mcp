@@ -10,7 +10,7 @@ P6 should first adapt Reasonix TUI, not Reasonix GUI. The TUI adapter should run
 
 ## Current Status
 
-P6.0-P6.19 Agent discovery, Reasonix one-shot execution, generic low-token task get/wait/reply, generic task lifecycle/status tools, safe client Agent commands including replies and token status, Reasonix session mapping, Admin UI integration/lifecycle/handoff parity, agent-aware queue/path-conflict scheduling, Reasonix live/session parsing, safe session-folder opening, safe Reasonix GUI companion opening, explicit token/cost extraction, and generic Review Package summary fields are implemented locally.
+P6.0-P6.20 Agent discovery, Reasonix one-shot execution, generic low-token task get/wait/reply, generic task lifecycle/status tools, safe client Agent commands including replies and token status, Reasonix session mapping, Admin UI integration/lifecycle/handoff/detail-read parity, agent-aware queue/path-conflict scheduling, Reasonix live/session parsing, safe session-folder opening, safe Reasonix GUI companion opening, explicit token/cost extraction, and generic Review Package summary fields are implemented locally.
 
 Implemented:
 
@@ -57,6 +57,7 @@ Implemented:
 - Safe GUI companion opening: Admin UI can call `POST /api/tasks/:id/open` with `action=reasonix_gui` for Reasonix TUI tasks. The daemon launches an explicit `reasonix-gui` agent command when configured, otherwise infers `...\ReasonixDesktop\reasonix-desktop.exe` from Reasonix TUI `home_dir`/command. It sets the same `REASONIX_HOME`, does not accept browser-supplied paths or commands, and does not return raw local paths.
 - Admin UI lifecycle parity: task detail buttons now call generic `/api/agent-tasks/:id/...` lifecycle routes for Reasonix tasks and keep `/api/tasks/:id/...` for MiMo tasks.
 - Admin UI Codex handoff parity: "交给 Codex 审查" now copies Reasonix-specific low-context review commands (`agent-review` / `agent_get_task`) for Reasonix TUI tasks, while preserving MiMo review commands for MiMo tasks. The reply box also displays the actual Agent name.
+- Admin UI detail-read parity: task detail refresh, focused file reads, diff reads, log tails, and full debug reads use `/api/agent-tasks/:id?...agent_id=reasonix-tui` for Reasonix tasks and keep `/api/tasks/:id?...` for MiMo tasks.
 
 Not implemented yet:
 

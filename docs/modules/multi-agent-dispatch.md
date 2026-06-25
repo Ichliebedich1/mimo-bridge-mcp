@@ -22,7 +22,7 @@ Reasonix should eventually reach the same project role as MiMo:
 
 ## Current Status
 
-P6.0-P6.19 are implemented locally. The runtime now has an Agent Registry, Reasonix TUI probe, Reasonix one-shot runner, generic low-token task get/wait/reply tools, generic lifecycle/status tools for cancel/finish/merge/delete/queue/token, safe client Agent commands including replies/recovery/listing/token status, Reasonix session mapping through `agent_session_path`, Admin UI agent selector/badge/reply/lifecycle support, agent-aware Codex review handoff prompts, agent-aware queue scheduling, Reasonix live/session parsing for the read-only live viewer, safe local folder opening, safe Reasonix GUI companion opening, explicit Reasonix token/cost extraction when session fields exist, bounded generic task listing/recovery, and generic Review Package summary fields. Existing `mimo_*` MCP tools remain compatible.
+P6.0-P6.20 are implemented locally. The runtime now has an Agent Registry, Reasonix TUI probe, Reasonix one-shot runner, generic low-token task get/wait/reply tools, generic lifecycle/status tools for cancel/finish/merge/delete/queue/token, safe client Agent commands including replies/recovery/listing/token status, Reasonix session mapping through `agent_session_path`, Admin UI agent selector/badge/reply/lifecycle/detail-read support, agent-aware Codex review handoff prompts, agent-aware queue scheduling, Reasonix live/session parsing for the read-only live viewer, safe local folder opening, safe Reasonix GUI companion opening, explicit Reasonix token/cost extraction when session fields exist, bounded generic task listing/recovery, and generic Review Package summary fields. Existing `mimo_*` MCP tools remain compatible.
 
 Observed local Reasonix installation on this machine:
 
@@ -430,6 +430,29 @@ Status:
 - Implemented locally.
 - Verified with admin-ui build and root build.
 - Focused tests passed: `node --test tests\codex-handoff.test.mjs tests\admin-ui-api.test.mjs tests\admin-ui-lifecycle-api.test.mjs tests\admin-api.test.mjs` 51/51.
+
+### P6.20 Admin UI Agent Detail-Read Parity
+
+Goal: management-console review reads should use generic Agent detail routes for non-MiMo tasks, not MiMo-only task detail routes.
+
+Tasks:
+
+- Route detail refresh for Reasonix TUI tasks to `/api/agent-tasks/:id?detail_level=review&agent_id=reasonix-tui`.
+- Route focused file reads, diff reads, log tails, and full debug reads through the same generic Agent detail route for non-MiMo tasks.
+- Keep MiMo detail reads on `/api/tasks/:id?...` for compatibility.
+- Pass the task's `agent` from the detail page into the API helpers.
+
+Acceptance:
+
+- Reasonix detail review no longer borrows MiMo-only read endpoints.
+- MiMo detail review remains unchanged.
+- The low-context detail levels and max character limits are preserved.
+
+Status:
+
+- Implemented locally.
+- Verified with admin-ui build and root build.
+- Focused tests passed: `node --test tests\admin-ui-task-detail-api.test.mjs tests\admin-ui-lifecycle-api.test.mjs tests\admin-api.test.mjs tests\agent-get-wait-task.test.mjs` 37/37.
 
 ### P6.8 Token/Cost Integration
 

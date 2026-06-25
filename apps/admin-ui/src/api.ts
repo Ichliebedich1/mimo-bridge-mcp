@@ -185,21 +185,34 @@ export async function fetchAgents(): Promise<AgentStatusResponse[]> {
   return response.agents;
 }
 
-export async function fetchTask(taskId: string): Promise<Task> {
+function taskDetailPath(taskId: string, agent: string, params: URLSearchParams) {
+  const encodedTaskId = encodeURIComponent(taskId);
+  if (agent && agent !== 'mimo') {
+    params.set('agent_id', agent);
+    return '/api/agent-tasks/' + encodedTaskId + '?' + params;
+  }
+  return '/api/tasks/' + encodedTaskId + '?' + params;
+}
+
+export async function fetchTask(taskId: string, agent = 'mimo'): Promise<Task> {
+  const params = new URLSearchParams({
+    detail_level: 'review',
+    max_chars: '8000',
+  });
   const response = unwrap(
-    await getJson<GetTaskResponse>('/api/tasks/' + encodeURIComponent(taskId) + '?detail_level=review&max_chars=8000'),
+    await getJson<GetTaskResponse>(taskDetailPath(taskId, agent, params)),
   );
   return detailToUiTask(response);
 }
 
-export async function fetchFocusedTask(taskId: string, filePath: string): Promise<FocusedTaskResult> {
+export async function fetchFocusedTask(taskId: string, filePath: string, agent = 'mimo'): Promise<FocusedTaskResult> {
   const params = new URLSearchParams({
     detail_level: 'focused',
     max_chars: '20000',
   });
   params.append('diff_paths', filePath);
 
-  const response = unwrap(await getJson<GetTaskResponse>('/api/tasks/' + encodeURIComponent(taskId) + '?' + params));
+  const response = unwrap(await getJson<GetTaskResponse>(taskDetailPath(taskId, agent, params)));
   return {
     taskId: response.task_id,
     filePath,
@@ -216,13 +229,13 @@ export async function fetchFocusedTask(taskId: string, filePath: string): Promis
   };
 }
 
-export async function fetchTaskDiff(taskId: string, filePath: string): Promise<FocusedTaskResult> {
+export async function fetchTaskDiff(taskId: string, filePath: string, agent = 'mimo'): Promise<FocusedTaskResult> {
   const params = new URLSearchParams({
     detail_level: 'diff',
     max_chars: '20000',
   });
   params.append('diff_paths', filePath);
-  const response = unwrap(await getJson<GetTaskResponse>('/api/tasks/' + encodeURIComponent(taskId) + '?' + params));
+  const response = unwrap(await getJson<GetTaskResponse>(taskDetailPath(taskId, agent, params)));
   return {
     taskId: response.task_id,
     filePath,
@@ -233,13 +246,13 @@ export async function fetchTaskDiff(taskId: string, filePath: string): Promise<F
   };
 }
 
-export async function fetchTaskLogs(taskId: string, lineCount = 20): Promise<TaskLogsResult> {
+export async function fetchTaskLogs(taskId: string, lineCount = 20, agent = 'mimo'): Promise<TaskLogsResult> {
   const params = new URLSearchParams({
     detail_level: 'logs',
     log_tail_lines: String(lineCount),
     max_chars: '8000',
   });
-  const response = unwrap(await getJson<GetTaskResponse>('/api/tasks/' + encodeURIComponent(taskId) + '?' + params));
+  const response = unwrap(await getJson<GetTaskResponse>(taskDetailPath(taskId, agent, params)));
   return {
     taskId: response.task_id,
     stdout: response.logs?.stdout ?? '',
@@ -249,13 +262,13 @@ export async function fetchTaskLogs(taskId: string, lineCount = 20): Promise<Tas
   };
 }
 
-export async function fetchFullTask(taskId: string): Promise<FullTaskResult> {
+export async function fetchFullTask(taskId: string, agent = 'mimo'): Promise<FullTaskResult> {
   const params = new URLSearchParams({
     detail_level: 'full',
     max_chars: '20000',
     log_tail_lines: '50',
   });
-  const response = unwrap(await getJson<GetTaskResponse>('/api/tasks/' + encodeURIComponent(taskId) + '?' + params));
+  const response = unwrap(await getJson<GetTaskResponse>(taskDetailPath(taskId, agent, params)));
   return {
     taskId: response.task_id,
     diff: response.diff,

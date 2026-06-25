@@ -169,7 +169,8 @@ function App() {
       return;
     }
     try {
-      const task = await fetchTask(taskId);
+      const agent = tasks.find((candidate) => candidate.id === taskId)?.agent ?? 'mimo';
+      const task = await fetchTask(taskId, agent);
       setTasks((current) => mergeTask(current, task));
       setApiError(null);
     } catch (error) {
@@ -427,10 +428,10 @@ function App() {
                 onDiscardAndAbandon={confirmDiscardAndAbandon}
                 onDeleteTask={confirmDeleteTask}
                 onFinish={confirmFinish}
-                onLoadDiff={(taskId, filePath) => fetchTaskDiff(taskId, filePath)}
-                onLoadFocused={(taskId, filePath) => fetchFocusedTask(taskId, filePath)}
-                onLoadFull={(taskId) => fetchFullTask(taskId)}
-                onLoadLogs={(taskId) => fetchTaskLogs(taskId, 20)}
+                onLoadDiff={(taskId, filePath, agent) => fetchTaskDiff(taskId, filePath, agent)}
+                onLoadFocused={(taskId, filePath, agent) => fetchFocusedTask(taskId, filePath, agent)}
+                onLoadFull={(taskId, agent) => fetchFullTask(taskId, agent)}
+                onLoadLogs={(taskId, agent) => fetchTaskLogs(taskId, 20, agent)}
                 onMergeAndAccept={confirmMergeAndAccept}
                 onOpenTaskTarget={handleOpenTaskTarget}
                 onRefresh={() => refreshTaskDetail(selectedTask.id)}
@@ -788,10 +789,10 @@ function TaskDetailPage({
   onMergeAndAccept: (taskId: string) => void;
   onDiscardAndAbandon: (taskId: string) => void;
   onDeleteTask: (taskId: string) => void;
-  onLoadFocused: (taskId: string, filePath: string) => Promise<FocusedTaskResult>;
-  onLoadDiff: (taskId: string, filePath: string) => Promise<FocusedTaskResult>;
-  onLoadLogs: (taskId: string) => Promise<TaskLogsResult>;
-  onLoadFull: (taskId: string) => Promise<FullTaskResult>;
+  onLoadFocused: (taskId: string, filePath: string, agent: string) => Promise<FocusedTaskResult>;
+  onLoadDiff: (taskId: string, filePath: string, agent: string) => Promise<FocusedTaskResult>;
+  onLoadLogs: (taskId: string, agent: string) => Promise<TaskLogsResult>;
+  onLoadFull: (taskId: string, agent: string) => Promise<FullTaskResult>;
   onOpenTaskTarget: (taskId: string, action: TaskOpenAction) => Promise<void>;
   onRefresh: () => Promise<void>;
 }) {
@@ -833,7 +834,7 @@ function TaskDetailPage({
     setLocalError(null);
     setLoadingPanel('diff');
     try {
-      const result = await onLoadFocused(task.id, selectedFile.path).catch(() => onLoadDiff(task.id, selectedFile.path));
+      const result = await onLoadFocused(task.id, selectedFile.path, task.agent).catch(() => onLoadDiff(task.id, selectedFile.path, task.agent));
       setFocusedDiff(result);
     } catch (error) {
       setLocalError('加载 focused diff 失败：' + errorMessage(error));
@@ -846,7 +847,7 @@ function TaskDetailPage({
     setLocalError(null);
     setLoadingPanel('logs');
     try {
-      setLogs(await onLoadLogs(task.id));
+      setLogs(await onLoadLogs(task.id, task.agent));
     } catch (error) {
       setLocalError('加载日志失败：' + errorMessage(error));
     } finally {
@@ -858,7 +859,7 @@ function TaskDetailPage({
     setLocalError(null);
     setLoadingPanel('full');
     try {
-      setFullResult(await onLoadFull(task.id));
+      setFullResult(await onLoadFull(task.id, task.agent));
     } catch (error) {
       setLocalError('加载 full 模式失败：' + errorMessage(error));
     } finally {

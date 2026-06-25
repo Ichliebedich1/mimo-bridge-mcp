@@ -4,6 +4,8 @@ This file is the project-local long-term memory. Update it after each meaningful
 
 ## Latest Status
 
+- P6.20 Admin UI task-detail reads are implemented locally. Detail refresh, focused file read, diff read, log tail, and full debug helpers now route non-MiMo tasks through `/api/agent-tasks/:id?...agent_id=...`, while MiMo tasks keep `/api/tasks/:id?...`. This removes another management-console dependency on MiMo-only read routes for Reasonix task review.
+- P6.20 verification passed: admin-ui build, root build, and `node --test tests\admin-ui-task-detail-api.test.mjs tests\admin-ui-lifecycle-api.test.mjs tests\admin-api.test.mjs tests\agent-get-wait-task.test.mjs` passed 37/37.
 - P6.19 Admin UI Codex handoff is implemented locally. The "交给 Codex 审查" prompt is now agent-aware: MiMo tasks keep the `mimo_get_task` / safe-client `review` path, while Reasonix TUI tasks tell Codex to use `agent_get_task(agent_id="reasonix-tui", ...)` or `agent-review --agent-id reasonix-tui`. The task detail reply box also displays the actual agent name instead of always saying "回复 MiMo".
 - P6.19 verification passed: admin-ui build, root build, `node --test tests\codex-handoff.test.mjs tests\admin-ui-api.test.mjs`, and `node --test tests\codex-handoff.test.mjs tests\admin-ui-api.test.mjs tests\admin-ui-lifecycle-api.test.mjs tests\admin-api.test.mjs` passed 51/51.
 - Release artifacts were refreshed after P6.19. `npm.cmd run package:installer` produced `artifacts\MiMoBridgeSetup-win10-win11-x64.exe` (55,604,736 bytes) and ignored local `artifacts\MiMoBridge-portable-win10-win11-x64.zip` (55,641,860 bytes). `npm.cmd run validate:release -- -SkipPackageBuild` passed; installer manifest source commit is `d5749d3`.
