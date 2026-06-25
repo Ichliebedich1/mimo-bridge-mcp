@@ -118,6 +118,66 @@ const effortLabels: Record<ReasoningEffort, string> = {
   high: '高',
 };
 
+const DEFAULT_ROUTING_PROFILES: RoutingProfiles = {
+  default_scenario: 'normal',
+  scenarios: {
+    multimodal: {
+      description: '多模态/图片任务',
+      supports_multimodal: true,
+      recommended: {
+        mimo: { model: 'mimo-v2.5-flash', reasoning_effort: 'medium', reason: '只有 MiMo flash 支持多模态输入' },
+        'reasonix-tui': { model: 'deepseek-v4-flash', reasoning_effort: 'medium', reason: 'Reasonix 当前不支持多模态，仅作为文本任务参考' },
+      },
+      current: { agent_id: 'mimo', model: 'mimo-v2.5-flash', reasoning_effort: 'medium' },
+    },
+    simple: {
+      description: '简单文本、文档、小 UI 调整',
+      supports_multimodal: false,
+      recommended: {
+        mimo: { model: 'mimo-v2.5-flash', reasoning_effort: 'low', reason: '简单任务优先用 flash 降低成本' },
+        'reasonix-tui': { model: 'deepseek-v4-flash', reasoning_effort: 'low', reason: '简单任务优先用 flash 降低成本' },
+      },
+      current: { agent_id: 'mimo', model: 'mimo-v2.5-flash', reasoning_effort: 'low' },
+    },
+    normal: {
+      description: '普通代码任务',
+      supports_multimodal: false,
+      recommended: {
+        mimo: { model: 'mimo-v2.5-flash', reasoning_effort: 'medium', reason: '普通任务默认用 flash，中等强度' },
+        'reasonix-tui': { model: 'deepseek-v4-flash', reasoning_effort: 'medium', reason: '普通任务默认用 flash，中等强度' },
+      },
+      current: { agent_id: 'mimo', model: 'mimo-v2.5-flash', reasoning_effort: 'medium' },
+    },
+    complex: {
+      description: '复杂运行时、Git、安装包、安全边界任务',
+      supports_multimodal: false,
+      recommended: {
+        mimo: { model: 'mimo-v2.5-pro', reasoning_effort: 'high', reason: '复杂任务用 pro 和高强度更稳' },
+        'reasonix-tui': { model: 'deepseek-v4-pro', reasoning_effort: 'high', reason: '复杂任务用 pro 和高强度更稳' },
+      },
+      current: { agent_id: 'mimo', model: 'mimo-v2.5-pro', reasoning_effort: 'high' },
+    },
+    high_risk: {
+      description: '高风险修改、迁移、删除、权限和发布相关任务',
+      supports_multimodal: false,
+      recommended: {
+        mimo: { model: 'mimo-v2.5-pro', reasoning_effort: 'high', reason: '高风险任务默认使用 pro 和高强度' },
+        'reasonix-tui': { model: 'deepseek-v4-pro', reasoning_effort: 'high', reason: '高风险任务默认使用 pro 和高强度' },
+      },
+      current: { agent_id: 'mimo', model: 'mimo-v2.5-pro', reasoning_effort: 'high' },
+    },
+  },
+  allowed_models: {
+    mimo: ['mimo-v2.5-flash', 'mimo-v2.5-pro'],
+    'reasonix-tui': ['deepseek-v4-flash', 'deepseek-v4-pro'],
+  },
+  reasoning_efforts: ['low', 'medium', 'high'],
+  pricing_per_1m_cny: {
+    flash: { input: 1, output: 3, cache_hit: 0.02 },
+    pro: { input: 3, output: 6, cache_hit: 0.025 },
+  },
+};
+
 function agentDisplayName(agent: string) {
   if (agent === 'mimo') return 'MiMo';
   if (agent === 'reasonix-tui') return 'Reasonix TUI';
@@ -149,6 +209,7 @@ function App() {
   const [apiError, setApiError] = useState<string | null>(null);
   const [tokenStatus, setTokenStatus] = useState<unknown>(null);
   const [routingProfiles, setRoutingProfiles] = useState<RoutingProfiles | null>(null);
+  const [routingProfilesFallback, setRoutingProfilesFallback] = useState(false);
   const [notice, setNotice] = useState<Notice | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [actionBusy, setActionBusy] = useState<string | null>(null);
@@ -176,7 +237,13 @@ function App() {
       setTasks((current) => mergeTaskListPreservingDetail(current, nextTasks));
       setQueueItems(toQueueItems(nextQueue, nextTasks));
       setTokenStatus(nextToken);
-      if (nextRouting) setRoutingProfiles(nextRouting);
+      if (nextRouting) {
+        setRoutingProfiles(nextRouting);
+        setRoutingProfilesFallback(false);
+      } else {
+        setRoutingProfiles((current) => current ?? DEFAULT_ROUTING_PROFILES);
+        setRoutingProfilesFallback(true);
+      }
       setApiError(nextHealth.daemon.degraded ? nextHealth.daemon.config_error ?? '本地守护进程处于降级模式。' : null);
       setLastRefresh(formatClock());
 
@@ -463,10 +530,10 @@ function App() {
               onCreate={() => setPage('create')}
             />
           )}
-          {page === 'create' && <CreateTaskPage actionBusy={Boolean(actionBusy)} agents={agents} routingProfiles={routingProfiles} onCreate={handleCreateTask} />}
+          {page === 'create' && <CreateTaskPage actionBusy={Boolean(actionBusy)} agents={agents} routingProfiles={routingProfiles} routingProfilesFallback={routingProfilesFallback} onCreate={handleCreateTask} />}
           {page === 'queue' && <QueuePage queueItems={queueItems} onOpenTask={openTask} />}
           {page === 'token' && <TokenPage tokenStatus={tokenStatus} onReset={confirmTokenReset} actionBusy={Boolean(actionBusy)} />}
-          {page === 'routing' && <RoutingSettingsPage actionBusy={Boolean(actionBusy)} routingProfiles={routingProfiles} onSave={handleSaveRoutingProfiles} />}
+          {page === 'routing' && <RoutingSettingsPage actionBusy={Boolean(actionBusy)} routingProfiles={routingProfiles} routingProfilesFallback={routingProfilesFallback} onSave={handleSaveRoutingProfiles} />}
           {page === 'system' && <SystemPage agents={agents} health={health} apiError={apiError} />}
           {page === 'detail' &&
             (selectedTask ? (
@@ -635,11 +702,13 @@ function CreateTaskPage({
   actionBusy,
   agents,
   routingProfiles,
+  routingProfilesFallback,
   onCreate,
 }: {
   actionBusy: boolean;
   agents: AgentStatusResponse[];
   routingProfiles: RoutingProfiles | null;
+  routingProfilesFallback: boolean;
   onCreate: (input: CreateTaskInput) => Promise<void>;
 }) {
   const runnableAgents = agents.filter((agent) => agent.enabled !== false && agent.capabilities?.start_task !== false);
@@ -760,6 +829,11 @@ function CreateTaskPage({
         <PanelHeader title="新建 Agent 任务" helper="先选场景和模型路由；Auto 模式会按后台默认策略选择 Agent、模型和思考强度。" />
         <form className="task-form" onSubmit={handleSubmit}>
           {formError && <div className="form-error">{formError}</div>}
+          {routingProfilesFallback && (
+            <div className="warning-card compact">
+              当前后台暂未返回路由配置，页面正在使用内置默认策略预览。请刷新或重启后台后再保存自定义路由设置。
+            </div>
+          )}
           <div className="split-fields">
             <label>
               <span>任务场景</span>
@@ -1415,10 +1489,12 @@ function SystemPage({ agents, health, apiError }: { agents: AgentStatusResponse[
 function RoutingSettingsPage({
   actionBusy,
   routingProfiles,
+  routingProfilesFallback,
   onSave,
 }: {
   actionBusy: boolean;
   routingProfiles: RoutingProfiles | null;
+  routingProfilesFallback: boolean;
   onSave: (next: RoutingProfiles) => Promise<void>;
 }) {
   const [draft, setDraft] = useState<RoutingProfiles | null>(routingProfiles);
@@ -1473,6 +1549,11 @@ function RoutingSettingsPage({
             保存路由设置
           </button>
         </div>
+        {routingProfilesFallback && (
+          <div className="warning-card compact">
+            当前显示的是内置默认策略，因为后台还没有返回 `/api/routing-profiles`。如果保存失败，请先重启 MiMo Bridge 后台再刷新页面。
+          </div>
+        )}
         <div className="routing-grid">
           {(Object.keys(scenarioLabels) as TaskScenario[]).map((scenario) => {
             const item = draft.scenarios[scenario];
