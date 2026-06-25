@@ -87,9 +87,12 @@ Related collaboration issue: if Codex has already stopped waiting, crashed, or b
 1. `mimo_pending_reviews` lists tasks in `review` status without returning full diff, full logs, full source, or local runtime paths.
 2. `/api/health` exposes `pending_reviews.count` and the recommended `recover` command.
 3. `scripts/mimo-bridge-client.mjs recover` returns task IDs, small objective previews, risk flags, review recommendation, and the next bounded review command.
-4. The current Codex thread has a 10-minute heartbeat automation that runs `recover` and wakes the thread if a completed MiMo task is waiting for review.
+4. `scripts/mimo-review-wakeup.mjs` runs MiMo `recover` and Reasonix `agent-recover` once, deduplicates tasks, and prints a compact wakeup summary.
+5. The current Codex thread has a 5-minute heartbeat automation named `mimo-bridge-review-wakeup` that calls the wakeup script and wakes the thread if a completed or failed task needs Codex review/intervention.
 
 Operational rule: after any interruption, context compression, or suspiciously quiet wait, run `node scripts\mimo-bridge-client.mjs recover --limit 5 --max-chars 8000` before starting a new MiMo task. If the command returns 404, the daemon has not been restarted with the recovery-inbox code yet.
+
+Important boundary: the local daemon cannot directly push into a stopped Codex turn by itself. The implemented wake behavior is a bounded inbox plus Codex App heartbeat. It avoids full-state polling and keeps token cost low, but its responsiveness depends on the heartbeat interval unless the user or Codex manually runs the recovery command.
 
 ## Test Method
 

@@ -155,7 +155,7 @@ function recordMimoTokenUsage(task: TaskState, parsed: ReturnType<ReturnType<typ
   );
 }
 
-function buildMimoArgs(task: TaskState, runtimeDir: string): string[] {
+export function buildMimoArgs(task: TaskState, runtimeDir: string): string[] {
   const args: string[] = [
     "run",
     "--pure",
@@ -168,8 +168,14 @@ function buildMimoArgs(task: TaskState, runtimeDir: string): string[] {
     args.push("--session", task.session_id);
   }
 
-  if (task.config.routing?.model) {
-    args.push("--model", task.config.routing.model);
+  const cliModel = resolveMimoCliModel(task.config.routing?.model);
+  if (cliModel) {
+    args.push("--model", cliModel);
+  }
+
+  const cliVariant = resolveMimoCliVariant(task.config.routing?.reasoning_effort);
+  if (cliVariant) {
+    args.push("--variant", cliVariant);
   }
 
   args.push("--dir", task.config.workspace_path);
@@ -178,6 +184,33 @@ function buildMimoArgs(task: TaskState, runtimeDir: string): string[] {
   args.push("--file", briefPath);
 
   return args;
+}
+
+export function resolveMimoCliModel(model: string | undefined): string | null {
+  if (!model) return null;
+  if (model.includes("/")) return model;
+
+  switch (model) {
+    case "mimo-v2.5-flash":
+      return "xiaomi/mimo-v2.5";
+    case "mimo-v2.5-pro":
+      return "xiaomi/mimo-v2.5-pro";
+    default:
+      return null;
+  }
+}
+
+export function resolveMimoCliVariant(effort: string | undefined): string | null {
+  switch (effort) {
+    case "low":
+      return "minimal";
+    case "medium":
+      return "high";
+    case "high":
+      return "max";
+    default:
+      return null;
+  }
 }
 
 function stopPtyProcessTree(ptyProcess: pty.IPty): void {

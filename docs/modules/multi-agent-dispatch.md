@@ -56,7 +56,8 @@ Implemented behavior:
 - Admin UI has a "模型路由" settings page where each scenario can choose Agent, model, and reasoning effort.
 - Create Task supports Auto/Manual routing, task scenario, image/multimodal checkbox, Agent, model, reasoning effort, and an Auto preview.
 - Routing snapshots are stored in task config, task briefs, and Review Package.
-- MiMo receives the selected model through `--model`.
+- MiMo stores the user-facing selected model in task config, task briefs, and Review Package. Before execution, `mimo-runner` maps Bridge labels to MiMo CLI `provider/model` names: `mimo-v2.5-flash -> xiaomi/mimo-v2.5`, `mimo-v2.5-pro -> xiaomi/mimo-v2.5-pro`. Already-qualified values containing `/` pass through unchanged.
+- MiMo reasoning effort maps to `--variant`: low=`minimal`, medium=`high`, high=`max`.
 - Reasonix receives the selected model through `--model`; reasoning effort maps to `--max-steps` as low=10, medium=20, high=40.
 - Multimodal/image tasks are forced to MiMo `mimo-v2.5-flash`.
 - Model lists are enforced: MiMo supports `mimo-v2.5-flash` / `mimo-v2.5-pro`; Reasonix supports `deepseek-v4-flash` / `deepseek-v4-pro`.
@@ -75,6 +76,7 @@ Remaining routing refinements:
 - Codex-owned implementation is not yet a selectable execution target in routing profiles.
 - More advanced complexity detection can be added later, but it should stay small and rule-based so the classifier does not cost more context than it saves.
 - Review strictness can later use scenario/risk more deeply; the first implementation records routing context and validates hard model/multimodal rules.
+- MiMo CLI compatibility depends on the installed provider/model list. On the current machine, `mimo models` lists `xiaomi/mimo-v2.5` and `xiaomi/mimo-v2.5-pro`; passing raw `mimo-v2.5-flash` caused `ProviderModelNotFoundError`, so runners must not pass raw UI labels to the CLI.
 
 ## Technical Route
 
