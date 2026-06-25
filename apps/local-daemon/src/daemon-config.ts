@@ -1,7 +1,8 @@
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { checkMimoVersion, type Config, type MimoVersion } from "../../../src/config.js";
-import type { AgentConfig } from "../../../src/types.js";
+import { normalizeRoutingProfilesConfig } from "../../../src/services/model-routing.js";
+import type { AgentConfig, RoutingProfilesConfig } from "../../../src/types.js";
 
 export interface DaemonConfig {
   host: "127.0.0.1";
@@ -10,6 +11,7 @@ export interface DaemonConfig {
   mcpConfig: Config | null;
   mimoVersion: MimoVersion | null;
   agents: AgentConfig[];
+  routingProfiles?: RoutingProfilesConfig;
   configError: string | null;
 }
 
@@ -20,6 +22,7 @@ export interface PersistentConfig {
   runtimeDir?: string;
   port?: number;
   agents?: AgentConfig[];
+  routingProfiles?: RoutingProfilesConfig;
 }
 
 export function getDefaultConfigPath(): string {
@@ -119,6 +122,12 @@ function validatePersistentFields(config: PersistentConfig): string | null {
       }
     }
   }
+  if (config.routingProfiles !== undefined) {
+    const validation = normalizeRoutingProfilesConfig(config.routingProfiles);
+    if (!validation.ok) {
+      return `配置文件 routingProfiles 无效: ${validation.error}`;
+    }
+  }
   return null;
 }
 
@@ -152,6 +161,7 @@ export function loadDaemonConfig(): DaemonConfig {
   const mimoEntryPath = process.env.MIMO_ENTRY_PATH || persistent?.mimoEntryPath;
   const allowedRoots = resolveArrayField(process.env.MIMO_ALLOWED_ROOTS, persistent?.allowedRoots);
   const agents = resolveAgentConfigs(persistent?.agents);
+  const routingProfiles = resolveRoutingProfilesConfig(persistent?.routingProfiles);
 
   let mcpConfig: Config | null = null;
   let mimoVersion: MimoVersion | null = null;
@@ -176,6 +186,7 @@ export function loadDaemonConfig(): DaemonConfig {
           allowedRoots,
           runtimeDir,
           agents,
+          routingProfiles,
         };
       } catch {
         configError = "MiMo 版本检查失败";
@@ -190,8 +201,27 @@ export function loadDaemonConfig(): DaemonConfig {
     mcpConfig,
     mimoVersion,
     agents,
+    routingProfiles,
     configError,
   };
+}
+
+export function savePersistentConfig(configPath: string, patch: Partial<PersistentConfig>): { ok: true; config: PersistentConfig } | { ok: false; error: string } {
+  const loaded = loadPersistentConfig(configPath);
+  if (loaded.error) {
+    return { ok: false, error: loaded.error };
+  }
+  const next: PersistentConfig = {
+    ...(loaded.config ?? {}),
+    ...patch,
+  };
+  const validation = validatePersistentFields(next);
+  if (validation) {
+    return { ok: false, error: validation };
+  }
+  mkdirSync(dirname(configPath), { recursive: true });
+  writeFileSync(configPath, JSON.stringify(next, null, 2) + "\n", "utf-8");
+  return { ok: true, config: next };
 }
 
 function resolveAgentConfigs(persisted: AgentConfig[] | undefined): AgentConfig[] {
@@ -205,6 +235,11 @@ function resolveAgentConfigs(persisted: AgentConfig[] | undefined): AgentConfig[
     });
   }
   return agents;
+}
+
+function resolveRoutingProfilesConfig(input: RoutingProfilesConfig | undefined): RoutingProfilesConfig {
+  const validation = normalizeRoutingProfilesConfig(input ?? {});
+  return validation.ok ? validation.config : {};
 }
 
 function normalizeAgentConfig(input: AgentConfig): AgentConfig | null {

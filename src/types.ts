@@ -12,6 +12,10 @@ export type ScopeMode = "strict" | "suggested" | "repo-wide";
 export type IncludeTestsMode = "auto" | "always" | "never";
 export type AgentKind = "mimo" | "reasonix-tui" | "reasonix-gui" | "unknown";
 export type AgentStatus = "ready" | "disabled" | "missing" | "not_configured" | "error";
+export type RoutingMode = "auto" | "manual";
+export type TaskScenario = "multimodal" | "simple" | "normal" | "complex" | "high_risk";
+export type ReasoningEffort = "low" | "medium" | "high";
+export type RoutingAgentId = "mimo" | "reasonix-tui";
 
 export interface AgentConfig {
   id: string;
@@ -80,6 +84,22 @@ export interface TaskScopeSnapshot {
   generated_at: string;
 }
 
+export interface RoutingSelection {
+  agent_id: RoutingAgentId;
+  model: string;
+  reasoning_effort: ReasoningEffort;
+}
+
+export interface RoutingProfilesConfig {
+  scenarios?: Partial<Record<TaskScenario, RoutingSelection>>;
+}
+
+export interface RoutingConfig extends RoutingSelection {
+  routing_mode: RoutingMode;
+  task_scenario: TaskScenario;
+  routing_reason: string;
+}
+
 export interface TaskConfig {
   objective: string;
   workspace_path: string;
@@ -89,6 +109,7 @@ export interface TaskConfig {
   max_rounds: number;
   runtime_timeout_seconds: number;
   scope?: TaskScopeSnapshot;
+  routing?: RoutingConfig;
   origin_codex_thread_id?: string;
   origin_codex_thread_url?: string;
   origin_source?: string;
@@ -159,6 +180,7 @@ export interface ReviewPackage {
   generated_at: string;
   review_recommendation: ReviewRecommendation;
   truncated: boolean;
+  routing?: RoutingConfig;
 }
 
 export interface TaskState {
@@ -237,6 +259,11 @@ export interface StartTaskInput {
   scope_mode?: ScopeMode;
   include_tests?: IncludeTestsMode;
   repo_wide_confirmed?: boolean;
+  routing_mode?: RoutingMode;
+  task_scenario?: TaskScenario;
+  model?: string;
+  reasoning_effort?: ReasoningEffort;
+  has_images?: boolean;
   origin_codex_thread_id?: string;
   origin_codex_thread_url?: string;
   origin_source?: string;

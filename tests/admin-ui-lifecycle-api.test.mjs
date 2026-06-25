@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert";
 
-import { cancelTask, deleteTask, finishTask, openTaskTarget, worktreeTask } from "../apps/admin-ui/src/api.ts";
+import { cancelTask, createTask, deleteTask, finishTask, openTaskTarget, saveRoutingProfiles, worktreeTask } from "../apps/admin-ui/src/api.ts";
 
 function installFetchMock() {
   const calls = [];
@@ -79,6 +79,75 @@ test("admin UI lifecycle API keeps MiMo tasks on legacy routes", async () => {
     assert.deepStrictEqual(mock.calls[1].body, { status: "accepted" });
     assert.deepStrictEqual(mock.calls[2].body, { action: "merge" });
     assert.deepStrictEqual(mock.calls[3].body, { action: "task_folder" });
+  } finally {
+    mock.restore();
+  }
+});
+
+test("admin UI create task API sends routing fields to MiMo and Reasonix routes", async () => {
+  const mock = installFetchMock();
+  const baseInput = {
+    objective: "route task",
+    workspace_path: "C:\\repo",
+    editable_paths: ["src"],
+    readonly_paths: [],
+    acceptance_criteria: [],
+    max_rounds: 5,
+    runtime_timeout_seconds: 900,
+    use_worktree: true,
+    priority: 5,
+    scope_mode: "strict",
+    include_tests: "auto",
+    repo_wide_confirmed: false,
+    routing_mode: "manual",
+    task_scenario: "complex",
+    model: "mimo-v2.5-pro",
+    reasoning_effort: "high",
+    has_images: false,
+  };
+
+  try {
+    await createTask({ ...baseInput, agent_id: "mimo" });
+    await createTask({ ...baseInput, agent_id: "reasonix-tui", model: "deepseek-v4-pro" });
+
+    assert.deepStrictEqual(
+      mock.calls.map((call) => [call.method, call.path]),
+      [
+        ["POST", "/api/tasks"],
+        ["POST", "/api/agent-tasks"],
+      ]
+    );
+    assert.strictEqual(mock.calls[0].body.agent_id, undefined);
+    assert.strictEqual(mock.calls[0].body.routing_mode, "manual");
+    assert.strictEqual(mock.calls[0].body.task_scenario, "complex");
+    assert.strictEqual(mock.calls[0].body.model, "mimo-v2.5-pro");
+    assert.strictEqual(mock.calls[0].body.reasoning_effort, "high");
+    assert.strictEqual(mock.calls[1].body.agent_id, "reasonix-tui");
+    assert.strictEqual(mock.calls[1].body.model, "deepseek-v4-pro");
+  } finally {
+    mock.restore();
+  }
+});
+
+test("admin UI routing settings API saves profiles with PUT", async () => {
+  const mock = installFetchMock();
+  try {
+    await saveRoutingProfiles({
+      scenarios: {
+        normal: {
+          current: {
+            agent_id: "reasonix-tui",
+            model: "deepseek-v4-flash",
+            reasoning_effort: "medium",
+          },
+        },
+      },
+    });
+
+    assert.strictEqual(mock.calls.length, 1);
+    assert.strictEqual(mock.calls[0].method, "PUT");
+    assert.strictEqual(mock.calls[0].path, "/api/routing-profiles");
+    assert.strictEqual(mock.calls[0].body.scenarios.normal.current.agent_id, "reasonix-tui");
   } finally {
     mock.restore();
   }

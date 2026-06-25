@@ -2,6 +2,9 @@ import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 
 const args = process.argv.slice(2);
+if (process.env.FAKE_REASONIX_ARGS_PATH) {
+  writeFileSync(process.env.FAKE_REASONIX_ARGS_PATH, JSON.stringify(args, null, 2), "utf-8");
+}
 
 if (args[0] === "version") {
   console.log("reasonix fake-test");

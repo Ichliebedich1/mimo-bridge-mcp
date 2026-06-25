@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert";
 import { EventEmitter } from "node:events";
-import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -1059,6 +1059,130 @@ test("admin API list includes origin fields for tasks with origin info", async (
     assert.strictEqual(task.origin_codex_thread_id, "origin-thread-id");
     assert.strictEqual(task.origin_codex_thread_url, "codex://threads/origin-thread-id");
     assert.strictEqual(task.origin_source, "codex");
+  } finally {
+    fixture.cleanup();
+  }
+});
+
+test("admin API GET /api/routing-profiles returns current routing settings", async () => {
+  const fixture = createContext();
+  try {
+    const result = await callApi(fixture.context, "GET", "/api/routing-profiles", undefined, {
+      mcpConfig: {
+        agents: [],
+        routingProfiles: {
+          scenarios: {
+            simple: {
+              agent_id: "reasonix-tui",
+              model: "deepseek-v4-flash",
+              reasoning_effort: "low",
+            },
+          },
+        },
+      },
+    });
+    assert.strictEqual(result.statusCode, 200);
+    assert.strictEqual(result.body.ok, true);
+    assert.strictEqual(result.body.data.scenarios.simple.current.agent_id, "reasonix-tui");
+    assert.strictEqual(result.body.data.scenarios.simple.current.model, "deepseek-v4-flash");
+    assert.ok(result.body.data.allowed_models.mimo.includes("mimo-v2.5-flash"));
+    assert.ok(result.body.data.allowed_models["reasonix-tui"].includes("deepseek-v4-pro"));
+  } finally {
+    fixture.cleanup();
+  }
+});
+
+test("admin API PUT /api/routing-profiles saves validated routing settings", async () => {
+  const fixture = createContext();
+  const previousConfigPath = process.env.MIMO_BRIDGE_CONFIG;
+  const configPath = join(fixture.runtimeDir, "config.json");
+  process.env.MIMO_BRIDGE_CONFIG = configPath;
+  const daemonConfig = {
+    mcpConfig: {
+      agents: [],
+      routingProfiles: {},
+    },
+  };
+  try {
+    const result = await callApi(fixture.context, "PUT", "/api/routing-profiles", {
+      scenarios: {
+        normal: {
+          agent_id: "reasonix-tui",
+          model: "deepseek-v4-flash",
+          reasoning_effort: "medium",
+        },
+        complex: {
+          agent_id: "mimo",
+          model: "mimo-v2.5-pro",
+          reasoning_effort: "high",
+        },
+      },
+    }, daemonConfig);
+
+    assert.strictEqual(result.statusCode, 200);
+    assert.strictEqual(result.body.data.scenarios.normal.current.agent_id, "reasonix-tui");
+    assert.strictEqual(daemonConfig.mcpConfig.routingProfiles.scenarios.normal.agent_id, "reasonix-tui");
+    const saved = JSON.parse(readFileSync(configPath, "utf-8"));
+    assert.strictEqual(saved.routingProfiles.scenarios.normal.model, "deepseek-v4-flash");
+  } finally {
+    if (previousConfigPath === undefined) {
+      delete process.env.MIMO_BRIDGE_CONFIG;
+    } else {
+      process.env.MIMO_BRIDGE_CONFIG = previousConfigPath;
+    }
+    fixture.cleanup();
+  }
+});
+
+test("admin API PUT /api/routing-profiles rejects invalid multimodal Reasonix setting", async () => {
+  const fixture = createContext();
+  const previousConfigPath = process.env.MIMO_BRIDGE_CONFIG;
+  process.env.MIMO_BRIDGE_CONFIG = join(fixture.runtimeDir, "config.json");
+  try {
+    const result = await callApi(fixture.context, "PUT", "/api/routing-profiles", {
+      scenarios: {
+        multimodal: {
+          agent_id: "reasonix-tui",
+          model: "deepseek-v4-flash",
+          reasoning_effort: "low",
+        },
+      },
+    });
+
+    assert.strictEqual(result.statusCode, 400);
+    assert.strictEqual(result.body.ok, false);
+    assert.match(result.body.error, /multimodal|场景/);
+  } finally {
+    if (previousConfigPath === undefined) {
+      delete process.env.MIMO_BRIDGE_CONFIG;
+    } else {
+      process.env.MIMO_BRIDGE_CONFIG = previousConfigPath;
+    }
+    fixture.cleanup();
+  }
+});
+
+test("admin API POST /api/tasks passes routing fields to MiMo handler", async () => {
+  const fixture = createContext();
+  try {
+    const result = await callApi(fixture.context, "POST", "/api/tasks", {
+      objective: "routing passthrough",
+      workspace_path: "C:\\sensitive\\workspace",
+      routing_mode: "manual",
+      task_scenario: "complex",
+      model: "mimo-v2.5-pro",
+      reasoning_effort: "high",
+      has_images: false,
+    });
+
+    assert.strictEqual(result.statusCode, 200);
+    const captured = fixture.calls.find(([name]) => name === "startTask");
+    assert.ok(captured);
+    assert.strictEqual(captured[1].routing_mode, "manual");
+    assert.strictEqual(captured[1].task_scenario, "complex");
+    assert.strictEqual(captured[1].model, "mimo-v2.5-pro");
+    assert.strictEqual(captured[1].reasoning_effort, "high");
+    assert.strictEqual(captured[1].has_images, false);
   } finally {
     fixture.cleanup();
   }

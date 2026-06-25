@@ -10,6 +10,32 @@ export type TaskStatus =
 
 export type ScopeMode = 'strict' | 'suggested' | 'repo-wide';
 export type IncludeTestsMode = 'auto' | 'always' | 'never';
+export type TaskScenario = 'multimodal' | 'simple' | 'normal' | 'complex' | 'high_risk';
+export type RoutingMode = 'auto' | 'manual';
+export type ReasoningEffort = 'low' | 'medium' | 'high';
+export type RoutingAgentId = 'mimo' | 'reasonix-tui';
+
+export type RoutingSelection = {
+  agent_id: RoutingAgentId;
+  model: string;
+  reasoning_effort: ReasoningEffort;
+};
+
+export type RoutingProfiles = {
+  default_scenario: TaskScenario;
+  scenarios: Record<TaskScenario, {
+    description: string;
+    supports_multimodal: boolean;
+    recommended: Record<RoutingAgentId, { model: string; reasoning_effort: ReasoningEffort; reason: string }>;
+    current: RoutingSelection;
+  }>;
+  allowed_models: Record<RoutingAgentId, string[]>;
+  reasoning_efforts: ReasoningEffort[];
+  pricing_per_1m_cny: {
+    flash: { input: number; output: number; cache_hit: number };
+    pro: { input: number; output: number; cache_hit: number };
+  };
+};
 
 export type RiskFlag =
   | 'OUT_OF_BOUNDS_CHANGES'
@@ -82,6 +108,11 @@ export type CreateTaskInput = {
   scope_mode: ScopeMode;
   include_tests: IncludeTestsMode;
   repo_wide_confirmed: boolean;
+  routing_mode?: RoutingMode;
+  task_scenario?: TaskScenario;
+  model?: string;
+  reasoning_effort?: ReasoningEffort;
+  has_images?: boolean;
 };
 
 export type TaskActionResult = {

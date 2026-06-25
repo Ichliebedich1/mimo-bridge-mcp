@@ -8,6 +8,8 @@ import { readLiveTaskView, parseLiveParams } from "./live-task-view.js";
 import { getPendingReviewCount } from "../../../src/services/pending-reviews.js";
 import { computeTaskReplyCapability } from "../../../src/services/task-reply-capability.js";
 import { createOpenTaskTargetHandler } from "./task-open-actions.js";
+import { getRoutingProfiles, normalizeRoutingProfilesConfig } from "../../../src/services/model-routing.js";
+import { resolveConfigPath, savePersistentConfig } from "./daemon-config.js";
 
 const StartTaskBodySchema = z.object({
   objective: z.string().min(1),
@@ -22,6 +24,11 @@ const StartTaskBodySchema = z.object({
   scope_mode: z.enum(["strict", "suggested", "repo-wide"]).default("strict"),
   include_tests: z.enum(["auto", "always", "never"]).default("auto"),
   repo_wide_confirmed: z.boolean().default(false),
+  routing_mode: z.enum(["auto", "manual"]).default("auto"),
+  task_scenario: z.enum(["multimodal", "simple", "normal", "complex", "high_risk"]).optional(),
+  model: z.string().optional(),
+  reasoning_effort: z.enum(["low", "medium", "high"]).optional(),
+  has_images: z.boolean().default(false),
   origin_codex_thread_id: z.string().optional(),
   origin_codex_thread_url: z.string().optional(),
   origin_source: z.string().optional(),
@@ -98,6 +105,29 @@ export async function handleAdminApi(
     if (req.method === "GET" && url.pathname === "/api/agents") {
       const data = await context.tools.agentList.handler({});
       sendJson(res, 200, wrapToolResult(data));
+      return true;
+    }
+
+    if (req.method === "GET" && url.pathname === "/api/routing-profiles") {
+      sendJson(res, 200, ok(getRoutingProfiles(config.mcpConfig?.routingProfiles)));
+      return true;
+    }
+
+    if (req.method === "PUT" && url.pathname === "/api/routing-profiles") {
+      const normalized = normalizeRoutingProfilesConfig(await readJsonBody(req));
+      if (!normalized.ok) {
+        sendJson(res, 400, fail(normalized.error));
+        return true;
+      }
+      const saved = savePersistentConfig(resolveConfigPath(), { routingProfiles: normalized.config });
+      if (!saved.ok) {
+        sendJson(res, 400, fail(saved.error));
+        return true;
+      }
+      if (config.mcpConfig) {
+        config.mcpConfig.routingProfiles = normalized.config;
+      }
+      sendJson(res, 200, ok(getRoutingProfiles(normalized.config)));
       return true;
     }
 

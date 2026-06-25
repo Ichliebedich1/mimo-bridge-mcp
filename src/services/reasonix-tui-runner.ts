@@ -7,6 +7,7 @@ import type { AgentConfig, TaskResult, TaskState } from "../types.js";
 import { extractReasonixTokenUsageFromFile } from "./reasonix-event-parser.js";
 import { findReasonixSessionPath } from "./reasonix-session-store.js";
 import { globalTokenBudget } from "./token-budget.js";
+import { reasoningEffortToMaxSteps } from "./model-routing.js";
 
 export interface ReasonixRunnerOptions {
   agent: AgentConfig;
@@ -35,7 +36,7 @@ export function runReasonixTuiTask(
   const logPath = `${runtimeDir}/logs/${task.task_id}-round-${round}.jsonl`;
   const stderrLogPath = `${runtimeDir}/logs/${task.task_id}-round-${round}.stderr.log`;
   const briefPath = `${runtimeDir}/briefs/${task.task_id}-round-${round}.md`;
-  const args = buildReasonixRunArgs(agent, briefPath, task.config.workspace_path, resumeSessionPath);
+  const args = buildReasonixRunArgs(agent, briefPath, task.config.workspace_path, task, resumeSessionPath);
 
   prepareReasonixWorkspace(task.config.workspace_path);
   writeReasonixEvent(logPath, "start", "Reasonix TUI task started.");
@@ -167,14 +168,24 @@ function buildReasonixRunArgs(
   agent: AgentConfig,
   briefPath: string,
   workspacePath: string,
+  task?: TaskState,
   resumeSessionPath?: string | null
 ): string[] {
   const args = [...(agent.command_args ?? []), "run"];
-  if (agent.default_model) {
-    args.push("--model", agent.default_model);
+  const model = task?.config.routing?.model ?? agent.default_model;
+  if (model) {
+    args.push("--model", model);
   }
-  if (agent.max_steps && Number.isInteger(agent.max_steps) && agent.max_steps > 0) {
-    args.push("--max-steps", String(agent.max_steps));
+
+  const routingMaxSteps = task?.config.routing?.reasoning_effort
+    ? reasoningEffortToMaxSteps(task.config.routing.reasoning_effort)
+    : undefined;
+  const configuredMaxSteps = agent.max_steps && Number.isInteger(agent.max_steps) && agent.max_steps > 0
+    ? agent.max_steps
+    : undefined;
+  const maxSteps = routingMaxSteps ?? configuredMaxSteps;
+  if (maxSteps) {
+    args.push("--max-steps", String(maxSteps));
   }
   if (resumeSessionPath) {
     args.push("--resume", resumeSessionPath);

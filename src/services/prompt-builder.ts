@@ -32,6 +32,20 @@ export function buildTaskBrief(config: TaskConfig): string {
     lines.push("");
   }
 
+  if (config.routing) {
+    lines.push("## 模型路由");
+    lines.push("");
+    lines.push(`- **Routing Mode**: ${config.routing.routing_mode}`);
+    lines.push(`- **Task Scenario**: ${config.routing.task_scenario}`);
+    lines.push(`- **Agent**: ${config.routing.agent_id}`);
+    lines.push(`- **Model**: ${config.routing.model}`);
+    lines.push(`- **Thinking Effort**: ${config.routing.reasoning_effort}`);
+    lines.push(`- **Reason**: ${config.routing.routing_reason}`);
+    lines.push("");
+    lines.push("请按上述模型路由执行。若你认为任务复杂度或模型选择不合适，请在总结中说明，不要自行绕过 Bridge 配置。");
+    lines.push("");
+  }
+
   if (config.editable_paths.length > 0) {
     lines.push("## 允许修改的文件范围");
     lines.push("");

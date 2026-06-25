@@ -1,7 +1,7 @@
 import { z } from "zod";
 import type { Config } from "../config.js";
 import type { TaskStore } from "../services/task-store.js";
-import type { TaskResult, WorktreeState } from "../types.js";
+import type { AgentKind, TaskResult, WorktreeState } from "../types.js";
 import { validateWorkspacePath, validateEditablePaths, validateMaxRounds, validateTimeout } from "../services/path-guard.js";
 import { writeTaskBrief } from "../services/prompt-builder.js";
 import { runMimoTask } from "../services/mimo-runner.js";
@@ -10,6 +10,7 @@ import { globalTaskQueue, type TaskQueue } from "../services/task-queue.js";
 import { GitWorktreeManager } from "../services/git-worktree.js";
 import { refreshReviewPackage } from "../services/review-package.js";
 import { computeTaskScope } from "../services/task-scope.js";
+import { resolveRouting } from "../services/model-routing.js";
 
 type StartTaskRunner = (
   options: {
@@ -28,6 +29,7 @@ export interface StartTaskDependencies {
   runningTasks?: RunningTaskRegistry;
   taskQueue?: TaskQueue;
   agentId?: string;
+  agentKind?: AgentKind;
 }
 
 export const StartTaskSchema = z.object({
@@ -43,6 +45,11 @@ export const StartTaskSchema = z.object({
   scope_mode: z.enum(["strict", "suggested", "repo-wide"]).default("strict"),
   include_tests: z.enum(["auto", "always", "never"]).default("auto"),
   repo_wide_confirmed: z.boolean().default(false),
+  routing_mode: z.enum(["auto", "manual"]).default("auto"),
+  task_scenario: z.enum(["multimodal", "simple", "normal", "complex", "high_risk"]).optional(),
+  model: z.string().optional(),
+  reasoning_effort: z.enum(["low", "medium", "high"]).optional(),
+  has_images: z.boolean().default(false),
   origin_codex_thread_id: z.string().optional(),
   origin_codex_thread_url: z.string().optional(),
   origin_source: z.string().optional(),
@@ -59,6 +66,7 @@ export function createStartTaskHandler(
   const runningTasks = dependencies.runningTasks ?? globalRunningTasks;
   const taskQueue = dependencies.taskQueue ?? globalTaskQueue;
   const agentId = dependencies.agentId ?? "mimo";
+  const agentKind = dependencies.agentKind ?? "mimo";
 
   function executeTask(
     taskId: string,
@@ -181,6 +189,17 @@ export function createStartTaskHandler(
         return { error: scopeResult.error };
       }
 
+      const routingResult = resolveRouting(agentKind, {
+        routing_mode: input.routing_mode,
+        task_scenario: input.task_scenario,
+        model: input.model,
+        reasoning_effort: input.reasoning_effort,
+        has_images: input.has_images,
+      }, config.routingProfiles);
+      if (!routingResult.ok) {
+        return { error: routingResult.error };
+      }
+
       const task = taskStore.createTask({
         objective: input.objective,
         workspace_path: input.workspace_path,
@@ -190,6 +209,7 @@ export function createStartTaskHandler(
         max_rounds: input.max_rounds,
         runtime_timeout_seconds: input.runtime_timeout_seconds,
         scope: scopeResult.snapshot,
+        routing: routingResult.config,
         origin_codex_thread_id: input.origin_codex_thread_id,
         origin_codex_thread_url: input.origin_codex_thread_url,
         origin_source: input.origin_source,

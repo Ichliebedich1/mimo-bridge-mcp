@@ -9,6 +9,7 @@ import {
   fetchHealth,
   fetchLiveTask,
   fetchQueue,
+  fetchRoutingProfiles,
   fetchTask,
   fetchTaskDiff,
   fetchTaskLogs,
@@ -19,6 +20,7 @@ import {
   openTaskTarget,
   replyTask,
   resetTokenBudget,
+  saveRoutingProfiles,
   worktreeTask,
   type AgentStatusResponse,
   type HealthResponse,
@@ -36,14 +38,19 @@ import type {
   LiveEvent,
   LiveTaskView,
   QueueItem,
+  ReasoningEffort,
   RiskFlag,
+  RoutingAgentId,
+  RoutingMode,
+  RoutingProfiles,
   ScopeMode,
   Task,
+  TaskScenario,
   TaskLogsResult,
   TaskStatus,
 } from './types';
 
-type Page = 'overview' | 'tasks' | 'create' | 'queue' | 'token' | 'system' | 'detail';
+type Page = 'overview' | 'tasks' | 'create' | 'queue' | 'token' | 'routing' | 'system' | 'detail';
 
 type ConfirmAction = {
   title: string;
@@ -64,6 +71,7 @@ const navItems: Array<{ key: Page; label: string; icon: string }> = [
   { key: 'create', label: '新建任务', icon: '+' },
   { key: 'queue', label: '队列', icon: '↻' },
   { key: 'token', label: 'Token', icon: '◌' },
+  { key: 'routing', label: '模型路由', icon: '◎' },
   { key: 'system', label: '系统状态', icon: '●' },
 ];
 
@@ -96,6 +104,20 @@ const testLabels: Record<Task['testResult'], string> = {
   unknown: '暂无结果',
 };
 
+const scenarioLabels: Record<TaskScenario, string> = {
+  multimodal: '多模态/图片',
+  simple: '简单任务',
+  normal: '普通代码',
+  complex: '复杂任务',
+  high_risk: '高风险任务',
+};
+
+const effortLabels: Record<ReasoningEffort, string> = {
+  low: '低',
+  medium: '中',
+  high: '高',
+};
+
 function agentDisplayName(agent: string) {
   if (agent === 'mimo') return 'MiMo';
   if (agent === 'reasonix-tui') return 'Reasonix TUI';
@@ -126,6 +148,7 @@ function App() {
   const [agents, setAgents] = useState<AgentStatusResponse[]>([]);
   const [apiError, setApiError] = useState<string | null>(null);
   const [tokenStatus, setTokenStatus] = useState<unknown>(null);
+  const [routingProfiles, setRoutingProfiles] = useState<RoutingProfiles | null>(null);
   const [notice, setNotice] = useState<Notice | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [actionBusy, setActionBusy] = useState<string | null>(null);
@@ -146,12 +169,14 @@ function App() {
         fetchTokenBudget().catch(() => null),
       ]);
       const nextAgents = await fetchAgents().catch(() => []);
+      const nextRouting = await fetchRoutingProfiles().catch(() => null);
 
       setHealth(nextHealth);
       setAgents(nextAgents);
       setTasks((current) => mergeTaskListPreservingDetail(current, nextTasks));
       setQueueItems(toQueueItems(nextQueue, nextTasks));
       setTokenStatus(nextToken);
+      if (nextRouting) setRoutingProfiles(nextRouting);
       setApiError(nextHealth.daemon.degraded ? nextHealth.daemon.config_error ?? '本地守护进程处于降级模式。' : null);
       setLastRefresh(formatClock());
 
@@ -247,6 +272,13 @@ function App() {
     await runAction('正在发送回复…', '回复已发送，执行 Agent 将继续处理。', () => replyTask(taskId, message, priority, agent), {
       refreshTaskId: taskId,
     });
+  }
+
+  async function handleSaveRoutingProfiles(next: RoutingProfiles) {
+    const result = await runAction('正在保存模型路由设置…', '模型路由设置已保存。', () => saveRoutingProfiles({ scenarios: next.scenarios }));
+    if (result) {
+      setRoutingProfiles(result);
+    }
   }
 
   async function handleOpenTaskTarget(taskId: string, action: TaskOpenAction) {
@@ -431,9 +463,10 @@ function App() {
               onCreate={() => setPage('create')}
             />
           )}
-          {page === 'create' && <CreateTaskPage actionBusy={Boolean(actionBusy)} agents={agents} onCreate={handleCreateTask} />}
+          {page === 'create' && <CreateTaskPage actionBusy={Boolean(actionBusy)} agents={agents} routingProfiles={routingProfiles} onCreate={handleCreateTask} />}
           {page === 'queue' && <QueuePage queueItems={queueItems} onOpenTask={openTask} />}
           {page === 'token' && <TokenPage tokenStatus={tokenStatus} onReset={confirmTokenReset} actionBusy={Boolean(actionBusy)} />}
+          {page === 'routing' && <RoutingSettingsPage actionBusy={Boolean(actionBusy)} routingProfiles={routingProfiles} onSave={handleSaveRoutingProfiles} />}
           {page === 'system' && <SystemPage agents={agents} health={health} apiError={apiError} />}
           {page === 'detail' &&
             (selectedTask ? (
@@ -472,6 +505,7 @@ function pageTitle(page: Page) {
     detail: '任务审查工作台',
     queue: '队列',
     token: 'Token 预算',
+    routing: '模型路由',
     system: '系统状态',
   };
   return titles[page];
@@ -600,10 +634,12 @@ function TasksPage({
 function CreateTaskPage({
   actionBusy,
   agents,
+  routingProfiles,
   onCreate,
 }: {
   actionBusy: boolean;
   agents: AgentStatusResponse[];
+  routingProfiles: RoutingProfiles | null;
   onCreate: (input: CreateTaskInput) => Promise<void>;
 }) {
   const runnableAgents = agents.filter((agent) => agent.enabled !== false && agent.capabilities?.start_task !== false);
@@ -621,14 +657,40 @@ function CreateTaskPage({
   const [scopeMode, setScopeMode] = useState<ScopeMode>('strict');
   const [includeTests, setIncludeTests] = useState<IncludeTestsMode>('auto');
   const [repoWideConfirmed, setRepoWideConfirmed] = useState(false);
+  const [routingMode, setRoutingMode] = useState<RoutingMode>('auto');
+  const [taskScenario, setTaskScenario] = useState<TaskScenario>('normal');
+  const [model, setModel] = useState('');
+  const [reasoningEffort, setReasoningEffort] = useState<ReasoningEffort>('medium');
+  const [hasImages, setHasImages] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+
+  const currentScenario = routingProfiles?.scenarios[taskScenario] ?? null;
+  const selectedRoutingAgent = agentId === 'reasonix-tui' ? 'reasonix-tui' : 'mimo';
+  const allowedModels = routingProfiles?.allowed_models[selectedRoutingAgent] ?? (selectedRoutingAgent === 'mimo' ? ['mimo-v2.5-flash', 'mimo-v2.5-pro'] : ['deepseek-v4-flash', 'deepseek-v4-pro']);
+  const autoSelection = currentScenario?.current;
+  const effectiveAgentId = routingMode === 'auto' ? autoSelection?.agent_id ?? 'mimo' : selectedRoutingAgent;
+  const effectiveModel = routingMode === 'auto' ? autoSelection?.model ?? 'mimo-v2.5-flash' : (model || allowedModels[0] || '');
+  const effectiveEffort = routingMode === 'auto' ? autoSelection?.reasoning_effort ?? 'medium' : reasoningEffort;
 
   useEffect(() => {
     if (!agentOptions.some((agent) => agent.id === agentId)) {
       setAgentId(agentOptions[0]?.id ?? 'mimo');
     }
   }, [agentId, agentOptions]);
+
+  useEffect(() => {
+    if (hasImages) {
+      setTaskScenario('multimodal');
+      setRoutingMode('auto');
+    }
+  }, [hasImages]);
+
+  useEffect(() => {
+    if (routingMode === 'manual' && (!model || !allowedModels.includes(model))) {
+      setModel(allowedModels[0] ?? '');
+    }
+  }, [allowedModels, model, routingMode]);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -654,9 +716,17 @@ function CreateTaskPage({
       setFormError('repo-wide 模式需要勾选确认复选框。');
       return;
     }
+    if (hasImages && routingMode === 'manual') {
+      setFormError('多模态任务请使用 Auto 模式，系统会强制选择 MiMo flash。');
+      return;
+    }
+    if (routingMode === 'manual' && taskScenario === 'multimodal' && (selectedRoutingAgent !== 'mimo' || effectiveModel !== 'mimo-v2.5-flash')) {
+      setFormError('多模态任务只能使用 MiMo 的 mimo-v2.5-flash。');
+      return;
+    }
 
     const input: CreateTaskInput = {
-      agent_id: agentId,
+      agent_id: routingMode === 'auto' ? effectiveAgentId : agentId,
       objective: objective.trim(),
       workspace_path: workspacePath.trim(),
       editable_paths: splitLines(editablePaths),
@@ -669,6 +739,11 @@ function CreateTaskPage({
       scope_mode: scopeMode,
       include_tests: includeTests,
       repo_wide_confirmed: repoWideConfirmed,
+      routing_mode: routingMode,
+      task_scenario: hasImages ? 'multimodal' : taskScenario,
+      model: effectiveModel,
+      reasoning_effort: effectiveEffort,
+      has_images: hasImages,
     };
 
     setSubmitting(true);
@@ -682,20 +757,71 @@ function CreateTaskPage({
   return (
     <div className="create-layout">
       <section className="panel">
-        <PanelHeader title="新建 Agent 任务" helper="选择 MiMo 或 Reasonix TUI；已有写任务时新任务会安全排队。" />
+        <PanelHeader title="新建 Agent 任务" helper="先选场景和模型路由；Auto 模式会按后台默认策略选择 Agent、模型和思考强度。" />
         <form className="task-form" onSubmit={handleSubmit}>
           {formError && <div className="form-error">{formError}</div>}
-          <label>
-            <span>执行 Agent *</span>
-            <select value={agentId} onChange={(event) => setAgentId(event.target.value)}>
-              {agentOptions.map((agent) => (
-                <option key={agent.id} value={agent.id}>
-                  {agent.display_name || agent.id} ({agent.status})
-                </option>
-              ))}
-            </select>
-            <small className="field-help">MiMo 是稳定路径；Reasonix TUI 当前支持 one-shot 任务、低上下文审查和会话映射。</small>
+          <div className="split-fields">
+            <label>
+              <span>任务场景</span>
+              <select disabled={hasImages} value={taskScenario} onChange={(event) => setTaskScenario(event.target.value as TaskScenario)}>
+                {Object.entries(scenarioLabels).map(([value, label]) => (
+                  <option key={value} value={value}>{label}</option>
+                ))}
+              </select>
+              <small className="field-help">{currentScenario?.description ?? '选择场景后，Auto 模式会套用后台默认策略。'}</small>
+            </label>
+            <label>
+              <span>路由模式</span>
+              <select disabled={hasImages} value={routingMode} onChange={(event) => setRoutingMode(event.target.value as RoutingMode)}>
+                <option value="auto">Auto（按规则自动判断）</option>
+                <option value="manual">Manual（手动选择）</option>
+              </select>
+              <small className="field-help">Auto 适合省心省 token；Manual 适合你明确要指定模型时使用。</small>
+            </label>
+          </div>
+          <label className="toggle-row">
+            <input checked={hasImages} onChange={(event) => setHasImages(event.target.checked)} type="checkbox" />
+            <span>包含图片/多模态输入（自动使用 MiMo flash）</span>
           </label>
+          <div className="routing-preview">
+            <strong>本次将使用</strong>
+            <span>Agent：{agentDisplayName(effectiveAgentId)}</span>
+            <span>模型：{effectiveModel}</span>
+            <span>思考强度：{effortLabels[effectiveEffort]}</span>
+          </div>
+          {routingMode === 'manual' && (
+            <>
+              <label>
+                <span>执行 Agent *</span>
+                <select value={agentId} onChange={(event) => setAgentId(event.target.value)}>
+                  {agentOptions.map((agent) => (
+                    <option key={agent.id} value={agent.id}>
+                      {agent.display_name || agent.id} ({agent.status})
+                    </option>
+                  ))}
+                </select>
+                <small className="field-help">MiMo 支持多模态 flash；Reasonix TUI 当前只支持文本任务。</small>
+              </label>
+              <div className="split-fields">
+                <label>
+                  <span>模型</span>
+                  <select value={model || allowedModels[0] || ''} onChange={(event) => setModel(event.target.value)}>
+                    {allowedModels.map((item) => (
+                      <option key={item} value={item}>{item}</option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  <span>思考强度</span>
+                  <select value={reasoningEffort} onChange={(event) => setReasoningEffort(event.target.value as ReasoningEffort)}>
+                    <option value="low">低</option>
+                    <option value="medium">中</option>
+                    <option value="high">高</option>
+                  </select>
+                </label>
+              </div>
+            </>
+          )}
           <label>
             <span>任务目标 *</span>
             <textarea value={objective} onChange={(event) => setObjective(event.target.value)} placeholder="例如：为管理页面接入真实取消/验收 API，并补充错误提示。" rows={5} />
@@ -1280,6 +1406,153 @@ function SystemPage({ agents, health, apiError }: { agents: AgentStatusResponse[
               <p>{agent.error || (agent.capabilities?.start_task ? '可创建任务' : '暂不可创建任务')}</p>
             </div>
           ))}
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function RoutingSettingsPage({
+  actionBusy,
+  routingProfiles,
+  onSave,
+}: {
+  actionBusy: boolean;
+  routingProfiles: RoutingProfiles | null;
+  onSave: (next: RoutingProfiles) => Promise<void>;
+}) {
+  const [draft, setDraft] = useState<RoutingProfiles | null>(routingProfiles);
+
+  useEffect(() => {
+    setDraft(routingProfiles);
+  }, [routingProfiles]);
+
+  if (!draft) {
+    return (
+      <section className="panel wide page-panel">
+        <PanelHeader title="模型路由" helper="等待 /api/routing-profiles 返回配置。" />
+        <EmptyState title="还没有路由配置" body="请确认后台 daemon 已启动，或点击刷新重新读取。" />
+      </section>
+    );
+  }
+
+  function updateScenario(scenario: TaskScenario, patch: Partial<{ agent_id: RoutingAgentId; model: string; reasoning_effort: ReasoningEffort }>) {
+    setDraft((current) => {
+      if (!current) return current;
+      const next = structuredClone(current);
+      const currentSelection = next.scenarios[scenario].current;
+      const agentId = patch.agent_id ?? currentSelection.agent_id;
+      const allowedModels = next.allowed_models[agentId];
+      let model = patch.model ?? currentSelection.model;
+      if (patch.agent_id && !allowedModels.includes(model)) {
+        model = allowedModels[0] ?? model;
+      }
+      if (scenario === 'multimodal') {
+        next.scenarios[scenario].current = {
+          agent_id: 'mimo',
+          model: 'mimo-v2.5-flash',
+          reasoning_effort: patch.reasoning_effort ?? currentSelection.reasoning_effort,
+        };
+        return next;
+      }
+      next.scenarios[scenario].current = {
+        agent_id: agentId,
+        model,
+        reasoning_effort: patch.reasoning_effort ?? currentSelection.reasoning_effort,
+      };
+      return next;
+    });
+  }
+
+  return (
+    <div className="page-grid">
+      <section className="panel wide">
+        <div className="section-title">
+          <PanelHeader title="模型路由设置" helper="配置每种场景默认使用哪个 Agent、模型和思考强度；新建任务 Auto 模式会读取这里。" />
+          <button className="button primary" disabled={actionBusy} onClick={() => void onSave(draft)} type="button">
+            保存路由设置
+          </button>
+        </div>
+        <div className="routing-grid">
+          {(Object.keys(scenarioLabels) as TaskScenario[]).map((scenario) => {
+            const item = draft.scenarios[scenario];
+            const selection = item.current;
+            const allowedModels = draft.allowed_models[selection.agent_id];
+            const lockedMultimodal = scenario === 'multimodal';
+            return (
+              <div className="routing-card" key={scenario}>
+                <div className="routing-card-head">
+                  <div>
+                    <strong>{scenarioLabels[scenario]}</strong>
+                    <p>{item.description}</p>
+                  </div>
+                  {lockedMultimodal && <Pill tone="blue">MiMo flash only</Pill>}
+                </div>
+                <label>
+                  <span>默认 Agent</span>
+                  <select
+                    disabled={lockedMultimodal}
+                    value={selection.agent_id}
+                    onChange={(event) => updateScenario(scenario, { agent_id: event.target.value as RoutingAgentId })}
+                  >
+                    <option value="mimo">MiMo</option>
+                    <option value="reasonix-tui">Reasonix TUI</option>
+                  </select>
+                </label>
+                <label>
+                  <span>默认模型</span>
+                  <select
+                    disabled={lockedMultimodal}
+                    value={selection.model}
+                    onChange={(event) => updateScenario(scenario, { model: event.target.value })}
+                  >
+                    {allowedModels.map((model) => (
+                      <option key={model} value={model}>{model}</option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  <span>思考强度</span>
+                  <select value={selection.reasoning_effort} onChange={(event) => updateScenario(scenario, { reasoning_effort: event.target.value as ReasoningEffort })}>
+                    <option value="low">低</option>
+                    <option value="medium">中</option>
+                    <option value="high">高</option>
+                  </select>
+                </label>
+                <div className="routing-recommendation">
+                  <strong>推荐参考</strong>
+                  <span>MiMo：{item.recommended.mimo.model} / {effortLabels[item.recommended.mimo.reasoning_effort]}</span>
+                  <span>Reasonix：{item.recommended['reasonix-tui'].model} / {effortLabels[item.recommended['reasonix-tui'].reasoning_effort]}</span>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </section>
+      <section className="panel wide">
+        <PanelHeader title="价格和模型限制" helper="用于理解 Auto 模式的成本取向。" />
+        <div className="model-whitelist-grid">
+          <div className="model-card">
+            <AgentBadge agent="mimo" />
+            <ul>
+              <li><code>mimo-v2.5-flash</code>：支持多模态；flash 价格，适合简单/普通任务。</li>
+              <li><code>mimo-v2.5-pro</code>：不支持多模态；pro 价格，适合复杂/高风险任务。</li>
+            </ul>
+          </div>
+          <div className="model-card">
+            <AgentBadge agent="reasonix-tui" />
+            <ul>
+              <li><code>deepseek-v4-flash</code>：文本任务；flash 价格。</li>
+              <li><code>deepseek-v4-pro</code>：文本任务；pro 价格。</li>
+            </ul>
+          </div>
+          <div className="model-card">
+            <strong>价格 / 1M token</strong>
+            <ul>
+              <li>flash：输入 ¥{draft.pricing_per_1m_cny.flash.input}，输出 ¥{draft.pricing_per_1m_cny.flash.output}，缓存命中 ¥{draft.pricing_per_1m_cny.flash.cache_hit}</li>
+              <li>pro：输入 ¥{draft.pricing_per_1m_cny.pro.input}，输出 ¥{draft.pricing_per_1m_cny.pro.output}，缓存命中 ¥{draft.pricing_per_1m_cny.pro.cache_hit}</li>
+            </ul>
+          </div>
         </div>
       </section>
     </div>

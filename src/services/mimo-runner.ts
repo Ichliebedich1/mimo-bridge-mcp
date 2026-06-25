@@ -168,6 +168,10 @@ function buildMimoArgs(task: TaskState, runtimeDir: string): string[] {
     args.push("--session", task.session_id);
   }
 
+  if (task.config.routing?.model) {
+    args.push("--model", task.config.routing.model);
+  }
+
   args.push("--dir", task.config.workspace_path);
   args.push("--format", "json");
   args.push("请读取附件中的任务说明并按要求执行。");

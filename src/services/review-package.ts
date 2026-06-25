@@ -416,6 +416,7 @@ export function generateReviewPackage(
     generated_at: new Date().toISOString(),
     review_recommendation: getRecommendation(task, riskFlags),
     truncated: summary.truncated || logTail.truncated || allChangedFiles.length > changedFiles.length,
+    ...(task.config.routing ? { routing: task.config.routing } : {}),
   };
   return fitReviewPackageToBudget(reviewPackage, maxChars);
 }

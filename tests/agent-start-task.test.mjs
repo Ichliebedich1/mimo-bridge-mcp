@@ -1,7 +1,8 @@
 import { test } from "node:test";
 import assert from "node:assert";
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -136,6 +137,148 @@ test("agent_start_task rejects unknown agents", async () => {
       workspace_path: runtimeDir,
     });
     assert.match(result.error, /Unknown agent_id/);
+  } finally {
+    rmSync(runtimeDir, { recursive: true, force: true });
+  }
+});
+
+test("agent_start_task auto routing can select Reasonix from scenario profile", async () => {
+  const routeDir = mkdtempSync(join(tmpdir(), "agent-start-auto-routing-"));
+  const repoDir = join(routeDir, "repo");
+  const runtimeDir = join(routeDir, "runtime");
+  const reasonixHome = join(routeDir, "ReasonixData");
+  const argsPath = join(routeDir, "reasonix-args.json");
+  initRepo(repoDir);
+  mkdirSync(runtimeDir, { recursive: true });
+  mkdirSync(reasonixHome, { recursive: true });
+
+  const store = new TaskStore(runtimeDir);
+  const runningTasks = new RunningTaskRegistry();
+  const taskQueue = new TaskQueue(1);
+  const handler = createAgentStartTaskHandler(
+    {
+      mimoNodePath: process.execPath,
+      mimoEntryPath: join(__dirname, "fixtures", "fake-mimo.mjs"),
+      allowedRoots: [repoDir],
+      runtimeDir,
+      agents: [],
+      routingProfiles: {
+        scenarios: {
+          normal: {
+            agent_id: "reasonix-tui",
+            model: "deepseek-v4-flash",
+            reasoning_effort: "low",
+          },
+        },
+      },
+    },
+    [
+      {
+        id: "mimo",
+        kind: "mimo",
+        display_name: "MiMo Code",
+        enabled: true,
+      },
+      {
+        id: "reasonix-tui",
+        kind: "reasonix-tui",
+        display_name: "Reasonix TUI",
+        enabled: true,
+        command: process.execPath,
+        command_args: [join(__dirname, "fixtures", "fake-reasonix.mjs")],
+        home_dir: reasonixHome,
+      },
+    ],
+    store,
+    { runningTasks, taskQueue }
+  );
+
+  const previousArgsPath = process.env.FAKE_REASONIX_ARGS_PATH;
+  process.env.FAKE_REASONIX_ARGS_PATH = argsPath;
+  try {
+    const started = await handler.handler({
+      agent_id: "auto",
+      objective: "auto route normal task",
+      workspace_path: repoDir,
+      editable_paths: ["src"],
+      readonly_paths: [],
+      acceptance_criteria: ["src/reasonix-output.txt exists"],
+      task_scenario: "normal",
+      use_worktree: true,
+      runtime_timeout_seconds: 60,
+    });
+
+    assert.strictEqual(started.status, "running");
+    assert.ok(started.task_id);
+    for (let i = 0; i < 30; i++) {
+      const task = store.getTask(started.task_id);
+      if (task?.status === "review" || task?.status === "failed") {
+        break;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+
+    const task = store.getTask(started.task_id);
+    assert.strictEqual(task.agent, "reasonix-tui");
+    assert.strictEqual(task.config.routing.agent_id, "reasonix-tui");
+    assert.strictEqual(task.config.routing.model, "deepseek-v4-flash");
+    assert.strictEqual(task.config.routing.reasoning_effort, "low");
+    const args = JSON.parse(readFileSync(argsPath, "utf-8"));
+    assert.deepStrictEqual(args.slice(0, 5), [
+      "run",
+      "--model",
+      "deepseek-v4-flash",
+      "--max-steps",
+      "10",
+    ]);
+  } finally {
+    if (previousArgsPath === undefined) {
+      delete process.env.FAKE_REASONIX_ARGS_PATH;
+    } else {
+      process.env.FAKE_REASONIX_ARGS_PATH = previousArgsPath;
+    }
+    runningTasks.cancelAll();
+    taskQueue.cancelAll();
+    rmSync(routeDir, { recursive: true, force: true });
+  }
+});
+
+test("agent_start_task rejects Reasonix multimodal routing before starting a task", async () => {
+  const runtimeDir = mkdtempSync(join(tmpdir(), "agent-start-reject-multimodal-"));
+  mkdirSync(runtimeDir, { recursive: true });
+  const store = new TaskStore(runtimeDir);
+  const handler = createAgentStartTaskHandler(
+    {
+      mimoNodePath: process.execPath,
+      mimoEntryPath: join(__dirname, "fixtures", "fake-mimo.mjs"),
+      allowedRoots: [runtimeDir],
+      runtimeDir,
+      agents: [],
+    },
+    [
+      {
+        id: "reasonix-tui",
+        kind: "reasonix-tui",
+        display_name: "Reasonix TUI",
+        enabled: true,
+        command: process.execPath,
+        command_args: [join(__dirname, "fixtures", "fake-reasonix.mjs")],
+        home_dir: runtimeDir,
+      },
+    ],
+    store
+  );
+
+  try {
+    const result = await handler.handler({
+      agent_id: "reasonix-tui",
+      objective: "image task",
+      workspace_path: runtimeDir,
+      task_scenario: "multimodal",
+      model: "deepseek-v4-flash",
+    });
+    assert.ok(result.error);
+    assert.match(result.error, /多模态/);
   } finally {
     rmSync(runtimeDir, { recursive: true, force: true });
   }

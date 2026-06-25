@@ -22,7 +22,7 @@ Reasonix should eventually reach the same project role as MiMo:
 
 ## Current Status
 
-P6.0-P6.22 are implemented locally. The runtime now has an Agent Registry, Reasonix TUI probe, Reasonix one-shot runner, generic low-token task get/wait/reply tools, generic lifecycle/status tools for cancel/finish/merge/delete/queue/token, safe client Agent commands including replies/recovery/listing/token status, Reasonix session mapping through `agent_session_path`, Admin UI agent selector/badge/reply/lifecycle/detail-read/open-action support, agent-aware Codex review handoff prompts, agent-aware queue scheduling, Reasonix live/session parsing for the read-only live viewer, safe local folder opening, safe Reasonix GUI companion opening, explicit Reasonix token/cost extraction when session fields exist, bounded generic task listing/recovery, generic Review Package summary fields, and terminal-task Worktree cleanup for failed/cancelled/abandoned tasks. Existing `mimo_*` MCP tools remain compatible.
+P6.0-P6.25 are implemented locally. The runtime now has an Agent Registry, Reasonix TUI probe, Reasonix one-shot runner, generic low-token task get/wait/reply tools, generic lifecycle/status tools for cancel/finish/merge/delete/queue/token, safe client Agent commands including replies/recovery/listing/token status, Reasonix session mapping through `agent_session_path`, Admin UI agent selector/badge/reply/lifecycle/detail-read/open-action support, agent-aware Codex review handoff prompts, agent-aware queue scheduling, Reasonix live/session parsing for the read-only live viewer, safe local folder opening, safe Reasonix GUI companion opening, explicit Reasonix token/cost extraction when session fields exist, bounded generic task listing/recovery, generic Review Package summary fields, terminal-task Worktree cleanup for failed/cancelled/abandoned tasks, failed-task reply capability visibility, and low-cost model routing/profile configuration. Existing `mimo_*` MCP tools remain compatible.
 
 Current concurrency boundary: the global task queue allows at most two running write tasks. It can run one MiMo task and one Reasonix TUI task at the same time only when both tasks have known workspace metadata and their editable paths do not overlap. Two MiMo tasks still queue behind each other, two Reasonix tasks still queue behind each other, and any task with unknown workspace/editable-path metadata is treated conservatively and queued.
 
@@ -45,31 +45,36 @@ Observed local Reasonix installation on this machine:
 | `reasonix-tui` | First Reasonix execution adapter via `reasonix run` / PTY | Implement first |
 | `reasonix-gui` | Visual viewer/manual companion for Reasonix sessions | Do not automate first; share/read sessions only |
 
-## Later Optimization: Low-Cost Routing And Model Profiles
+## P6.25 Low-Cost Routing And Model Profiles
 
-This is planned but not urgent. The goal is to reduce cost without adding a heavy Codex reasoning step before every delegation.
+Status: implemented locally. The goal is to reduce cost without adding a heavy Codex reasoning step before every delegation.
 
-Target behavior:
+Implemented behavior:
 
-- Assign a lightweight task complexity label: `trivial`, `simple`, `normal`, `complex`, or `high_risk`.
-- Recommend an execution agent: MiMo, Reasonix TUI, or Codex-owned implementation.
-- Recommend a cost/model profile: `cheap`, `balanced`, or `strong`.
-- Recommend reasoning effort: `low`, `medium`, or `high`.
-- Store a short routing reason in task state and Review Package, for example: `single-file UI copy change; low risk`.
-- Let the user override the agent/profile/effort in the admin UI before starting the task.
+- Uses task scenarios: `multimodal`, `simple`, `normal`, `complex`, and `high_risk`.
+- Stores default scenario selections in persistent `routingProfiles`.
+- Admin UI has a "模型路由" settings page where each scenario can choose Agent, model, and reasoning effort.
+- Create Task supports Auto/Manual routing, task scenario, image/multimodal checkbox, Agent, model, reasoning effort, and an Auto preview.
+- Routing snapshots are stored in task config, task briefs, and Review Package.
+- MiMo receives the selected model through `--model`.
+- Reasonix receives the selected model through `--model`; reasoning effort maps to `--max-steps` as low=10, medium=20, high=40.
+- Multimodal/image tasks are forced to MiMo `mimo-v2.5-flash`.
+- Model lists are enforced: MiMo supports `mimo-v2.5-flash` / `mimo-v2.5-pro`; Reasonix supports `deepseek-v4-flash` / `deepseek-v4-pro`.
+- Pricing metadata is exposed in profiles: flash input ¥1/output ¥3/cache-hit ¥0.02 per 1M; pro input ¥3/output ¥6/cache-hit ¥0.025 per 1M.
 
-First implementation should be rule-based and quiet by default:
+Current default policy is rule-based and quiet:
 
 - UI text, style, docs, and single-file changes usually route to MiMo with cheap/low.
 - Normal feature slices or tests route to MiMo or Reasonix with balanced/medium.
 - Cross-module work, installer/runtime/process/Git/Worktree changes, deletion behavior, security boundaries, and migrations route to Reasonix strong/high or Codex-led work.
 - `high_risk` should trigger stricter review and must not be silently downgraded to a cheap profile.
 
-Adapter requirements:
+Remaining routing refinements:
 
-- If MiMo or Reasonix exposes stable CLI/config support for model and reasoning effort, pass the selected profile through the runner adapter.
-- If not, keep the profile as metadata and use it for routing/review strictness only.
-- Reasonix and MiMo must share the same routing policy and `TaskScopePolicy`; do not build a separate Reasonix-only classifier.
+- MiMo and Reasonix now share the same routing policy and `TaskScopePolicy`.
+- Codex-owned implementation is not yet a selectable execution target in routing profiles.
+- More advanced complexity detection can be added later, but it should stay small and rule-based so the classifier does not cost more context than it saves.
+- Review strictness can later use scenario/risk more deeply; the first implementation records routing context and validates hard model/multimodal rules.
 
 ## Technical Route
 

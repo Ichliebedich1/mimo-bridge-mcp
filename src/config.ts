@@ -1,7 +1,7 @@
 import { existsSync } from "node:fs";
 import { resolve } from "node:path";
 import { execFileSync } from "node:child_process";
-import type { AgentConfig } from "./types.js";
+import type { AgentConfig, RoutingProfilesConfig } from "./types.js";
 
 export interface Config {
   mimoNodePath: string;
@@ -9,6 +9,7 @@ export interface Config {
   allowedRoots: string[];
   runtimeDir: string;
   agents: AgentConfig[];
+  routingProfiles?: RoutingProfilesConfig;
 }
 
 export interface MimoVersion {
@@ -52,6 +53,7 @@ export function loadConfig(): Config {
   const allowedRoots = process.env.MIMO_ALLOWED_ROOTS?.split(";").filter(Boolean) || [];
   const runtimeDir = process.env.MIMO_RUNTIME_DIR || resolve(process.cwd(), "runtime");
   const agents = loadAgentConfigsFromEnv();
+  const routingProfiles: RoutingProfilesConfig = {};
 
   if (!mimoNodePath) {
     throw new Error("MIMO_NODE_PATH 环境变量未设置");
@@ -84,6 +86,7 @@ export function loadConfig(): Config {
     allowedRoots,
     runtimeDir,
     agents,
+    routingProfiles,
   };
 }
 

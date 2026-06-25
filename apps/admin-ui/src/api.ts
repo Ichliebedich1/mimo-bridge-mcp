@@ -4,6 +4,7 @@ import type {
   FullTaskResult,
   LiveTaskView,
   RiskFlag,
+  RoutingProfiles,
   Task,
   TaskActionResult,
   TaskLogsResult,
@@ -180,6 +181,14 @@ type GetTaskResponse = {
 };
 
 type TokenStatusResponse = unknown;
+
+export async function fetchRoutingProfiles(): Promise<RoutingProfiles> {
+  return unwrap(await getJson<RoutingProfiles>('/api/routing-profiles'));
+}
+
+export async function saveRoutingProfiles(input: { scenarios: Partial<RoutingProfiles['scenarios']> | Record<string, unknown> }): Promise<RoutingProfiles> {
+  return unwrap(await putJson<RoutingProfiles>('/api/routing-profiles', input));
+}
 
 export async function fetchHealth(): Promise<HealthResponse> {
   return unwrap(await getJson<HealthResponse>('/api/health'));
@@ -379,6 +388,18 @@ async function getJson<T>(path: string): Promise<ApiResult<T>> {
 async function postJson<T>(path: string, body: unknown): Promise<ApiResult<T>> {
   const response = await fetch(path, {
     method: 'POST',
+    headers: {
+      accept: 'application/json',
+      'content-type': 'application/json',
+    },
+    body: JSON.stringify(body),
+  });
+  return parseApiResponse<T>(response);
+}
+
+async function putJson<T>(path: string, body: unknown): Promise<ApiResult<T>> {
+  const response = await fetch(path, {
+    method: 'PUT',
     headers: {
       accept: 'application/json',
       'content-type': 'application/json',
