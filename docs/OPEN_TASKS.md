@@ -59,6 +59,7 @@
 - P6.18 Admin UI lifecycle parity: management buttons now route non-MiMo cancel/finish/worktree/delete operations through `/api/agent-tasks/:id/...` with `agent_id`; MiMo tasks keep legacy `/api/tasks/:id/...`. Verified with root/local-daemon/admin-ui builds and `node --test tests\admin-ui-lifecycle-api.test.mjs tests\agent-lifecycle-task.test.mjs tests\admin-api.test.mjs` passing 37/37.
 - P6.18 package refresh: `npm.cmd run package:installer` regenerated the Windows 10/11 x64 installer EXE and portable ZIP; `npm.cmd run validate:release -- -SkipPackageBuild` passed. Installer manifest source commit is `78dffac`.
 - P6.19 Admin UI Codex handoff: the "交给 Codex 审查" prompt now tells Codex to use MiMo review commands for MiMo tasks and generic `agent-review` / `agent_get_task` commands for Reasonix TUI tasks. The reply box displays the actual agent name. Verified with admin-ui/root builds and 51/51 focused admin/handoff tests.
+- P6.19 package refresh: `npm.cmd run package:installer` regenerated the Windows 10/11 x64 installer EXE and portable ZIP; `npm.cmd run validate:release -- -SkipPackageBuild` passed. Installer manifest source commit is `d5749d3`.
 ## Risks
 
 - The on-demand development Scheduled Task is not the final launcher or installer behavior.
