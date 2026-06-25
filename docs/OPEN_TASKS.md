@@ -57,6 +57,7 @@
 - P6.17 Reasonix GUI companion opening: `POST /api/tasks/:id/open` now accepts fixed `action=reasonix_gui` for Reasonix TUI tasks. The daemon launches a configured `reasonix-gui` command, or infers `...\ReasonixDesktop\reasonix-desktop.exe` from the Reasonix TUI config, with the shared `REASONIX_HOME`; Admin UI task detail shows "打开 Reasonix GUI". This opens GUI for shared-session/manual viewing, not a deep link to a specific session. Verified with root/local-daemon/admin-ui builds and `node --test tests\task-open-actions.test.mjs tests\admin-api.test.mjs tests\agent-registry.test.mjs` passing 43/43.
 - P6.17 package refresh: `npm.cmd run package:installer` regenerated the Windows 10/11 x64 installer EXE and portable ZIP; `npm.cmd run validate:release -- -SkipPackageBuild` passed. Installer manifest source commit is `1bafa35`.
 - P6.18 Admin UI lifecycle parity: management buttons now route non-MiMo cancel/finish/worktree/delete operations through `/api/agent-tasks/:id/...` with `agent_id`; MiMo tasks keep legacy `/api/tasks/:id/...`. Verified with root/local-daemon/admin-ui builds and `node --test tests\admin-ui-lifecycle-api.test.mjs tests\agent-lifecycle-task.test.mjs tests\admin-api.test.mjs` passing 37/37.
+- P6.18 package refresh: `npm.cmd run package:installer` regenerated the Windows 10/11 x64 installer EXE and portable ZIP; `npm.cmd run validate:release -- -SkipPackageBuild` passed. Installer manifest source commit is `78dffac`.
 ## Risks
 
 - The on-demand development Scheduled Task is not the final launcher or installer behavior.
