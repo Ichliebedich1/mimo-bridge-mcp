@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert";
 import { EventEmitter } from "node:events";
-import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -41,29 +41,31 @@ function createMockRes() {
   };
 }
 
-async function callApi(context, method, path, body) {
+async function callApi(context, method, path, body, daemonConfigOverrides = {}) {
   const req = createMockReq(method, body);
   const res = createMockRes();
+  const daemonConfig = {
+    host: "127.0.0.1",
+    port: 3210,
+    runtimeDir: join(tmpdir(), "unused-runtime"),
+    mcpConfig: { agents: [] },
+    configError: null,
+    mimoVersion: { nodeVersion: "test", cliVersion: "test" },
+    agents: [
+      {
+        id: "mimo",
+        kind: "mimo",
+        display_name: "MiMo Code",
+        enabled: true,
+      },
+    ],
+    ...daemonConfigOverrides,
+  };
   const handled = await handleAdminApi(
     req,
     res,
     new URL(path, "http://127.0.0.1:3210"),
-    {
-      host: "127.0.0.1",
-      port: 3210,
-      runtimeDir: join(tmpdir(), "unused-runtime"),
-      mcpConfig: { agents: [] },
-      configError: null,
-      mimoVersion: { nodeVersion: "test", cliVersion: "test" },
-      agents: [
-        {
-          id: "mimo",
-          kind: "mimo",
-          display_name: "MiMo Code",
-          enabled: true,
-        },
-      ],
-    },
+    daemonConfig,
     context
   );
   assert.strictEqual(handled, true);
@@ -322,7 +324,7 @@ function createContext() {
     },
   };
 
-  return { context, calls, taskId: task.task_id, cleanup: () => rmSync(runtimeDir, { recursive: true, force: true }) };
+  return { context, calls, runtimeDir, taskId: task.task_id, cleanup: () => rmSync(runtimeDir, { recursive: true, force: true }) };
 }
 
 test("admin API exposes fixed routes, augments safe task fields, and sanitizes local paths", async () => {
@@ -333,14 +335,78 @@ test("admin API exposes fixed routes, augments safe task fields, and sanitizes l
     assert.strictEqual(tasks.body.ok, true);
     assert.strictEqual(tasks.body.data.tasks[0].objective, "admin api objective");
     assert.strictEqual(tasks.body.data.tasks[0].has_worktree, true);
+    assert.strictEqual(tasks.body.data.tasks[0].can_reply, false);
+    assert.match(tasks.body.data.tasks[0].reply_blockers.join(" "), /MiMo 会话 ID/);
     assert.strictEqual(JSON.stringify(tasks.body).includes("raw_log_path"), false);
     assert.strictEqual(JSON.stringify(tasks.body).includes("sensitive"), false);
 
     const detail = await callApi(fixture.context, "GET", "/api/tasks/" + fixture.taskId + "?detail_level=full&max_chars=20000");
     assert.strictEqual(detail.body.ok, true);
     assert.strictEqual(detail.body.data.has_worktree, true);
+    assert.strictEqual(detail.body.data.can_reply, false);
+    assert.match(detail.body.data.reply_blockers.join(" "), /MiMo 会话 ID/);
     assert.strictEqual(JSON.stringify(detail.body).includes("workspace_path"), false);
     assert.strictEqual(JSON.stringify(detail.body).includes("sensitive"), false);
+  } finally {
+    fixture.cleanup();
+  }
+});
+
+test("admin API exposes safe reply capability for resumable Reasonix tasks", async () => {
+  const fixture = createContext();
+  try {
+    const reasonixHome = join(fixture.runtimeDir, "ReasonixData");
+    const sessionDir = join(reasonixHome, "sessions");
+    mkdirSync(sessionDir, { recursive: true });
+    const sessionPath = join(sessionDir, "reasonix-session.jsonl");
+    writeFileSync(sessionPath, "{}\n", "utf-8");
+
+    const reasonixTask = fixture.context.taskStore.createTask(
+      {
+        objective: "reasonix failed but resumable",
+        workspace_path: fixture.runtimeDir,
+        editable_paths: ["src"],
+        readonly_paths: [],
+        acceptance_criteria: [],
+        max_rounds: 5,
+        runtime_timeout_seconds: 900,
+      },
+      { agent: "reasonix-tui" }
+    );
+    fixture.context.taskStore.updateTaskAgentSession(reasonixTask.task_id, sessionPath);
+    fixture.context.taskStore.updateTaskStatus(reasonixTask.task_id, "failed", "paused after max steps");
+
+    const result = await callApi(
+      fixture.context,
+      "GET",
+      "/api/agent-tasks/" + reasonixTask.task_id + "?agent_id=reasonix-tui&detail_level=review&max_chars=4000",
+      undefined,
+      {
+        agents: [
+          {
+            id: "mimo",
+            kind: "mimo",
+            display_name: "MiMo Code",
+            enabled: true,
+          },
+          {
+            id: "reasonix-tui",
+            kind: "reasonix-tui",
+            display_name: "Reasonix TUI",
+            enabled: true,
+            command: process.execPath,
+            home_dir: reasonixHome,
+          },
+        ],
+      }
+    );
+
+    assert.strictEqual(result.statusCode, 200);
+    assert.strictEqual(result.body.ok, true);
+    assert.strictEqual(result.body.data.can_reply, true);
+    assert.deepStrictEqual(result.body.data.reply_blockers, []);
+    assert.strictEqual(result.body.data.reply_label, "可继续回复");
+    assert.strictEqual(JSON.stringify(result.body).includes(sessionPath), false);
   } finally {
     fixture.cleanup();
   }

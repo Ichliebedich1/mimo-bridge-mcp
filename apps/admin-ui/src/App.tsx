@@ -132,6 +132,7 @@ function App() {
 
   const selectedTask = tasks.find((task) => task.id === selectedTaskId) ?? null;
   const runningCount = Math.max(health?.queue.running ?? 0, tasks.filter((task) => task.status === 'running').length);
+  const pendingInterventionCount = health?.pending_reviews?.count ?? tasks.filter((task) => task.status === 'review' || task.status === 'failed').length;
   const apiReachable = health !== null;
   const apiReady = apiReachable && !health.daemon.degraded;
 
@@ -394,6 +395,7 @@ function App() {
           <div className="topbar-actions">
             <Pill tone={apiReady ? 'green' : 'amber'}>{apiReady ? '服务已连接 · API' : apiReachable ? '守护进程降级 · API' : '降级模式 · Mock'}</Pill>
             <Pill tone={runningCount > 0 ? 'blue' : 'neutral'}>运行中 {runningCount}</Pill>
+            <Pill tone={pendingInterventionCount > 0 ? 'red' : 'neutral'}>待介入 {pendingInterventionCount}</Pill>
             <button className="button ghost" disabled={isRefreshing} onClick={refreshData} type="button">
               {isRefreshing ? '刷新中…' : '刷新'}
             </button>
@@ -418,7 +420,7 @@ function App() {
         )}
 
         <main>
-          {page === 'overview' && <Overview tasks={tasks} queueItems={queueItems} onOpenTask={openTask} onDeleteTask={confirmDeleteTask} />}
+          {page === 'overview' && <Overview tasks={tasks} pendingInterventionCount={pendingInterventionCount} queueItems={queueItems} onOpenTask={openTask} onDeleteTask={confirmDeleteTask} />}
           {page === 'tasks' && (
             <TasksPage
               tasks={tasks}
@@ -477,11 +479,13 @@ function pageTitle(page: Page) {
 
 function Overview({
   tasks,
+  pendingInterventionCount,
   queueItems,
   onOpenTask,
   onDeleteTask,
 }: {
   tasks: Task[];
+  pendingInterventionCount: number;
   queueItems: QueueItem[];
   onOpenTask: (taskId: string) => void;
   onDeleteTask: (taskId: string) => void;
@@ -495,7 +499,7 @@ function Overview({
     }),
     [tasks],
   );
-  const reviewTask = tasks.find((task) => task.status === 'review') ?? tasks[0] ?? null;
+  const reviewTask = tasks.find((task) => task.status === 'review') ?? tasks.find((task) => task.status === 'failed') ?? tasks[0] ?? null;
 
   return (
     <div className="page-grid overview-grid">
@@ -522,8 +526,8 @@ function Overview({
         <div className="metric-grid">
           <MetricCard label="运行中" value={counts.running} tone="blue" helper="当前执行中的写任务" />
           <MetricCard label="排队中" value={counts.queued} tone="neutral" helper="等待当前 Runner 完成" />
-          <MetricCard label="待审查" value={counts.review} tone="purple" helper="优先进入 Review 工作台" />
-          <MetricCard label="失败" value={counts.failed} tone="red" helper="建议查看日志尾部" />
+          <MetricCard label="待介入" value={pendingInterventionCount} tone="red" helper="待审查或失败后需要处理" />
+          <MetricCard label="失败" value={counts.failed} tone="red" helper="可回复继续，或丢弃 Worktree" />
         </div>
       </section>
 
@@ -834,7 +838,7 @@ function TaskDetailPage({
     setShowLiveViewer(false);
   }, [task.id]);
 
-  const canReply = canReplyTaskStatus(task.status);
+  const canReply = task.canReply && canReplyTaskStatus(task.status);
   const canAccept = canAcceptTaskStatus(task.status);
   const canAbandon = canAbandonTaskStatus(task.status);
   const canDiscardWorktree = canDiscardWorktreeStatus(task.status) && task.hasWorktree;
@@ -1103,6 +1107,11 @@ function TaskDetailPage({
 
           <div className="reply-box">
             <h3>回复 {agentDisplayName(task.agent)}</h3>
+            <div className={canReply ? 'success-note compact' : 'warning-card compact'}>
+              {canReply
+                ? `${task.replyLabel}。失败任务也可以在保留会话时继续修复。`
+                : `暂不可回复：${task.replyBlockers.length > 0 ? task.replyBlockers.join('；') : '当前任务没有可恢复会话或状态不允许。'}`}
+            </div>
             <textarea
               disabled={!canReply || Boolean(actionBusy) || replying}
               onChange={(event) => setReplyMessage(event.target.value)}

@@ -47,6 +47,9 @@ export type Task = {
   recommendation: string;
   workspaceLabel: string;
   hasWorktree: boolean;
+  canReply: boolean;
+  replyBlockers: string[];
+  replyLabel: string;
   canDelete: boolean;
   deleteBlockers: string[];
   deleteLabel: string;

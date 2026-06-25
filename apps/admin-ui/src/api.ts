@@ -32,6 +32,10 @@ export type HealthResponse = {
     version: unknown;
   };
   queue: QueueStatusResponse;
+  pending_reviews?: {
+    count: number;
+    command: string;
+  };
   agents?: {
     configured: Array<{ id: string; kind: string; enabled: boolean }>;
     endpoint: string;
@@ -94,6 +98,9 @@ type ListTasksResponse = {
     can_delete?: boolean;
     delete_blockers?: string[];
     delete_label?: string;
+    can_reply?: boolean;
+    reply_blockers?: string[];
+    reply_label?: string;
     origin_codex_thread_id?: string | null;
     origin_codex_thread_url?: string | null;
     origin_source?: string | null;
@@ -136,6 +143,9 @@ type GetTaskResponse = {
   can_delete?: boolean;
   delete_blockers?: string[];
   delete_label?: string;
+  can_reply?: boolean;
+  reply_blockers?: string[];
+  reply_label?: string;
   review_package?: ReviewPackageResponse;
   summary?: string;
   completed?: boolean;
@@ -456,6 +466,9 @@ function toUiTask(task: ListTasksResponse['tasks'][number]): Task {
     recommendation: '打开详情后按低上下文协议审查。',
     workspaceLabel: '来自 API',
     hasWorktree: Boolean(task.has_worktree),
+    canReply: task.can_reply ?? ['waiting', 'review', 'failed'].includes(task.status),
+    replyBlockers: task.reply_blockers ?? [],
+    replyLabel: task.reply_label ?? '按状态判断',
     canDelete: Boolean(task.can_delete),
     deleteBlockers: task.delete_blockers ?? [],
     deleteLabel: task.delete_label ?? '不可删除',
@@ -487,6 +500,9 @@ function detailToUiTask(response: GetTaskResponse): Task {
       recommendation: '可稍后刷新，或查看任务状态。',
       workspaceLabel: '来自 API',
       hasWorktree: Boolean(response.has_worktree),
+      canReply: response.can_reply ?? ['waiting', 'review', 'failed'].includes(response.status),
+      replyBlockers: response.reply_blockers ?? [],
+      replyLabel: response.reply_label ?? '按状态判断',
       canDelete: Boolean(response.can_delete),
       deleteBlockers: response.delete_blockers ?? [],
       deleteLabel: response.delete_label ?? '不可删除',
@@ -525,6 +541,9 @@ function detailToUiTask(response: GetTaskResponse): Task {
     recommendation: recommendationLabel(review.review_recommendation),
     workspaceLabel: review.editable_paths?.length ? review.editable_paths.join('，') : '来自 API',
     hasWorktree: Boolean(response.has_worktree),
+    canReply: response.can_reply ?? ['waiting', 'review', 'failed'].includes(response.status),
+    replyBlockers: response.reply_blockers ?? [],
+    replyLabel: response.reply_label ?? '按状态判断',
     canDelete: Boolean(response.can_delete),
     deleteBlockers: response.delete_blockers ?? [],
     deleteLabel: response.delete_label ?? '不可删除',
@@ -587,7 +606,7 @@ function recommendationLabel(value: string): string {
   const labels: Record<string, string> = {
     approve: '建议验收。仍需由用户确认，不会自动合并。',
     needs_attention: '需要人工关注后再决定。',
-    reject: '建议拒绝或要求 MiMo 继续修复。',
+    reject: '建议拒绝，或要求执行 Agent 继续修复。',
     wait: '等待任务继续运行或补充信息。',
   };
   return labels[value] ?? value;

@@ -6,6 +6,7 @@ import type { DaemonConfig } from "./daemon-config.js";
 import type { ToolContext } from "./tool-context.js";
 import { readLiveTaskView, parseLiveParams } from "./live-task-view.js";
 import { getPendingReviewCount } from "../../../src/services/pending-reviews.js";
+import { computeTaskReplyCapability } from "../../../src/services/task-reply-capability.js";
 import { createOpenTaskTargetHandler } from "./task-open-actions.js";
 
 const StartTaskBodySchema = z.object({
@@ -103,7 +104,7 @@ export async function handleAdminApi(
     if (req.method === "GET" && url.pathname === "/api/tasks") {
       const limit = parseLimit(url.searchParams.get("limit"));
       const data = await context.tools.listTasks.handler({ limit });
-      sendJson(res, 200, wrapToolResult(augmentListTasksResult(data, context)));
+      sendJson(res, 200, wrapToolResult(augmentListTasksResult(data, context, config)));
       return true;
     }
 
@@ -162,7 +163,7 @@ export async function handleAdminApi(
           agent_id: agentId,
           ...query,
         });
-        sendJson(res, toolStatusCode(data), wrapToolResult(augmentTaskResult(data, context)));
+        sendJson(res, toolStatusCode(data), wrapToolResult(augmentTaskResult(data, context, config)));
         return true;
       }
 
@@ -172,7 +173,7 @@ export async function handleAdminApi(
           task_id: taskId,
           ...body,
         });
-        sendJson(res, toolStatusCode(data), wrapToolResult(augmentTaskResult(data, context)));
+        sendJson(res, toolStatusCode(data), wrapToolResult(augmentTaskResult(data, context, config)));
         return true;
       }
 
@@ -264,7 +265,7 @@ export async function handleAdminApi(
           task_id: taskId,
           ...query,
         });
-        sendJson(res, toolStatusCode(data), wrapToolResult(augmentTaskResult(data, context)));
+        sendJson(res, toolStatusCode(data), wrapToolResult(augmentTaskResult(data, context, config)));
         return true;
       }
 
@@ -467,7 +468,7 @@ function isZodError(error: unknown): error is ZodError {
   return typeof error === "object" && error !== null && "issues" in error;
 }
 
-function augmentListTasksResult(data: unknown, context: ToolContext): unknown {
+function augmentListTasksResult(data: unknown, context: ToolContext, config: DaemonConfig): unknown {
   if (isToolError(data) || !isRecord(data) || !Array.isArray(data.tasks)) {
     return data;
   }
@@ -484,6 +485,7 @@ function augmentListTasksResult(data: unknown, context: ToolContext): unknown {
       }
       const hasWorktree = Boolean(stored.worktree);
       const safeDelete = computeSafeDelete(stored.status, hasWorktree);
+      const reply = computeTaskReplyCapability(stored, config.agents);
       return {
         ...task,
         objective: stored.config.objective,
@@ -494,6 +496,9 @@ function augmentListTasksResult(data: unknown, context: ToolContext): unknown {
         can_delete: safeDelete.can_delete,
         delete_blockers: safeDelete.delete_blockers,
         delete_label: safeDelete.delete_label,
+        can_reply: reply.can_reply,
+        reply_blockers: reply.reply_blockers,
+        reply_label: reply.reply_label,
         origin_codex_thread_id: stored.config.origin_codex_thread_id ?? null,
         origin_codex_thread_url: stored.config.origin_codex_thread_url ?? null,
         origin_source: stored.config.origin_source ?? null,
@@ -502,7 +507,7 @@ function augmentListTasksResult(data: unknown, context: ToolContext): unknown {
   };
 }
 
-function augmentTaskResult(data: unknown, context: ToolContext): unknown {
+function augmentTaskResult(data: unknown, context: ToolContext, config: DaemonConfig): unknown {
   if (isToolError(data) || !isRecord(data) || typeof data.task_id !== "string") {
     return data;
   }
@@ -514,6 +519,7 @@ function augmentTaskResult(data: unknown, context: ToolContext): unknown {
 
   const hasWorktree = Boolean(stored.worktree);
   const safeDelete = computeSafeDelete(stored.status, hasWorktree);
+  const reply = computeTaskReplyCapability(stored, config.agents);
 
   return {
     ...data,
@@ -525,6 +531,9 @@ function augmentTaskResult(data: unknown, context: ToolContext): unknown {
     can_delete: safeDelete.can_delete,
     delete_blockers: safeDelete.delete_blockers,
     delete_label: safeDelete.delete_label,
+    can_reply: reply.can_reply,
+    reply_blockers: reply.reply_blockers,
+    reply_label: reply.reply_label,
     origin_codex_thread_id: stored.config.origin_codex_thread_id ?? null,
     origin_codex_thread_url: stored.config.origin_codex_thread_url ?? null,
     origin_source: stored.config.origin_source ?? null,
