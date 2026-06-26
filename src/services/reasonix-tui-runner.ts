@@ -22,6 +22,8 @@ export interface ReasonixRunnerHandle {
   cancel: () => void;
 }
 
+const MAX_AUTO_RESUME_ATTEMPTS = 2;
+
 export function runReasonixTuiTask(
   options: ReasonixRunnerOptions,
   onResult: (result: TaskResult) => void,
@@ -36,29 +38,19 @@ export function runReasonixTuiTask(
   const logPath = `${runtimeDir}/logs/${task.task_id}-round-${round}.jsonl`;
   const stderrLogPath = `${runtimeDir}/logs/${task.task_id}-round-${round}.stderr.log`;
   const briefPath = `${runtimeDir}/briefs/${task.task_id}-round-${round}.md`;
-  const args = buildReasonixRunArgs(agent, briefPath, task.config.workspace_path, task, resumeSessionPath);
 
   prepareReasonixWorkspace(task.config.workspace_path);
-  writeReasonixEvent(logPath, "start", "Reasonix TUI task started.");
   const startedAtMs = Date.now();
 
   let timeoutId: ReturnType<typeof setTimeout> | null = null;
   let cancelled = false;
   let settled = false;
+  let autoResumeAttempts = 0;
+  let currentChild: ChildProcessWithoutNullStreams | null = null;
   const stdoutChunks: string[] = [];
   const stderrChunks: string[] = [];
 
-  const child = spawn(agent.command, args, {
-    cwd: task.config.workspace_path,
-    env: {
-      ...process.env,
-      ...(agent.home_dir ? { REASONIX_HOME: agent.home_dir } : {}),
-      REASONIX_LANG: process.env.REASONIX_LANG || "zh",
-    },
-    windowsHide: true,
-  });
-
-  const settle = (exitCode: number | null, signal: NodeJS.Signals | null = null): void => {
+  const settleFinal = (exitCode: number | null, signal: NodeJS.Signals | null = null): void => {
     if (settled || cancelled) return;
     settled = true;
     if (timeoutId) {
@@ -101,48 +93,119 @@ export function runReasonixTuiTask(
     onResult(result);
   };
 
-  child.stdout.on("data", (chunk: Buffer) => {
-    const text = chunk.toString("utf-8");
-    stdoutChunks.push(text);
-    appendRaw(stdoutChunks, logPath, "message", text);
-  });
+  function startAttempt(attemptResumePath: string | null | undefined): ChildProcessWithoutNullStreams {
+    const args = buildReasonixRunArgs(agent, briefPath, task.config.workspace_path, task, attemptResumePath);
+    const attemptStdoutChunks: string[] = [];
+    const attemptStderrChunks: string[] = [];
+    writeReasonixEvent(
+      logPath,
+      attemptResumePath ? "auto_resume_start" : "start",
+      attemptResumePath
+        ? `Reasonix TUI auto-resume attempt ${autoResumeAttempts} started.`
+        : "Reasonix TUI task started."
+    );
 
-  child.stderr.on("data", (chunk: Buffer) => {
-    const text = chunk.toString("utf-8");
-    stderrChunks.push(text);
-    try {
-      appendFileSync(stderrLogPath, text, "utf-8");
-    } catch {
-      // Logs are diagnostic only; task lifecycle should not depend on log writes.
-    }
-    appendRaw(stderrChunks, logPath, "event", text, "stderr");
-  });
+    const child = spawn(agent.command!, args, {
+      cwd: task.config.workspace_path,
+      env: {
+        ...process.env,
+        ...(agent.home_dir ? { REASONIX_HOME: agent.home_dir } : {}),
+        REASONIX_LANG: process.env.REASONIX_LANG || "zh",
+      },
+      windowsHide: true,
+    });
+    currentChild = child;
 
-  child.on("error", (error) => {
+    child.stdout.on("data", (chunk: Buffer) => {
+      const text = chunk.toString("utf-8");
+      stdoutChunks.push(text);
+      attemptStdoutChunks.push(text);
+      appendRaw(stdoutChunks, logPath, "message", text);
+    });
+
+    child.stderr.on("data", (chunk: Buffer) => {
+      const text = chunk.toString("utf-8");
+      stderrChunks.push(text);
+      attemptStderrChunks.push(text);
+      try {
+        appendFileSync(stderrLogPath, text, "utf-8");
+      } catch {
+        // Logs are diagnostic only; task lifecycle should not depend on log writes.
+      }
+      appendRaw(stderrChunks, logPath, "event", text, "stderr");
+    });
+
+    child.on("error", (error) => {
+      if (settled || cancelled) return;
+      settled = true;
+      if (timeoutId) clearTimeout(timeoutId);
+      onError(`Reasonix failed to start: ${error.message}`);
+    });
+
+    child.on("exit", (exitCode, signal) => {
+      handleAttemptExit(exitCode, signal, attemptResumePath, attemptStdoutChunks.join(""), attemptStderrChunks.join(""));
+    });
+
+    return child;
+  }
+
+  function handleAttemptExit(
+    exitCode: number | null,
+    signal: NodeJS.Signals | null,
+    attemptResumePath: string | null | undefined,
+    attemptStdout: string,
+    attemptStderr: string
+  ): void {
     if (settled || cancelled) return;
-    settled = true;
-    if (timeoutId) clearTimeout(timeoutId);
-    onError(`Reasonix failed to start: ${error.message}`);
-  });
+    const sessionCandidate = findReasonixSessionPath({
+      homeDir: agent.home_dir,
+      workspacePath: task.config.workspace_path,
+      taskId: task.task_id,
+      startedAtMs,
+      finishedAtMs: Date.now(),
+    });
+    const nextResumePath = sessionCandidate?.path ?? attemptResumePath ?? null;
 
-  child.on("exit", (exitCode, signal) => {
-    settle(exitCode, signal);
-  });
+    if (
+      exitCode !== 0 &&
+      isReasonixMaxStepsPause(attemptStdout, attemptStderr) &&
+      nextResumePath &&
+      existsSync(nextResumePath) &&
+      autoResumeAttempts < MAX_AUTO_RESUME_ATTEMPTS
+    ) {
+      autoResumeAttempts += 1;
+      writeReasonixEvent(
+        logPath,
+        "auto_resume",
+        `Reasonix paused after max steps; auto-resuming saved session (${autoResumeAttempts}/${MAX_AUTO_RESUME_ATTEMPTS}).`
+      );
+      startAttempt(nextResumePath);
+      return;
+    }
+
+    settleFinal(exitCode, signal);
+  }
 
   timeoutId = setTimeout(() => {
     if (settled || cancelled) return;
     cancelled = true;
-    stopChildProcessTree(child);
+    if (currentChild) {
+      stopChildProcessTree(currentChild);
+    }
     onError(`Reasonix task timed out: ${timeoutMs}ms`);
   }, timeoutMs);
 
+  const firstChild = startAttempt(resumeSessionPath);
+
   return {
-    process: child,
+    process: firstChild,
     cancel: () => {
       if (settled || cancelled) return;
       cancelled = true;
       if (timeoutId) clearTimeout(timeoutId);
-      stopChildProcessTree(child);
+      if (currentChild) {
+        stopChildProcessTree(currentChild);
+      }
     },
   };
 }
@@ -256,6 +319,13 @@ function summarizeReasonixOutput(stdout: string, stderr: string, exitCode: numbe
   if (!visible) return header;
   const tail = visible.slice(-3000);
   return `${header}\n\n${tail}`;
+}
+
+function isReasonixMaxStepsPause(stdout: string, stderr: string): boolean {
+  const text = `${stdout}\n${stderr}`;
+  return /paused\s+after[\s\S]{0,160}(?:agent\.)?max[_-]?steps/i.test(text)
+    || /agent\.max_steps/i.test(text)
+    || (/max[_-]?steps/i.test(text) && /paused|pause|暂停|上限/.test(text));
 }
 
 function stopChildProcessTree(child: ChildProcessWithoutNullStreams): void {

@@ -59,6 +59,11 @@ if (!brief.includes("# ")) {
 }
 
 mkdirSync("src", { recursive: true });
+if (process.env.FAKE_REASONIX_MAX_STEPS_ONCE === "1" && !resumePath) {
+  writeFakeSession(taskText);
+  console.error("paused after 20 tool-call rounds (agent.max_steps)");
+  process.exit(1);
+}
 if (resumePath) {
   writeFileSync(join("src", "reasonix-followup.txt"), `Reasonix fake resumed from ${resumePath}\n`, "utf-8");
 } else {

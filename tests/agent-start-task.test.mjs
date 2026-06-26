@@ -243,6 +243,83 @@ test("agent_start_task auto routing can select Reasonix from scenario profile", 
   }
 });
 
+test("agent_start_task auto-resumes Reasonix max_steps pause before failing", async () => {
+  const pauseDir = mkdtempSync(join(tmpdir(), "agent-start-reasonix-max-steps-"));
+  const repoDir = join(pauseDir, "repo");
+  const runtimeDir = join(pauseDir, "runtime");
+  const reasonixHome = join(pauseDir, "ReasonixData");
+  initRepo(repoDir);
+  mkdirSync(runtimeDir, { recursive: true });
+  mkdirSync(reasonixHome, { recursive: true });
+
+  const store = new TaskStore(runtimeDir);
+  const runningTasks = new RunningTaskRegistry();
+  const taskQueue = new TaskQueue(1);
+  const handler = createAgentStartTaskHandler(
+    {
+      mimoNodePath: process.execPath,
+      mimoEntryPath: join(__dirname, "fixtures", "fake-mimo.mjs"),
+      allowedRoots: [repoDir],
+      runtimeDir,
+      agents: [],
+    },
+    [
+      {
+        id: "reasonix-tui",
+        kind: "reasonix-tui",
+        display_name: "Reasonix TUI",
+        enabled: true,
+        command: process.execPath,
+        command_args: [join(__dirname, "fixtures", "fake-reasonix.mjs")],
+        home_dir: reasonixHome,
+        max_steps: 3,
+      },
+    ],
+    store,
+    { runningTasks, taskQueue }
+  );
+
+  const previousPauseFlag = process.env.FAKE_REASONIX_MAX_STEPS_ONCE;
+  process.env.FAKE_REASONIX_MAX_STEPS_ONCE = "1";
+  try {
+    const started = await handler.handler({
+      agent_id: "reasonix-tui",
+      objective: "Recover from max steps pause",
+      workspace_path: repoDir,
+      editable_paths: ["src"],
+      readonly_paths: [],
+      acceptance_criteria: ["src/reasonix-followup.txt exists"],
+      use_worktree: true,
+      runtime_timeout_seconds: 60,
+    });
+
+    assert.strictEqual(started.status, "running");
+    for (let i = 0; i < 40; i++) {
+      const task = store.getTask(started.task_id);
+      if (task?.status === "review" || task?.status === "failed") {
+        break;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+
+    const task = store.getTask(started.task_id);
+    assert.ok(task);
+    assert.strictEqual(task.status, "review");
+    assert.ok(task.agent_session_path);
+    assert.strictEqual(existsSync(join(task.worktree.worktree_path, "src", "reasonix-followup.txt")), true);
+    assert.match(readFileSync(task.raw_log_path, "utf-8"), /auto-resuming saved session/);
+  } finally {
+    if (previousPauseFlag === undefined) {
+      delete process.env.FAKE_REASONIX_MAX_STEPS_ONCE;
+    } else {
+      process.env.FAKE_REASONIX_MAX_STEPS_ONCE = previousPauseFlag;
+    }
+    runningTasks.cancelAll();
+    taskQueue.cancelAll();
+    rmSync(pauseDir, { recursive: true, force: true });
+  }
+});
+
 test("agent_start_task rejects Reasonix multimodal routing before starting a task", async () => {
   const runtimeDir = mkdtempSync(join(tmpdir(), "agent-start-reject-multimodal-"));
   mkdirSync(runtimeDir, { recursive: true });
