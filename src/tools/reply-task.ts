@@ -1,9 +1,10 @@
 import { z } from "zod";
 import type { Config } from "../config.js";
 import type { TaskStore } from "../services/task-store.js";
-import type { TaskConfig, TaskResult, TaskState, WorktreeState } from "../types.js";
+import type { TaskAttachment, TaskAttachmentInput, TaskConfig, TaskResult, TaskState, WorktreeState } from "../types.js";
 import { validateSessionId } from "../services/path-guard.js";
 import { writeReplyBrief } from "../services/prompt-builder.js";
+import { persistTaskAttachments } from "../services/task-attachments.js";
 import { runMimoTask } from "../services/mimo-runner.js";
 import { globalRunningTasks, type RunningTaskRegistry } from "../services/running-tasks.js";
 import { globalTaskQueue, type TaskQueue } from "../services/task-queue.js";
@@ -76,6 +77,13 @@ export const ReplyTaskSchema = z.object({
   task_id: z.string().min(1, "任务 ID 不能为空"),
   message: z.string().min(1, "回复消息不能为空"),
   priority: z.number().int().min(0).max(10).default(5),
+  attachments: z.array(z.object({
+    name: z.string().min(1).max(160),
+    mime_type: z.string().optional(),
+    size_bytes: z.number().int().min(0).optional(),
+    base64: z.string().min(1),
+    kind: z.enum(["image", "file"]).optional(),
+  })).default([]),
 });
 
 export type ReplyTaskInput = z.infer<typeof ReplyTaskSchema>;
@@ -242,7 +250,16 @@ export function createReplyTaskHandler(
         return { error: `任务回复已在队列中: ${task.task_id}` };
       }
 
-      writeReplyBrief(input.message, task.task_id, task.current_round, `${config.runtimeDir}/briefs`);
+      const persistedAttachments = persistReplyAttachments(config.runtimeDir, task.task_id, input.attachments);
+      if (!persistedAttachments.ok) {
+        return { error: persistedAttachments.error };
+      }
+      writeReplyBrief(
+        buildReplyMessageWithAttachments(input.message, persistedAttachments.attachments),
+        task.task_id,
+        task.current_round,
+        `${config.runtimeDir}/briefs`
+      );
 
       const taskId = task.task_id;
 
@@ -295,4 +312,28 @@ function validateMimoReplyTarget(task: TaskState): string | null {
     return sessionValidation.reason ?? "Invalid MiMo session ID";
   }
   return null;
+}
+
+function persistReplyAttachments(
+  runtimeDir: string,
+  taskId: string,
+  attachments: TaskAttachmentInput[] | undefined
+): { ok: true; attachments: TaskAttachment[] } | { ok: false; error: string } {
+  return persistTaskAttachments(runtimeDir, taskId, attachments);
+}
+
+function buildReplyMessageWithAttachments(message: string, attachments: TaskAttachment[]): string {
+  if (attachments.length === 0) {
+    return message;
+  }
+  const lines = [
+    message,
+    "",
+    "## Reply attachments",
+    "",
+    "MiMo Bridge saved these reply attachments under the task runtime directory. Read them if needed; do not rely on browser-local original paths.",
+    "",
+    ...attachments.map((attachment) => `- \`${attachment.path}\` (${attachment.name}, ${attachment.mime_type}, ${attachment.size_bytes} bytes, ${attachment.kind})`),
+  ];
+  return lines.join("\n");
 }

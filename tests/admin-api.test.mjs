@@ -629,6 +629,15 @@ test("admin API maps agent task replies to agentReplyTask", async () => {
       agent_id: "reasonix-tui",
       message: "continue",
       priority: 4,
+      attachments: [
+        {
+          name: "reply.png",
+          mime_type: "image/png",
+          size_bytes: 5,
+          base64: "aGVsbG8=",
+          kind: "image",
+        },
+      ],
     });
     assert.strictEqual(result.statusCode, 200);
     assert.strictEqual(result.body.ok, true);
@@ -638,6 +647,7 @@ test("admin API maps agent task replies to agentReplyTask", async () => {
     assert.ok(captured);
     assert.strictEqual(captured[1].message, "continue");
     assert.strictEqual(captured[1].priority, 4);
+    assert.strictEqual(captured[1].attachments[0].name, "reply.png");
   } finally {
     fixture.cleanup();
   }

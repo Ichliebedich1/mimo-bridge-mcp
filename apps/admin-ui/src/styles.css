@@ -739,6 +739,46 @@ tr:last-child td {
   margin-bottom: 16px;
 }
 
+.batch-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  padding: 12px 14px;
+  background: #f8fafc;
+}
+
+.select-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: #344054;
+  font-weight: 800;
+}
+
+.select-row input,
+.select-col input {
+  width: 18px;
+  height: 18px;
+}
+
+.select-col {
+  width: 72px;
+}
+
+.task-summary-cell {
+  max-width: 420px;
+}
+
+.one-line {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .chip {
   border: 1px solid var(--line);
   border-radius: 999px;
@@ -1011,6 +1051,49 @@ select:focus {
 .review-summary {
   display: grid;
   gap: 12px;
+}
+
+.task-switcher {
+  display: grid;
+  gap: 12px;
+  margin-bottom: 18px;
+  padding-bottom: 18px;
+  border-bottom: 1px solid var(--line);
+}
+
+.task-switcher-list {
+  display: grid;
+  gap: 8px;
+  max-height: 260px;
+  overflow: auto;
+}
+
+.task-switcher-item {
+  display: grid;
+  gap: 4px;
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 10px 12px;
+  background: #ffffff;
+  color: var(--ink);
+  text-align: left;
+}
+
+.task-switcher-item.active {
+  border-color: #93c5fd;
+  background: #eff6ff;
+}
+
+.task-switcher-item span,
+.task-switcher-item small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.task-switcher-item small {
+  color: var(--muted);
 }
 
 .file-item {

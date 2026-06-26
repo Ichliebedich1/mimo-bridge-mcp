@@ -218,6 +218,7 @@ function App() {
   const [notice, setNotice] = useState<Notice | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [actionBusy, setActionBusy] = useState<string | null>(null);
+  const [selectedForBatch, setSelectedForBatch] = useState<string[]>([]);
 
   const selectedTask = tasks.find((task) => task.id === selectedTaskId) ?? null;
   const runningCount = Math.max(health?.queue.running ?? 0, tasks.filter((task) => task.status === 'running').length);
@@ -340,8 +341,8 @@ function App() {
     }
   }
 
-  async function handleReply(taskId: string, message: string, priority: number, agent: string) {
-    await runAction('正在发送回复…', '回复已发送，执行 Agent 将继续处理。', () => replyTask(taskId, message, priority, agent), {
+  async function handleReply(taskId: string, message: string, priority: number, agent: string, attachments: CreateTaskAttachment[] = []) {
+    await runAction('正在发送回复…', '回复已发送，执行 Agent 将继续处理。', () => replyTask(taskId, message, priority, agent, attachments), {
       refreshTaskId: taskId,
     });
   }
@@ -399,6 +400,41 @@ function App() {
         if (result) {
           setSelectedTaskId('');
           setPage('tasks');
+        }
+      },
+    });
+  }
+
+  function confirmBatchDeleteTasks(taskIds: string[]) {
+    const uniqueIds = Array.from(new Set(taskIds));
+    const selectedTasks = uniqueIds.map((id) => tasks.find((task) => task.id === id)).filter((task): task is Task => Boolean(task));
+    const blocked = selectedTasks.filter((task) => !task.canDelete);
+    if (selectedTasks.length === 0) {
+      setNotice({ tone: 'error', message: '请先选择要删除的任务。' });
+      return;
+    }
+    if (blocked.length > 0) {
+      setNotice({ tone: 'error', message: '选中的任务里有不可安全删除项：' + blocked.map((task) => task.id).join('，') });
+      return;
+    }
+    setConfirmAction({
+      title: '批量删除任务？',
+      body: `将永久删除 ${selectedTasks.length} 个已结束且无 Worktree 的任务记录、brief 和日志，删除后无法恢复。`,
+      confirmLabel: '批量删除',
+      tone: 'danger',
+      onConfirm: async () => {
+        const result = await runAction('正在批量删除任务…', '选中的任务已删除。', async () => {
+          for (const task of selectedTasks) {
+            await deleteTask(task.id, task.agent);
+          }
+          return { deleted: selectedTasks.length };
+        });
+        if (result) {
+          setSelectedForBatch([]);
+          if (selectedTasks.some((task) => task.id === selectedTaskId)) {
+            setSelectedTaskId('');
+            setPage('tasks');
+          }
         }
       },
     });
@@ -541,6 +577,9 @@ function App() {
               onFilterChange={setStatusFilter}
               onOpenTask={openTask}
               onDeleteTask={confirmDeleteTask}
+              selectedTaskIds={selectedForBatch}
+              onSelectedTaskIdsChange={setSelectedForBatch}
+              onBatchDelete={confirmBatchDeleteTasks}
               onCreate={() => setPage('create')}
             />
           )}
@@ -554,6 +593,8 @@ function App() {
               <TaskDetailPage
                 actionBusy={actionBusy}
                 task={selectedTask}
+                tasks={tasks}
+                onOpenTask={openTask}
                 onCancel={confirmCancel}
                 onDiscardAndAbandon={confirmDiscardAndAbandon}
                 onDeleteTask={confirmDeleteTask}
@@ -674,6 +715,9 @@ function TasksPage({
   onFilterChange,
   onOpenTask,
   onDeleteTask,
+  selectedTaskIds,
+  onSelectedTaskIdsChange,
+  onBatchDelete,
   onCreate,
 }: {
   tasks: Task[];
@@ -681,18 +725,38 @@ function TasksPage({
   onFilterChange: (status: 'all' | TaskStatus) => void;
   onOpenTask: (taskId: string) => void;
   onDeleteTask: (taskId: string) => void;
+  selectedTaskIds: string[];
+  onSelectedTaskIdsChange: (taskIds: string[]) => void;
+  onBatchDelete: (taskIds: string[]) => void;
   onCreate: () => void;
 }) {
   const [showSafeDeleteOnly, setShowSafeDeleteOnly] = useState(false);
+  const [showSummaries, setShowSummaries] = useState(false);
   const statusFiltered = filter === 'all' ? tasks : tasks.filter((task) => task.status === filter);
   const filtered = showSafeDeleteOnly ? statusFiltered.filter((task) => task.canDelete) : statusFiltered;
   const safeDeleteCount = statusFiltered.filter((task) => task.canDelete).length;
+  const batchDeleteCount = filtered.filter((task) => selectedTaskIds.includes(task.id) && task.canDelete).length;
   const statuses: Array<'all' | TaskStatus> = ['all', 'queued', 'running', 'waiting', 'review', 'accepted', 'failed', 'cancelled', 'abandoned'];
+
+  function toggleSelect(taskId: string, checked: boolean) {
+    onSelectedTaskIdsChange(checked
+      ? Array.from(new Set([...selectedTaskIds, taskId]))
+      : selectedTaskIds.filter((id) => id !== taskId));
+  }
+
+  function toggleSelectAll(checked: boolean) {
+    const visibleIds = filtered.map((task) => task.id);
+    onSelectedTaskIdsChange(checked
+      ? Array.from(new Set([...selectedTaskIds, ...visibleIds]))
+      : selectedTaskIds.filter((id) => !visibleIds.includes(id)));
+  }
+
+  const allVisibleSelected = filtered.length > 0 && filtered.every((task) => selectedTaskIds.includes(task.id));
 
   return (
     <section className="panel wide page-panel">
       <div className="section-title">
-        <PanelHeader title="任务列表" helper="第一版只做状态筛选和手动刷新，不做服务端全文搜索。" />
+        <PanelHeader title="任务列表" helper="支持状态筛选、安全删除筛选、批量删除和摘要折叠。" />
         <button className="button primary" onClick={onCreate} type="button">
           新建任务
         </button>
@@ -706,8 +770,30 @@ function TasksPage({
         <button className={showSafeDeleteOnly ? 'chip active' : 'chip'} onClick={() => setShowSafeDeleteOnly(!showSafeDeleteOnly)} type="button">
           可安全删除{safeDeleteCount > 0 ? ' (' + safeDeleteCount + ')' : ''}
         </button>
+        <button className={showSummaries ? 'chip active' : 'chip'} onClick={() => setShowSummaries(!showSummaries)} type="button">
+          {showSummaries ? '折叠摘要' : '展开摘要'}
+        </button>
       </div>
-      {filtered.length === 0 ? <EmptyState title="没有匹配任务" body="换一个状态筛选，或创建一个新的 MiMo 任务。" /> : <TaskTable tasks={filtered} onOpenTask={onOpenTask} onDeleteTask={onDeleteTask} />}
+      <div className="batch-toolbar">
+        <label className="select-row">
+          <input checked={allVisibleSelected} disabled={filtered.length === 0} onChange={(event) => toggleSelectAll(event.target.checked)} type="checkbox" />
+          <span>选择当前列表</span>
+        </label>
+        <span className="muted-text">已选 {selectedTaskIds.length} 个，可删除 {batchDeleteCount} 个</span>
+        <button className="button danger" disabled={batchDeleteCount === 0} onClick={() => onBatchDelete(selectedTaskIds)} type="button">
+          批量删除
+        </button>
+      </div>
+      {filtered.length === 0 ? <EmptyState title="没有匹配任务" body="换一个筛选条件，或创建一个新的 Agent 任务。" /> : (
+        <TaskTable
+          tasks={filtered}
+          onOpenTask={onOpenTask}
+          onDeleteTask={onDeleteTask}
+          selectedTaskIds={selectedTaskIds}
+          onToggleTask={toggleSelect}
+          showSummaries={showSummaries}
+        />
+      )}
     </section>
   );
 }
@@ -1077,7 +1163,9 @@ function CreateTaskPage({
 
 function TaskDetailPage({
   task,
+  tasks,
   actionBusy,
+  onOpenTask,
   onReply,
   onCancel,
   onFinish,
@@ -1092,8 +1180,10 @@ function TaskDetailPage({
   onRefresh,
 }: {
   task: Task;
+  tasks: Task[];
   actionBusy: string | null;
-  onReply: (taskId: string, message: string, priority: number, agent: string) => Promise<void>;
+  onOpenTask: (taskId: string) => void;
+  onReply: (taskId: string, message: string, priority: number, agent: string, attachments?: CreateTaskAttachment[]) => Promise<void>;
   onCancel: (taskId: string) => void;
   onFinish: (taskId: string, status: 'accepted' | 'abandoned') => void;
   onMergeAndAccept: (taskId: string) => void;
@@ -1113,6 +1203,7 @@ function TaskDetailPage({
   const [loadingPanel, setLoadingPanel] = useState<'diff' | 'logs' | 'full' | null>(null);
   const [localError, setLocalError] = useState<string | null>(null);
   const [replyMessage, setReplyMessage] = useState('');
+  const [replyAttachments, setReplyAttachments] = useState<CreateTaskAttachment[]>([]);
   const [replying, setReplying] = useState(false);
   const [handoffMessage, setHandoffMessage] = useState<string | null>(null);
   const [handoffPrompt, setHandoffPrompt] = useState<string | null>(null);
@@ -1125,6 +1216,7 @@ function TaskDetailPage({
     setFullResult(null);
     setLocalError(null);
     setReplyMessage('');
+    setReplyAttachments([]);
     setHandoffMessage(null);
     setHandoffPrompt(null);
     setShowLiveViewer(false);
@@ -1188,10 +1280,29 @@ function TaskDetailPage({
     setLocalError(null);
     setReplying(true);
     try {
-      await onReply(task.id, message, task.priority, task.agent);
+      await onReply(task.id, message, task.priority, task.agent, replyAttachments);
       setReplyMessage('');
+      setReplyAttachments([]);
     } finally {
       setReplying(false);
+    }
+  }
+
+  async function addReplyFiles(files: FileList | File[]) {
+    setLocalError(null);
+    try {
+      const next = await Promise.all(Array.from(files).map(readFileAttachment));
+      setReplyAttachments((current) => [...current, ...next].slice(0, 10));
+    } catch (error) {
+      setLocalError('读取回复附件失败：' + errorMessage(error));
+    }
+  }
+
+  function handleReplyPaste(event: ClipboardEvent<HTMLTextAreaElement>) {
+    const files = event.clipboardData.files;
+    if (files.length > 0) {
+      event.preventDefault();
+      void addReplyFiles(files);
     }
   }
 
@@ -1236,6 +1347,22 @@ function TaskDetailPage({
 
       <div className="workbench">
         <section className="panel file-rail">
+          <div className="task-switcher">
+            <PanelHeader title="任务切换" helper="在当前列表内快速切换任务详情。" />
+            <div className="task-switcher-list">
+              {tasks.slice(0, 30).map((item) => (
+                <button
+                  className={item.id === task.id ? 'task-switcher-item active' : 'task-switcher-item'}
+                  key={item.id}
+                  onClick={() => onOpenTask(item.id)}
+                  type="button"
+                >
+                  <span>{item.title || item.id}</span>
+                  <small>{item.id}</small>
+                </button>
+              ))}
+            </div>
+          </div>
           <PanelHeader title="修改文件" helper="点击文件只切换选择；加载按钮才请求 focused diff。" />
           <div className="file-list">
             {task.changedFiles.length === 0 && <div className="lane-empty">Review Package 暂无 changed_files。</div>}
@@ -1331,6 +1458,64 @@ function TaskDetailPage({
               </pre>
             )}
           </div>
+
+          <div className="reply-box">
+            <h3>回复 {agentDisplayName(task.agent)}</h3>
+            <div className={canReply ? 'success-note compact' : 'warning-card compact'}>
+              {canReply
+                ? `${task.replyLabel}。失败任务也可以在保留会话时继续修复。`
+                : `暂不可回复：${task.replyBlockers.length > 0 ? task.replyBlockers.join('；') : '当前任务没有可恢复会话或状态不允许。'}`}
+            </div>
+            <textarea
+              disabled={!canReply || Boolean(actionBusy) || replying}
+              onChange={(event) => setReplyMessage(event.target.value)}
+              onPaste={handleReplyPaste}
+              placeholder={'说明需要 ' + agentDisplayName(task.agent) + ' 继续修复的问题，或给出下一步要求。'}
+              rows={5}
+              value={replyMessage}
+            />
+            <div className="attachment-box reply-attachments">
+              <div className="attachment-head">
+                <div>
+                  <strong>回复附件</strong>
+                  <p>可粘贴截图，或选择图片/文件补充给执行 Agent。</p>
+                </div>
+                <label className="button soft file-picker">
+                  选择附件/图片
+                  <input
+                    multiple
+                    onChange={(event) => {
+                      if (event.target.files?.length) {
+                        void addReplyFiles(event.target.files);
+                        event.target.value = '';
+                      }
+                    }}
+                    type="file"
+                  />
+                </label>
+              </div>
+              {replyAttachments.length === 0 ? (
+                <div className="attachment-empty">暂无附件。截图可直接 Ctrl+V 粘贴到回复框。</div>
+              ) : (
+                <div className="attachment-list">
+                  {replyAttachments.map((attachment, index) => (
+                    <div className="attachment-item" key={attachment.name + index}>
+                      <span>{attachment.kind === 'image' ? '图片' : '文件'}</span>
+                      <strong>{attachment.name}</strong>
+                      <small>{attachment.mime_type} · {formatBytes(attachment.size_bytes)}</small>
+                      <button className="link-button danger-link" onClick={() => setReplyAttachments((current) => current.filter((_, itemIndex) => itemIndex !== index))} type="button">
+                        移除
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+            <button className="button soft" disabled={!canReply || Boolean(actionBusy) || replying} onClick={() => void submitReply()} type="button">
+              {replying ? '发送中…' : '发送回复'}
+            </button>
+          </div>
+
         </section>
 
         <aside className="panel action-panel">
@@ -1404,25 +1589,6 @@ function TaskDetailPage({
               <textarea id="codex-handoff-prompt" readOnly rows={9} value={handoffPrompt} />
             </div>
           )}
-
-          <div className="reply-box">
-            <h3>回复 {agentDisplayName(task.agent)}</h3>
-            <div className={canReply ? 'success-note compact' : 'warning-card compact'}>
-              {canReply
-                ? `${task.replyLabel}。失败任务也可以在保留会话时继续修复。`
-                : `暂不可回复：${task.replyBlockers.length > 0 ? task.replyBlockers.join('；') : '当前任务没有可恢复会话或状态不允许。'}`}
-            </div>
-            <textarea
-              disabled={!canReply || Boolean(actionBusy) || replying}
-              onChange={(event) => setReplyMessage(event.target.value)}
-              placeholder={'说明需要 ' + agentDisplayName(task.agent) + ' 继续修复的问题，或给出下一步要求。'}
-              rows={5}
-              value={replyMessage}
-            />
-            <button className="button soft" disabled={!canReply || Boolean(actionBusy) || replying} onClick={() => void submitReply()} type="button">
-              {replying ? '发送中…' : '发送回复'}
-            </button>
-          </div>
 
           <div className="advanced-box">
             <h3>高级调试</h3>
@@ -1779,16 +1945,23 @@ function TaskTable({
   tasks,
   onOpenTask,
   onDeleteTask,
+  selectedTaskIds = [],
+  onToggleTask,
+  showSummaries = false,
 }: {
   tasks: Task[];
   onOpenTask: (taskId: string) => void;
   onDeleteTask: (taskId: string) => void;
+  selectedTaskIds?: string[];
+  onToggleTask?: (taskId: string, checked: boolean) => void;
+  showSummaries?: boolean;
 }) {
   return (
     <div className="table-wrap">
       <table>
         <thead>
           <tr>
+            {onToggleTask && <th className="select-col">选择</th>}
             <th>task_id</th>
             <th>Agent</th>
             <th>状态</th>
@@ -1801,6 +1974,11 @@ function TaskTable({
         <tbody>
           {tasks.map((task) => (
             <tr key={task.id}>
+              {onToggleTask && (
+                <td className="select-col">
+                  <input checked={selectedTaskIds.includes(task.id)} onChange={(event) => onToggleTask(task.id, event.target.checked)} type="checkbox" />
+                </td>
+              )}
               <td>
                 <code>{task.id}</code>
               </td>
@@ -1810,9 +1988,9 @@ function TaskTable({
               <td>
                 <Pill tone={statusMeta[task.status].tone}>{statusMeta[task.status].label}</Pill>
               </td>
-              <td>
+              <td className="task-summary-cell">
                 <strong>{task.title}</strong>
-                <span>{task.summary}</span>
+                {showSummaries ? <span>{task.summary}</span> : <span className="muted-text one-line">摘要已折叠</span>}
               </td>
               <td>
                 {task.riskFlags.length === 0 ? <span className="muted-text">无</span> : <span className="risk-count">{task.riskFlags.length}</span>}

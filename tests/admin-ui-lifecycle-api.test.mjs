@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert";
 
-import { cancelTask, createTask, deleteTask, finishTask, openTaskTarget, saveRoutingProfiles, worktreeTask } from "../apps/admin-ui/src/api.ts";
+import { cancelTask, createTask, deleteTask, finishTask, openTaskTarget, replyTask, saveRoutingProfiles, worktreeTask } from "../apps/admin-ui/src/api.ts";
 
 function installFetchMock() {
   const calls = [];
@@ -86,6 +86,40 @@ test("admin UI lifecycle API keeps MiMo tasks on legacy routes", async () => {
     assert.deepStrictEqual(mock.calls[2].body, { action: "merge" });
     assert.deepStrictEqual(mock.calls[3].body, { action: "task_folder" });
     assert.deepStrictEqual(mock.calls[4].body, { action: "mimo_session_terminal" });
+  } finally {
+    mock.restore();
+  }
+});
+
+test("admin UI reply API sends attachments to MiMo and generic agent routes", async () => {
+  const mock = installFetchMock();
+  const attachments = [
+    {
+      name: "reply.png",
+      mime_type: "image/png",
+      size_bytes: 5,
+      base64: "aGVsbG8=",
+      kind: "image",
+    },
+  ];
+
+  try {
+    await replyTask("task_1", "continue", 4, "mimo", attachments);
+    await replyTask("task_2", "continue", 6, "reasonix-tui", attachments);
+
+    assert.deepStrictEqual(
+      mock.calls.map((call) => [call.method, call.path]),
+      [
+        ["POST", "/api/tasks/task_1/replies"],
+        ["POST", "/api/agent-tasks/task_2/replies"],
+      ]
+    );
+    assert.strictEqual(mock.calls[0].body.message, "continue");
+    assert.strictEqual(mock.calls[0].body.priority, 4);
+    assert.strictEqual(mock.calls[0].body.attachments[0].name, "reply.png");
+    assert.strictEqual(mock.calls[1].body.agent_id, "reasonix-tui");
+    assert.strictEqual(mock.calls[1].body.priority, 6);
+    assert.strictEqual(mock.calls[1].body.attachments[0].name, "reply.png");
   } finally {
     mock.restore();
   }

@@ -52,12 +52,16 @@ async function readStdinJson(stdin = process.stdin) {
   for await (const chunk of stdin) {
     chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(String(chunk)));
   }
-  const raw = Buffer.concat(chunks).toString("utf8").trim();
+  const raw = stripUtf8Bom(Buffer.concat(chunks).toString("utf8")).trim();
   return raw ? JSON.parse(raw) : {};
 }
 
 function readJsonFile(filePath) {
-  return JSON.parse(readFileSync(filePath, "utf8"));
+  return JSON.parse(stripUtf8Bom(readFileSync(filePath, "utf8")));
+}
+
+function stripUtf8Bom(value) {
+  return value.charCodeAt(0) === 0xfeff ? value.slice(1) : value;
 }
 
 async function readJsonInput(args, stdin = process.stdin) {

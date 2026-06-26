@@ -48,6 +48,13 @@ const AgentStartTaskBodySchema = StartTaskBodySchema.extend({
 const ReplyBodySchema = z.object({
   message: z.string().min(1),
   priority: z.number().int().min(0).max(10).default(5),
+  attachments: z.array(z.object({
+    name: z.string().min(1).max(160),
+    mime_type: z.string().optional(),
+    size_bytes: z.number().int().min(0).optional(),
+    base64: z.string().min(1),
+    kind: z.enum(["image", "file"]).optional(),
+  })).default([]),
 });
 
 const FinishBodySchema = z.object({

@@ -159,6 +159,68 @@ test("start command reads UTF-8 JSON file with Chinese path text", async () => {
   }
 });
 
+test("start command accepts UTF-8 JSON file with BOM", async () => {
+  const tmpDir = mkdtempSync(join(tmpdir(), "mimo-client-bom-"));
+  const jsonFile = join(tmpDir, "task.json");
+  writeFileSync(jsonFile, `\ufeff${JSON.stringify({ objective: "BOM task" })}`, "utf8");
+
+  let receivedBody = null;
+  const mock = await startMockServer((req, res) => {
+    if (req.method === "POST" && req.url === "/api/tasks") {
+      const chunks = [];
+      req.on("data", (data) => chunks.push(data));
+      req.on("end", () => {
+        receivedBody = JSON.parse(Buffer.concat(chunks).toString("utf8"));
+        res.writeHead(200, { "content-type": "application/json" });
+        res.end(JSON.stringify({ ok: true, data: { task_id: "task_bom", status: "running" } }));
+      });
+      return;
+    }
+    res.writeHead(404).end("{}");
+  });
+
+  try {
+    const result = await runClient(["start", "--json", jsonFile], { env: { MIMO_BRIDGE_URL: mock.baseUrl } });
+    assert.equal(result.code, 0);
+    const out = JSON.parse(result.stdout);
+    assert.equal(out.task_id, "task_bom");
+    assert.equal(receivedBody.objective, "BOM task");
+  } finally {
+    await closeServer(mock.server);
+    rmSync(tmpDir, { recursive: true, force: true });
+  }
+});
+
+test("agent-start command accepts stdin JSON with BOM", async () => {
+  let receivedBody = null;
+  const mock = await startMockServer((req, res) => {
+    if (req.method === "POST" && req.url === "/api/agent-tasks") {
+      const chunks = [];
+      req.on("data", (data) => chunks.push(data));
+      req.on("end", () => {
+        receivedBody = JSON.parse(Buffer.concat(chunks).toString("utf8"));
+        res.writeHead(200, { "content-type": "application/json" });
+        res.end(JSON.stringify({ ok: true, data: { task_id: "task_agent_bom", status: "running", agent: "reasonix-tui" } }));
+      });
+      return;
+    }
+    res.writeHead(404).end("{}");
+  });
+
+  try {
+    const result = await runClient(["agent-start", "--agent-id", "reasonix-tui"], {
+      stdin: `\ufeff${JSON.stringify({ objective: "agent BOM task" })}`,
+      env: { MIMO_BRIDGE_URL: mock.baseUrl },
+    });
+    assert.equal(result.code, 0);
+    const out = JSON.parse(result.stdout);
+    assert.equal(out.task_id, "task_agent_bom");
+    assert.equal(receivedBody.objective, "agent BOM task");
+  } finally {
+    await closeServer(mock.server);
+  }
+});
+
 test("start command preserves special characters from JSON", async () => {
   let receivedBody = null;
   const mock = await startMockServer((req, res) => {

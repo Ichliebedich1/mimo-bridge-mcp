@@ -2,9 +2,9 @@
 
 ## Pending
 
-- Fix safe-client JSON request BOM handling. Real repeated failure: Codex-created `--json` request files can include a UTF-8 BOM, causing `Invalid JSON input: Unexpected token '﻿'` before the task reaches MiMo/Reasonix. This should be handled in the Safe Agent Invocation layer, either by stripping BOM in `scripts/mimo-bridge-client.mjs` or by adding a first-class request-file writer that emits UTF-8 no-BOM, with tests.
 - Make task completion/failure wake Codex or reliably break out to recovery. Current state is still insufficient: during the Ultra Speed delegation, MiMo completed and Reasonix failed, but Codex remained stuck in a long wait. The recovery inbox helps after interruption, but the collaboration loop still needs a stronger mechanism so terminal task state triggers review/intervention promptly without Codex polling full state.
 - Pause Reasonix for implementation work until a reliability pass is done. Reasonix TUI has repeatedly failed on delegated development tasks, often leaving Codex to recover manually. Before using it for core implementation again, audit failure causes, step limits, resume behavior, prompt shape, model settings, and UI/backend task sizing. Prefer MiMo-only execution for the current Ultra Speed feature.
+- Keep safe-client BOM handling under regression. The client now strips UTF-8 BOM from JSON files/stdin, but this failure has happened repeatedly during Codex-to-Agent dispatch, so future safe invocation changes must keep BOM file/stdin tests and avoid ad hoc PowerShell/Node JSON generation.
 - Investigate safe-client empty-output calls. During the Ultra Speed review, `node scripts\mimo-bridge-client.mjs health`, `review`, `recover`, and `agent-list` sometimes exited 0 with no stdout, while direct REST calls to `/api/health` and `/api/pending-reviews` returned valid JSON. Treat this as a client/entrypoint reliability issue separate from daemon health; add regression coverage so scripted Codex use always emits JSON or an explicit error.
 - Optimize direct MCP wait behavior: direct Codex MCP tool calls may time out around 30 seconds even though daemon-side `mimo_wait_task` continues correctly. The recovery inbox is implemented, but direct MCP waits should still get a short-call mode that returns `still_running` plus the safe-client wait command instead of trying to block for 30-60 minutes.
 - Improve "task completed/failed, wake Codex" beyond the current heartbeat. Current state: recovery inbox, `scripts/mimo-review-wakeup.mjs`, Admin UI `待介入` count, and a 5-minute Codex App heartbeat make missed tasks recoverable without polling full task state. Remaining desired upgrade: an app-side notification or persistent monitor that can wake the originating Codex thread more immediately than heartbeat intervals.
@@ -16,6 +16,7 @@
 
 ## Completed
 
+- Safe-client JSON request BOM handling: `scripts/mimo-bridge-client.mjs` now strips a leading UTF-8 BOM from both `--json` files and stdin before parsing, so Codex-created request files no longer fail with `Unexpected token '﻿'` before reaching MiMo/Reasonix. Verified with `node --test tests\mimo-bridge-client.test.mjs` passing 31/31, including BOM file/stdin regressions.
 - Persistent config and build-free `start-production.ps1`.
 - Windows launcher lifecycle controller and CLI: start/stop/restart/open/log/status, duplicate-instance guard, port-conflict report, first-run config wizard, desktop shortcut command, and opt-in autostart command.
 - Local launcher smoke: status, duplicate start, safe stop, start to healthy daemon, shortcut creation, autostart disabled, and bounded logs.

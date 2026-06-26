@@ -323,13 +323,13 @@ export async function createTask(input: CreateTaskInput): Promise<TaskActionResu
   return unwrap(await postJson<TaskActionResult>('/api/agent-tasks', input));
 }
 
-export async function replyTask(taskId: string, message: string, priority = 5, agent = 'mimo'): Promise<TaskActionResult> {
+export async function replyTask(taskId: string, message: string, priority = 5, agent = 'mimo', attachments: CreateTaskInput['attachments'] = []): Promise<TaskActionResult> {
   const encodedTaskId = encodeURIComponent(taskId);
-  const body = { message, priority, agent_id: agent };
+  const body = { message, priority, agent_id: agent, attachments };
   if (agent && agent !== 'mimo') {
     return unwrap(await postJson<TaskActionResult>('/api/agent-tasks/' + encodedTaskId + '/replies', body));
   }
-  return unwrap(await postJson<TaskActionResult>('/api/tasks/' + encodedTaskId + '/replies', { message, priority }));
+  return unwrap(await postJson<TaskActionResult>('/api/tasks/' + encodedTaskId + '/replies', { message, priority, attachments }));
 }
 
 export async function cancelTask(taskId: string, agent = 'mimo'): Promise<TaskActionResult> {
