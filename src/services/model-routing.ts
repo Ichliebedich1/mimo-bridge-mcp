@@ -12,7 +12,7 @@ import type {
 export const TASK_SCENARIOS: TaskScenario[] = ["multimodal", "simple", "normal", "complex", "high_risk"];
 export const REASONING_EFFORTS: ReasoningEffort[] = ["low", "medium", "high"];
 export const MIMO_MODELS = ["mimo-v2.5-flash", "mimo-v2.5-pro"] as const;
-export const MIMO_ULTRA_SPEED_MODEL = "mimo-v2.5-pro-ultra-speed" as const;
+export const MIMO_ULTRA_SPEED_MODEL = "mimo-v2.5-pro-ultraspeed" as const;
 export const REASONIX_MODELS = ["deepseek-v4-flash", "deepseek-v4-pro"] as const;
 
 export interface AgentRoutingProfile {
@@ -30,6 +30,7 @@ export interface ScenarioRoutingProfile {
 
 export interface RoutingProfilesResponse {
   default_scenario: TaskScenario;
+  enable_mimo_pro_ultra_speed: boolean;
   scenarios: Record<TaskScenario, ScenarioRoutingProfile>;
   allowed_models: Record<RoutingAgentId, string[]>;
   reasoning_efforts: ReasoningEffort[];
@@ -108,6 +109,7 @@ export function getRoutingProfiles(config: RoutingProfilesConfig | undefined = u
 
   return {
     default_scenario: "normal",
+    enable_mimo_pro_ultra_speed: config?.enable_mimo_pro_ultra_speed === true,
     scenarios,
     allowed_models: {
       mimo: mimoModels,
@@ -181,7 +183,7 @@ export function resolveRouting(
     return modelValidation;
   }
   if (scenario === "multimodal" && model !== "mimo-v2.5-flash") {
-    return { ok: false, error: "多模态任务必须使用 mimo-v2.5-flash；mimo-v2.5-pro 和 mimo-v2.5-pro-ultra-speed 不支持多模态" };
+    return { ok: false, error: "多模态任务必须使用 mimo-v2.5-flash；mimo-v2.5-pro 和 mimo-v2.5-pro-ultraspeed 不支持多模态" };
   }
 
   const profile = getRoutingProfiles(profiles).scenarios[scenario];

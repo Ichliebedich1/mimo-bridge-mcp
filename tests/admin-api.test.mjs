@@ -1081,6 +1081,7 @@ test("admin API GET /api/routing-profiles returns current routing settings", asy
       mcpConfig: {
         agents: [],
         routingProfiles: {
+          enable_mimo_pro_ultra_speed: true,
           scenarios: {
             simple: {
               agent_id: "reasonix-tui",
@@ -1095,7 +1096,9 @@ test("admin API GET /api/routing-profiles returns current routing settings", asy
     assert.strictEqual(result.body.ok, true);
     assert.strictEqual(result.body.data.scenarios.simple.current.agent_id, "reasonix-tui");
     assert.strictEqual(result.body.data.scenarios.simple.current.model, "deepseek-v4-flash");
+    assert.strictEqual(result.body.data.enable_mimo_pro_ultra_speed, true);
     assert.ok(result.body.data.allowed_models.mimo.includes("mimo-v2.5-flash"));
+    assert.ok(result.body.data.allowed_models.mimo.includes("mimo-v2.5-pro-ultraspeed"));
     assert.ok(result.body.data.allowed_models["reasonix-tui"].includes("deepseek-v4-pro"));
   } finally {
     fixture.cleanup();
@@ -1127,13 +1130,17 @@ test("admin API PUT /api/routing-profiles saves validated routing settings", asy
           reasoning_effort: "high",
         },
       },
+      enable_mimo_pro_ultra_speed: true,
     }, daemonConfig);
 
     assert.strictEqual(result.statusCode, 200);
     assert.strictEqual(result.body.data.scenarios.normal.current.agent_id, "reasonix-tui");
+    assert.strictEqual(result.body.data.enable_mimo_pro_ultra_speed, true);
     assert.strictEqual(daemonConfig.mcpConfig.routingProfiles.scenarios.normal.agent_id, "reasonix-tui");
+    assert.strictEqual(daemonConfig.mcpConfig.routingProfiles.enable_mimo_pro_ultra_speed, true);
     const saved = JSON.parse(readFileSync(configPath, "utf-8"));
     assert.strictEqual(saved.routingProfiles.scenarios.normal.model, "deepseek-v4-flash");
+    assert.strictEqual(saved.routingProfiles.enable_mimo_pro_ultra_speed, true);
   } finally {
     if (previousConfigPath === undefined) {
       delete process.env.MIMO_BRIDGE_CONFIG;

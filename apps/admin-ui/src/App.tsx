@@ -28,6 +28,7 @@ import {
   type TaskOpenAction,
 } from './api';
 import { CODEX_NEW_THREAD_URL, copyCodexReviewPrompt, resolveCodexHandoffUrl } from './codex-handoff.mjs';
+import { shouldSyncRoutingDraftFromServer } from './routing-draft';
 import { canAbandonTaskStatus, canAcceptTaskStatus, canCancelTaskStatus, canDiscardWorktreeStatus, canReplyTaskStatus } from './task-actions';
 import type {
   ChangedFile,
@@ -1764,10 +1765,20 @@ function RoutingSettingsPage({
   onSave: (next: RoutingProfiles) => Promise<void>;
 }) {
   const [draft, setDraft] = useState<RoutingProfiles | null>(routingProfiles);
+  const [routingDirty, setRoutingDirty] = useState(false);
 
   useEffect(() => {
-    setDraft(routingProfiles);
-  }, [routingProfiles]);
+    if (shouldSyncRoutingDraftFromServer({ isDirty: routingDirty, serverProfiles: routingProfiles, draft })) {
+      setDraft(routingProfiles);
+      setRoutingDirty(false);
+    }
+  }, [draft, routingDirty, routingProfiles]);
+
+  async function saveDraft() {
+    if (!draft) return;
+    await onSave(draft);
+    setRoutingDirty(false);
+  }
 
   if (!draft) {
     return (
@@ -1779,6 +1790,7 @@ function RoutingSettingsPage({
   }
 
   function updateScenario(scenario: TaskScenario, patch: Partial<{ agent_id: RoutingAgentId; model: string; reasoning_effort: ReasoningEffort }>) {
+    setRoutingDirty(true);
     setDraft((current) => {
       if (!current) return current;
       const next = structuredClone(current);
@@ -1807,10 +1819,11 @@ function RoutingSettingsPage({
   }
 
   function toggleUltraSpeed(enabled: boolean) {
+    setRoutingDirty(true);
     setDraft((current) => {
       if (!current) return current;
       const next = structuredClone(current);
-      const ultraSpeedModel = 'mimo-v2.5-pro-ultra-speed';
+      const ultraSpeedModel = 'mimo-v2.5-pro-ultraspeed';
       next.enable_mimo_pro_ultra_speed = enabled;
       if (enabled) {
         if (!next.allowed_models.mimo.includes(ultraSpeedModel)) {
@@ -1837,10 +1850,15 @@ function RoutingSettingsPage({
       <section className="panel wide">
         <div className="section-title">
           <PanelHeader title="模型路由设置" helper="配置每种场景默认使用哪个 Agent、模型和思考强度；新建任务 Auto 模式会读取这里。" />
-          <button className="button primary" disabled={actionBusy} onClick={() => void onSave(draft)} type="button">
+          <button className="button primary" disabled={actionBusy} onClick={() => void saveDraft()} type="button">
             保存路由设置
           </button>
         </div>
+        {routingDirty && (
+          <div className="warning-card compact">
+            当前有未保存的路由设置。后台自动刷新不会覆盖你正在编辑的 Ultra Speed 开关或模型选择。
+          </div>
+        )}
         {routingProfilesFallback && (
           <div className="warning-card compact">
             当前显示的是内置默认策略，因为后台还没有返回 `/api/routing-profiles`。如果保存失败，请先重启 MiMo Bridge 后台再刷新页面。
@@ -1917,7 +1935,7 @@ function RoutingSettingsPage({
             <ul>
               <li><code>mimo-v2.5-flash</code>：支持多模态；flash 价格，适合简单/普通任务。</li>
               <li><code>mimo-v2.5-pro</code>：不支持多模态；pro 价格，适合复杂/高风险任务。</li>
-              {ultraSpeedEnabled && <li><code>mimo-v2.5-pro-ultra-speed</code>：不支持多模态；ultra_speed 价格（约 Pro 3 倍），适合很急的复杂/大输出任务。</li>}
+              {ultraSpeedEnabled && <li><code>mimo-v2.5-pro-ultraspeed</code>：不支持多模态；ultra_speed 价格（约 Pro 3 倍），适合很急的复杂/大输出任务。</li>}
             </ul>
           </div>
           <div className="model-card">

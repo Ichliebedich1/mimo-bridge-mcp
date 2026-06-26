@@ -1,7 +1,10 @@
-﻿# Open Tasks
+# Open Tasks
 
 ## Pending
 
+- Token budget page v2: add time-range statistics, separate MiMo vs Reasonix token usage, include cache-hit tokens, and display estimated cost in CNY. Current TokenBudget plumbing records real events, but the UI still needs richer aggregation.
+- Investigate task detail "open conversation in CMD" false success: Admin UI reports success for MiMo/Reasonix session terminal actions, but no visible CMD window appears for the user. Audit launcher/task-open-actions process spawning, windowsHide/detached flags, installed-vs-source environment, and whether daemon service/session isolation prevents interactive windows.
+- Reasonix reliability pass remains required: repeated delegated tasks fail or stop early. The current local runner work-in-progress attempts auto-resume for `agent.max_steps`, but it still needs focused tests, review, and a clean commit before using Reasonix for implementation again.
 - Make task completion/failure wake Codex or reliably break out to recovery. Current state is still insufficient: during the Ultra Speed delegation, MiMo completed and Reasonix failed, but Codex remained stuck in a long wait. The recovery inbox helps after interruption, but the collaboration loop still needs a stronger mechanism so terminal task state triggers review/intervention promptly without Codex polling full state.
 - Pause Reasonix for implementation work until a reliability pass is done. Reasonix TUI has repeatedly failed on delegated development tasks, often leaving Codex to recover manually. Before using it for core implementation again, audit failure causes, step limits, resume behavior, prompt shape, model settings, and UI/backend task sizing. Prefer MiMo-only execution for the current Ultra Speed feature.
 - Keep safe-client BOM handling under regression. The client now strips UTF-8 BOM from JSON files/stdin, but this failure has happened repeatedly during Codex-to-Agent dispatch, so future safe invocation changes must keep BOM file/stdin tests and avoid ad hoc PowerShell/Node JSON generation.

@@ -117,6 +117,7 @@ test("reasoning effort maps to Reasonix max steps", () => {
 
 test("ultra speed is disabled by default: not in allowed_models and rejected by validation", () => {
   const profiles = getRoutingProfiles();
+  assert.strictEqual(profiles.enable_mimo_pro_ultra_speed, false);
   assert.strictEqual(profiles.allowed_models.mimo.includes(MIMO_ULTRA_SPEED_MODEL), false);
   assert.strictEqual(validateModelForAgent("mimo", MIMO_ULTRA_SPEED_MODEL).ok, false);
   assert.match(validateModelForAgent("mimo", MIMO_ULTRA_SPEED_MODEL).error, /Ultra Speed 未启用/);
@@ -125,6 +126,7 @@ test("ultra speed is disabled by default: not in allowed_models and rejected by 
 test("ultra speed is available when enabled: in allowed_models and accepted by validation", () => {
   const config = { enable_mimo_pro_ultra_speed: true };
   const profiles = getRoutingProfiles(config);
+  assert.strictEqual(profiles.enable_mimo_pro_ultra_speed, true);
   assert.strictEqual(profiles.allowed_models.mimo.includes(MIMO_ULTRA_SPEED_MODEL), true);
   assert.strictEqual(validateModelForAgent("mimo", MIMO_ULTRA_SPEED_MODEL, config).ok, true);
 });
