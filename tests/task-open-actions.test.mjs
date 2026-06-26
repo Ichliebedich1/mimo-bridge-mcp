@@ -451,3 +451,99 @@ test("createOpenTaskTargetHandler opens Reasonix GUI without returning executabl
     rmSync(root, { recursive: true, force: true });
   }
 });
+
+test("createOpenTaskTargetHandler marks MiMo session terminal as visible", async () => {
+  const root = tmpDir();
+  try {
+    const repo = join(root, "repo");
+    const runtime = join(root, "runtime");
+    const mimoEntry = join(root, "mimo-cli.mjs");
+    mkdirSync(repo, { recursive: true });
+    writeFileSync(mimoEntry, "", "utf-8");
+    const store = new TaskStore(runtime);
+    const task = store.createTask({
+      objective: "open visible mimo terminal",
+      workspace_path: repo,
+      editable_paths: [],
+      readonly_paths: [],
+      acceptance_criteria: [],
+      max_rounds: 1,
+      runtime_timeout_seconds: 60,
+    }, { session_id: "ses_terminal_visible" });
+    const opened = [];
+    const handler = createOpenTaskTargetHandler(
+      {
+        ...daemonConfig(root),
+        mcpConfig: {
+          ...daemonConfig(root).mcpConfig,
+          mimoEntryPath: mimoEntry,
+        },
+      },
+      store,
+      {
+        openExecutable: (command, args, options) => {
+          opened.push({ command, args, options });
+          return { ok: true };
+        },
+      }
+    );
+
+    const result = await handler.handler({ task_id: task.task_id, action: "mimo_session_terminal" });
+    assert.ok(!("error" in result));
+    assert.strictEqual(opened.length, 1);
+    assert.strictEqual(opened[0].command, "cmd.exe");
+    assert.strictEqual(opened[0].options.visibleTerminal, true);
+    assert.strictEqual(result.target_kind, "mimo_session_terminal");
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("createOpenTaskTargetHandler marks Reasonix session terminal as visible", async () => {
+  const root = tmpDir();
+  try {
+    const repo = join(root, "repo");
+    const runtime = join(root, "runtime");
+    const reasonixHome = join(root, "ReasonixData");
+    const reasonixBin = join(root, "bin", "reasonix.exe");
+    const sessionDir = join(reasonixHome, "projects", "repo", "sessions");
+    const sessionPath = join(sessionDir, "session.jsonl");
+    mkdirSync(repo, { recursive: true });
+    mkdirSync(join(root, "bin"), { recursive: true });
+    mkdirSync(sessionDir, { recursive: true });
+    writeFileSync(reasonixBin, "", "utf-8");
+    writeFileSync(sessionPath, "{}\n", "utf-8");
+    const store = new TaskStore(runtime);
+    const task = store.createTask({
+      objective: "open visible reasonix terminal",
+      workspace_path: repo,
+      editable_paths: [],
+      readonly_paths: [],
+      acceptance_criteria: [],
+      max_rounds: 1,
+      runtime_timeout_seconds: 60,
+    }, { agent: "reasonix-tui" });
+    store.updateTaskAgentSession(task.task_id, sessionPath);
+    const opened = [];
+    const handler = createOpenTaskTargetHandler(
+      daemonConfig(root, [{ id: "reasonix-tui", kind: "reasonix-tui", display_name: "Reasonix TUI", enabled: true, command: reasonixBin, home_dir: reasonixHome }]),
+      store,
+      {
+        openExecutable: (command, args, options) => {
+          opened.push({ command, args, options });
+          return { ok: true };
+        },
+      }
+    );
+
+    const result = await handler.handler({ task_id: task.task_id, action: "reasonix_session_terminal" });
+    assert.ok(!("error" in result));
+    assert.strictEqual(opened.length, 1);
+    assert.strictEqual(opened[0].command, "cmd.exe");
+    assert.strictEqual(opened[0].options.visibleTerminal, true);
+    assert.strictEqual(opened[0].options.env.REASONIX_HOME, resolve(reasonixHome));
+    assert.strictEqual(result.target_kind, "reasonix_session_terminal");
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});

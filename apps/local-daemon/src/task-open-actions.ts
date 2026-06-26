@@ -35,6 +35,7 @@ export interface OpenTaskTargetDependencies {
 export interface OpenExecutableOptions {
   cwd?: string;
   env?: NodeJS.ProcessEnv;
+  visibleTerminal?: boolean;
 }
 
 interface ResolvedTarget {
@@ -43,6 +44,7 @@ interface ResolvedTarget {
   args?: string[];
   cwd?: string;
   env?: NodeJS.ProcessEnv;
+  visibleTerminal?: boolean;
 }
 
 export function createOpenTaskTargetHandler(
@@ -68,7 +70,7 @@ export function createOpenTaskTargetHandler(
       }
 
       const opened = isExecutableTarget(resolved.kind)
-        ? await openExecutable(resolved.path, resolved.args ?? [], { cwd: resolved.cwd, env: resolved.env })
+        ? await openExecutable(resolved.path, resolved.args ?? [], { cwd: resolved.cwd, env: resolved.env, visibleTerminal: resolved.visibleTerminal })
         : await openPath(resolved.path);
       if (!opened.ok) {
         return { error: opened.error ?? "Failed to open local path." };
@@ -236,6 +238,7 @@ function resolveMimoSessionTerminalTarget(config: DaemonConfig, task: TaskState)
     args: ["/k", command.command],
     cwd: cwdTarget.path,
     env: process.env,
+    visibleTerminal: true,
   };
 }
 
@@ -274,6 +277,7 @@ function resolveReasonixSessionTerminalTarget(config: DaemonConfig, task: TaskSt
       ...(agent.home_dir ? { REASONIX_HOME: resolve(agent.home_dir) } : {}),
       REASONIX_LANG: process.env.REASONIX_LANG || "zh",
     },
+    visibleTerminal: true,
   };
 }
 
@@ -387,12 +391,13 @@ async function defaultOpenPath(pathToOpen: string): Promise<OpenPathResult> {
 async function defaultOpenExecutable(command: string, args: string[], options: OpenExecutableOptions): Promise<OpenPathResult> {
   return new Promise((resolvePromise) => {
     try {
-      const child = spawn(command, args, {
+      const launch = buildExecutableLaunch(command, args, options);
+      const child = spawn(launch.command, launch.args, {
         cwd: options.cwd,
         detached: true,
-        env: options.env,
+        env: launch.env,
         stdio: "ignore",
-        windowsHide: false,
+        windowsHide: launch.windowsHide,
       });
       child.once("error", (error) => resolvePromise({ ok: false, error: error.message }));
       child.unref();
@@ -401,4 +406,31 @@ async function defaultOpenExecutable(command: string, args: string[], options: O
       resolvePromise({ ok: false, error: error instanceof Error ? error.message : String(error) });
     }
   });
+}
+
+function buildExecutableLaunch(
+  command: string,
+  args: string[],
+  options: OpenExecutableOptions,
+): { command: string; args: string[]; env?: NodeJS.ProcessEnv; windowsHide: boolean } {
+  if (process.platform !== "win32" || !options.visibleTerminal) {
+    return { command, args, env: options.env, windowsHide: false };
+  }
+
+  const script = [
+    `$env:REASONIX_HOME = ${toPowerShellString(options.env?.REASONIX_HOME)}`,
+    `$env:REASONIX_LANG = ${toPowerShellString(options.env?.REASONIX_LANG ?? process.env.REASONIX_LANG ?? "zh")}`,
+    `$argumentList = @(${args.map(toPowerShellString).join(", ")})`,
+    `Start-Process -FilePath ${toPowerShellString(command)} -ArgumentList $argumentList -WorkingDirectory ${toPowerShellString(options.cwd ?? process.cwd())} -WindowStyle Normal`,
+  ].join("; ");
+  return {
+    command: "powershell.exe",
+    args: ["-NoProfile", "-ExecutionPolicy", "Bypass", "-EncodedCommand", Buffer.from(script, "utf16le").toString("base64")],
+    env: options.env,
+    windowsHide: true,
+  };
+}
+
+function toPowerShellString(value: string | undefined): string {
+  return "'" + String(value ?? "").replace(/'/g, "''") + "'";
 }
