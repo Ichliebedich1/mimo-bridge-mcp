@@ -195,6 +195,8 @@ export function resolveMimoCliModel(model: string | undefined): string | null {
       return "xiaomi/mimo-v2.5";
     case "mimo-v2.5-pro":
       return "xiaomi/mimo-v2.5-pro";
+    case "mimo-v2.5-pro-ultra-speed":
+      return "xiaomi/mimo-v2.5-pro-ultra-speed";
     default:
       return null;
   }

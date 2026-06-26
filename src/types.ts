@@ -92,6 +92,7 @@ export interface RoutingSelection {
 
 export interface RoutingProfilesConfig {
   scenarios?: Partial<Record<TaskScenario, RoutingSelection>>;
+  enable_mimo_pro_ultra_speed?: boolean;
 }
 
 export interface RoutingConfig extends RoutingSelection {

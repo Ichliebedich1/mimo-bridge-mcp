@@ -12,6 +12,7 @@ import type {
 export const TASK_SCENARIOS: TaskScenario[] = ["multimodal", "simple", "normal", "complex", "high_risk"];
 export const REASONING_EFFORTS: ReasoningEffort[] = ["low", "medium", "high"];
 export const MIMO_MODELS = ["mimo-v2.5-flash", "mimo-v2.5-pro"] as const;
+export const MIMO_ULTRA_SPEED_MODEL = "mimo-v2.5-pro-ultra-speed" as const;
 export const REASONIX_MODELS = ["deepseek-v4-flash", "deepseek-v4-pro"] as const;
 
 export interface AgentRoutingProfile {
@@ -35,6 +36,7 @@ export interface RoutingProfilesResponse {
   pricing_per_1m_cny: {
     flash: { input: number; output: number; cache_hit: number };
     pro: { input: number; output: number; cache_hit: number };
+    ultra_speed: { input: number; output: number; cache_hit: number };
   };
 }
 
@@ -90,7 +92,7 @@ export function getRoutingProfiles(config: RoutingProfilesConfig | undefined = u
   const scenarios = {} as Record<TaskScenario, ScenarioRoutingProfile>;
   for (const scenario of TASK_SCENARIOS) {
     const base = BASE_SCENARIOS[scenario];
-    const override = normalizeScenarioSelection(scenario, config?.scenarios?.[scenario]) ?? base.default_current;
+    const override = normalizeScenarioSelection(scenario, config?.scenarios?.[scenario], config) ?? base.default_current;
     scenarios[scenario] = {
       description: base.description,
       supports_multimodal: base.supports_multimodal,
@@ -99,17 +101,23 @@ export function getRoutingProfiles(config: RoutingProfilesConfig | undefined = u
     };
   }
 
+  const mimoModels: string[] = [...MIMO_MODELS];
+  if (config?.enable_mimo_pro_ultra_speed) {
+    mimoModels.push(MIMO_ULTRA_SPEED_MODEL);
+  }
+
   return {
     default_scenario: "normal",
     scenarios,
     allowed_models: {
-      mimo: [...MIMO_MODELS],
+      mimo: mimoModels,
       "reasonix-tui": [...REASONIX_MODELS],
     },
     reasoning_efforts: [...REASONING_EFFORTS],
     pricing_per_1m_cny: {
       flash: { input: 1, output: 3, cache_hit: 0.02 },
       pro: { input: 3, output: 6, cache_hit: 0.025 },
+      ultra_speed: { input: 9, output: 18, cache_hit: 0.075 },
     },
   };
 }
@@ -118,12 +126,18 @@ export function normalizeRoutingProfilesConfig(input: unknown): { ok: true; conf
   if (!isRecord(input)) {
     return { ok: false, error: "路由配置必须是 JSON 对象" };
   }
+  const enableUltraSpeed = input.enable_mimo_pro_ultra_speed === true;
+  const disableUltraSpeedExplicitly = Object.prototype.hasOwnProperty.call(input, "enable_mimo_pro_ultra_speed") && !enableUltraSpeed;
   const rawScenarios = isRecord(input.scenarios) ? input.scenarios : input;
   const scenarios: Partial<Record<TaskScenario, RoutingSelection>> = {};
+  const configForValidation: RoutingProfilesConfig = { enable_mimo_pro_ultra_speed: enableUltraSpeed };
 
   for (const scenario of TASK_SCENARIOS) {
-    const selection = normalizeScenarioSelection(scenario, rawScenarios[scenario]);
+    const selection = normalizeScenarioSelection(scenario, rawScenarios[scenario], configForValidation);
     if (rawScenarios[scenario] !== undefined && !selection) {
+      if (disableUltraSpeedExplicitly && isDisabledUltraSpeedSelection(rawScenarios[scenario])) {
+        continue;
+      }
       return { ok: false, error: `场景 ${scenario} 的路由配置无效` };
     }
     if (selection) {
@@ -131,7 +145,7 @@ export function normalizeRoutingProfilesConfig(input: unknown): { ok: true; conf
     }
   }
 
-  return { ok: true, config: { scenarios } };
+  return { ok: true, config: { scenarios, enable_mimo_pro_ultra_speed: enableUltraSpeed || undefined } };
 }
 
 export function resolveRouting(
@@ -162,12 +176,12 @@ export function resolveRouting(
   const defaultSelection = getSelectionForAgent(agentId, scenario, profiles);
   const model = options.model ?? defaultSelection.model;
   const effort = options.reasoning_effort ?? (routingMode === "manual" ? "medium" : defaultSelection.reasoning_effort);
-  const modelValidation = validateModelForAgent(agentId, model);
+  const modelValidation = validateModelForAgent(agentId, model, profiles);
   if (!modelValidation.ok) {
     return modelValidation;
   }
   if (scenario === "multimodal" && model !== "mimo-v2.5-flash") {
-    return { ok: false, error: "多模态任务必须使用 mimo-v2.5-flash；mimo-v2.5-pro 不支持多模态" };
+    return { ok: false, error: "多模态任务必须使用 mimo-v2.5-flash；mimo-v2.5-pro 和 mimo-v2.5-pro-ultra-speed 不支持多模态" };
   }
 
   const profile = getRoutingProfiles(profiles).scenarios[scenario];
@@ -204,9 +218,15 @@ export function selectRoutingAgent(
   return getRoutingProfiles(profiles).scenarios[scenario].current.agent_id;
 }
 
-export function validateModelForAgent(agent: AgentKind | RoutingAgentId, model: string): { ok: true } | { ok: false; error: string } {
+export function validateModelForAgent(agent: AgentKind | RoutingAgentId, model: string, config?: RoutingProfilesConfig): { ok: true } | { ok: false; error: string } {
   const agentId = agentKindToRoutingAgent(agent);
   if (agentId === "mimo") {
+    if (model === MIMO_ULTRA_SPEED_MODEL) {
+      if (!config?.enable_mimo_pro_ultra_speed) {
+        return { ok: false, error: `MiMo 不支持模型 "${model}"，Ultra Speed 未启用` };
+      }
+      return { ok: true };
+    }
     if (!MIMO_MODELS.includes(model as typeof MIMO_MODELS[number])) {
       return { ok: false, error: `MiMo 不支持模型 "${model}"，允许的模型: ${MIMO_MODELS.join(", ")}` };
     }
@@ -253,7 +273,7 @@ function getSelectionForAgent(
   return { agent_id: agentId, model: recommended.model, reasoning_effort: recommended.reasoning_effort };
 }
 
-function normalizeScenarioSelection(scenario: TaskScenario, input: unknown): RoutingSelection | null {
+function normalizeScenarioSelection(scenario: TaskScenario, input: unknown, config?: RoutingProfilesConfig): RoutingSelection | null {
   if (!isRecord(input)) return null;
   const candidate = isRecord(input.current) ? input.current : input;
   const agentId = candidate.agent_id === "mimo" || candidate.agent_id === "reasonix-tui" ? candidate.agent_id : null;
@@ -263,8 +283,15 @@ function normalizeScenarioSelection(scenario: TaskScenario, input: unknown): Rou
     : null;
   if (!agentId || !model || !effort) return null;
   if (scenario === "multimodal" && (agentId !== "mimo" || model !== "mimo-v2.5-flash")) return null;
-  if (!validateModelForAgent(agentId, model).ok) return null;
+  if (model === MIMO_ULTRA_SPEED_MODEL && !config?.enable_mimo_pro_ultra_speed) return null;
+  if (!validateModelForAgent(agentId, model, config).ok) return null;
   return { agent_id: agentId, model, reasoning_effort: effort };
+}
+
+function isDisabledUltraSpeedSelection(input: unknown): boolean {
+  if (!isRecord(input)) return false;
+  const candidate = isRecord(input.current) ? input.current : input;
+  return candidate.agent_id === "mimo" && candidate.model === MIMO_ULTRA_SPEED_MODEL;
 }
 
 function agentKindToRoutingAgent(agent: AgentKind | RoutingAgentId): RoutingAgentId | null {

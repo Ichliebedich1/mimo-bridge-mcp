@@ -22,7 +22,7 @@ function makeTask(routing) {
 test("resolveMimoCliModel maps Bridge model labels to MiMo CLI provider/model names", () => {
   assert.equal(resolveMimoCliModel("mimo-v2.5-flash"), "xiaomi/mimo-v2.5");
   assert.equal(resolveMimoCliModel("mimo-v2.5-pro"), "xiaomi/mimo-v2.5-pro");
-  assert.equal(resolveMimoCliModel("xiaomi/mimo-v2.5-pro-ultraspeed"), "xiaomi/mimo-v2.5-pro-ultraspeed");
+  assert.equal(resolveMimoCliModel("mimo-v2.5-pro-ultra-speed"), "xiaomi/mimo-v2.5-pro-ultra-speed");
   assert.equal(resolveMimoCliModel("unknown-model"), null);
   assert.equal(resolveMimoCliModel(undefined), null);
 });
@@ -50,3 +50,14 @@ test("buildMimoArgs passes provider/model and variant to the MiMo CLI", () => {
   ]);
 });
 
+test("buildMimoArgs passes ultra-speed provider/model to the MiMo CLI", () => {
+  const args = buildMimoArgs(makeTask({
+    model: "mimo-v2.5-pro-ultra-speed",
+    reasoning_effort: "high",
+  }), "C:/runtime");
+
+  assert.deepEqual(args.slice(args.indexOf("--model"), args.indexOf("--model") + 2), [
+    "--model",
+    "xiaomi/mimo-v2.5-pro-ultra-speed",
+  ]);
+});
