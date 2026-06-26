@@ -9,7 +9,7 @@ These are issue drafts for contributors. Each one should still be reviewed and a
 - **Background:** The README has a Mermaid architecture diagram. A contributor could improve it with a clearer visual flow or add an exported image for platforms that do not render Mermaid.
 - **Expected outcome:** README architecture section is easier to understand in under 30 seconds.
 - **Files likely involved:** `README.md`, optionally `docs/ARCHITECTURE.md`.
-- **Notes for contributors:** Keep the core message: Codex plans/reviews, MiMo Code executes in isolated Git Worktrees.
+- **Notes for contributors:** Keep the core message: Codex plans/reviews, MiMo or Reasonix executes in isolated Git Worktrees, and the final decision stays with Codex or the user.
 
 ## 2. Add Chinese README Screenshots
 
@@ -65,13 +65,13 @@ These are issue drafts for contributors. Each one should still be reviewed and a
 - **Files likely involved:** `docs/TROUBLESHOOTING.md`.
 - **Notes for contributors:** Keep commands Windows PowerShell friendly.
 
-## 8. Improve MiMo Code Runner Timeout Handling
+## 8. Improve Agent Runner Timeout Handling
 
 - **Type:** Reliability
 - **Difficulty:** Intermediate
-- **Background:** Runner stability and timeout behavior are important for safe task delegation.
+- **Background:** Runner stability and timeout behavior are important for safe task delegation. MiMo and Reasonix should both fail clearly when a task stalls or hits a step/time limit.
 - **Expected outcome:** Better timeout behavior, clearer failure reporting, or tests around runner timeouts.
-- **Files likely involved:** `src/services/mimo-runner.ts`, `src/tools/wait-task.ts`, tests.
+- **Files likely involved:** `src/services/mimo-runner.ts`, `src/services/reasonix-tui-runner.ts`, `src/tools/wait-task.ts`, tests.
 - **Notes for contributors:** Open an issue before implementation. This touches runtime behavior.
 
 ## 9. Add Admin UI Screenshots

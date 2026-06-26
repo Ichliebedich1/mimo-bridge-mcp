@@ -1,6 +1,6 @@
-# Contributing to MiMo Bridge MCP
+# Contributing to AgentBridge Local
 
-Thanks for helping improve MiMo Bridge MCP. This project is about a practical workflow: Codex plans and reviews; MiMo Code executes bounded tasks in isolated Git Worktrees.
+Thanks for helping improve AgentBridge Local, formerly MiMo Bridge MCP. This project is about a practical workflow: Codex plans and reviews; local agents such as MiMo Code or Reasonix TUI execute bounded tasks in isolated Git Worktrees.
 
 ## Local Setup
 
@@ -9,7 +9,8 @@ Prerequisites:
 - Windows 10/11 x64 for the primary supported path.
 - Node.js 18 or newer for source checkout development.
 - Git.
-- MiMo Code installed and logged in for real runner testing.
+- MiMo Code installed and logged in for real MiMo runner testing.
+- Reasonix installed/configured for real Reasonix TUI runner testing.
 - Codex or another MCP-capable client for integration testing.
 
 Install dependencies and build:
@@ -43,7 +44,7 @@ http://127.0.0.1:3210/mcp
 
 1. Open an issue first for behavior changes, security-sensitive changes, installer changes, task lifecycle changes, or anything that affects merge/discard behavior.
 2. Keep pull requests focused. Documentation, tests, UI polish, launcher changes, and runner changes are easier to review when separated.
-3. Preserve the core boundary: Codex reviews and accepts; MiMo Code executes bounded tasks; MiMo must not merge its own Worktree.
+3. Preserve the core boundary: Codex reviews and accepts; execution agents run bounded tasks; MiMo or Reasonix must not merge their own Worktree.
 4. Update relevant docs when changing commands, paths, ports, packaging behavior, or safety assumptions.
 5. Include screenshots or short notes for UI and installer changes when useful.
 
@@ -91,6 +92,7 @@ The main release target is Windows 10/11 x64. Useful validation includes:
 - Port `3210` conflict behavior.
 - Reboot/logon behavior when autostart is enabled by the user.
 - MiMo Code not installed or not logged in.
+- Reasonix not installed or not configured.
 - Antivirus or SmartScreen reactions to the installer.
 
 ## Test References
@@ -122,7 +124,7 @@ Tests not run; documentation-only change.
 Do not include:
 
 - API keys.
-- MiMo credentials or login state.
+- MiMo or Reasonix credentials or login state.
 - Tokens.
 - Full local logs that include private paths or user data.
 - Active task runtime data.

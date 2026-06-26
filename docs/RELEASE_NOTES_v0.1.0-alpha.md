@@ -1,43 +1,50 @@
-# v0.1.0-alpha: Codex -> MiMo Code MCP Bridge for Windows
+# v0.1.0-alpha: AgentBridge Local
 
-MiMo Bridge MCP is a local MCP bridge that lets Codex delegate bounded coding tasks to MiMo Code while keeping Codex in charge of planning, review, and final acceptance.
+AgentBridge Local is a local-first MCP orchestration console for Codex, MiMo Code, Reasonix TUI, and future local coding agents.
+
+Former name: **MiMo Bridge MCP**.
 
 ## What It Does
 
-- Lets Codex delegate bounded coding tasks to MiMo Code.
+- Lets Codex delegate bounded coding tasks to local execution agents.
+- Supports MiMo Code through legacy `mimo_*` tools and the shared task queue.
+- Supports Reasonix TUI through generic `agent_*` tools.
 - Runs as a localhost-only daemon.
 - Uses Git Worktrees for isolated task execution.
-- Provides a review-oriented MCP workflow to reduce token usage.
+- Provides a compact Review Package workflow to reduce Codex token usage.
 - Lets Codex read review summaries first, then focused diffs, files, or logs only when needed.
-- Includes a local Admin UI served by the same daemon.
+- Includes a browser-based Admin UI served by the same daemon.
+- Supports task attachments, including pasted images and uploaded files.
+- Includes model routing profiles for simple, normal, complex, high-risk, and multimodal tasks.
 - Includes Windows portable ZIP and EXE installer packaging workflow.
 
 ## Current Limitations
 
 - Windows 10/11 x64 first.
-- MiMo Code must be installed and logged in separately.
-- Early alpha; expect bugs.
-- Runner stability and clean Windows validation still need community testing.
+- MiMo Code and Reasonix must be installed and logged in/configured separately.
+- Early alpha; expect rough edges.
+- Clean Windows validation still needs more community testing.
 - The daemon is designed for localhost use only, not public network exposure.
-- Token budget tracking is not yet connected to real MiMo token events.
+- Reasonix GUI opening is companion viewing only; direct deep-link to a specific Reasonix session is not guaranteed.
+- Release artifact names still use `MiMoBridge...` for compatibility.
 
 ## Looking For Contributors
 
 - Windows installer testing.
-- Portable ZIP testing on clean Windows 10.
-- Codex MCP integration testing.
-- MiMo Code runner stability feedback.
-- Documentation and examples.
-- Admin UI improvements.
-- Release validation.
-- Demo GIF and screenshot contributions.
+- Portable ZIP testing on clean Windows 10/11.
+- Codex MCP integration examples.
+- MiMo Code and Reasonix task-flow testing.
+- Documentation and troubleshooting improvements.
+- Admin UI screenshots and demo GIFs.
+- Release validation reports.
+- New local Agent adapters.
 
 ## Safety Note
 
 - Do not expose the local daemon to public networks.
 - Review all diffs before merging task Worktrees.
-- Do not share API keys, MiMo credentials, tokens, full private logs, or local Worktrees in issues.
-- MiMo Code should not merge its own task Worktree; Codex or the user should make the final decision.
+- Do not share API keys, credentials, tokens, full private logs, local Worktrees, or unredacted personal paths in issues.
+- Execution agents should not merge their own task Worktrees; Codex or the user should make the final decision.
 
 ## Quick Links
 
@@ -46,3 +53,4 @@ MiMo Bridge MCP is a local MCP bridge that lets Codex delegate bounded coding ta
 - Troubleshooting: `docs/TROUBLESHOOTING.md`
 - Good First Issues: `docs/GOOD_FIRST_ISSUES.md`
 - Release validation checklist: `docs/RELEASE_VALIDATION.md`
+- Demo script: `docs/DEMO_SCRIPT.md`

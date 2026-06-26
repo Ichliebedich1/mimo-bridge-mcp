@@ -1,7 +1,7 @@
 {
   "name": "mimo-bridge-mcp-server",
   "version": "0.1.0",
-  "description": "MCP 传话员：连接 Codex 与 MiMo Code 的桥梁",
+  "description": "AgentBridge Local: local-first MCP orchestration for Codex, MiMo Code, Reasonix TUI, and Git Worktree review workflows",
   "type": "module",
   "main": "dist/index.js",
   "scripts": {

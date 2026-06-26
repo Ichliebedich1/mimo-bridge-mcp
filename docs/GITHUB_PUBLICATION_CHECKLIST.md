@@ -1,13 +1,19 @@
 # GitHub Publication Checklist
 
-Use this checklist when preparing the public GitHub repository page for MiMo Bridge MCP.
+Use this checklist when preparing the public GitHub repository page for **AgentBridge Local**.
 
 ## Repository About
 
 Suggested description:
 
 ```text
-MCP bridge that lets Codex delegate bounded coding tasks to MiMo Code in isolated Git Worktrees.
+Local-first MCP orchestration console for Codex, MiMo Code, Reasonix TUI, and bounded Git Worktree review workflows.
+```
+
+Shorter alternative:
+
+```text
+Let Codex coordinate local coding agents through safe MCP tasks, Git Worktrees, and low-token Review Packages.
 ```
 
 Suggested website:
@@ -26,18 +32,18 @@ Recommended topics:
 mcp
 model-context-protocol
 codex
-mimo
-mimo-code
 coding-agent
 ai-agent
 agentic-coding
-claude-code
 local-first
 windows
 git-worktree
 token-optimization
 developer-tools
 llm-tools
+mimo-code
+reasonix
+multi-agent
 ```
 
 If GitHub topic limits require a shorter list, prioritize:
@@ -46,11 +52,13 @@ If GitHub topic limits require a shorter list, prioritize:
 mcp
 model-context-protocol
 codex
-mimo-code
 coding-agent
 ai-agent
+local-first
 git-worktree
 token-optimization
+multi-agent
+windows
 ```
 
 ## Repository Features
@@ -63,6 +71,19 @@ Recommended settings:
 - Enable GitHub private vulnerability reporting if available.
 - Keep Actions enabled if CI or release validation workflows are added later.
 
+## First-Screen README Check
+
+The top of the README should make these points clear in under 30 seconds:
+
+- AgentBridge Local is the new project name.
+- Former name: MiMo Bridge MCP.
+- Codex plans and reviews.
+- MiMo / Reasonix execute bounded tasks.
+- Tasks run in Git Worktrees.
+- Codex starts from a compact Review Package instead of full logs/diffs/source.
+- The daemon is localhost-only.
+- Windows 10/11 x64 is the first target.
+
 ## Pinned / Highlighted Content
 
 Recommended links to mention in the repository README or release:
@@ -73,6 +94,7 @@ Recommended links to mention in the repository README or release:
 - `docs/GOOD_FIRST_ISSUES.md` for contributor entry points.
 - `docs/RELEASE_NOTES_v0.1.0-alpha.md` for the first alpha release.
 - `docs/RELEASE_VALIDATION.md` for clean Windows testing.
+- `docs/DEMO_SCRIPT.md` for launch copy and demo video/GIF planning.
 
 ## First Release Checklist
 
@@ -80,10 +102,11 @@ Before publishing `v0.1.0-alpha`:
 
 - Confirm clean Windows 10 x64 portable ZIP validation.
 - Confirm clean Windows 11 x64 EXE installer validation.
-- Confirm MiMo Code installed/logged-in requirement is clear.
+- Confirm MiMo Code and Reasonix are described as separately installed tools.
 - Confirm Codex MCP endpoint documentation uses `http://127.0.0.1:3210/mcp`.
 - Confirm Admin UI documentation uses `http://127.0.0.1:3210/`.
-- Confirm no artifacts contain MiMo credentials, logs, local data, active tasks, or Worktrees.
+- Confirm artifact naming is explained: release files still use `MiMoBridge...` for compatibility while the product name is AgentBridge Local.
+- Confirm no artifacts contain credentials, logs, local data, active tasks, or Worktrees.
 - Attach release artifacts only after a clean packaging run.
 
 ## Suggested Release Assets
@@ -99,8 +122,18 @@ Before publishing `v0.1.0-alpha`:
 - Reddit communities focused on local AI agents, MCP, and developer tools, following each community's self-promotion rules.
 - Hacker News "Show HN" only after a clean demo and README are ready.
 - V2EX or similar Chinese developer communities.
-- 知乎 / 掘金 / 少数派 if you want a Chinese write-up around the workflow problem.
+- Zhihu / Juejin / Shaoshupai if you want a Chinese write-up around the workflow problem.
 - Discord / Slack communities where MCP, Codex, or agentic coding tools are discussed.
+
+## Suggested Launch Copy
+
+```text
+AgentBridge Local lets Codex coordinate local coding agents without giving them the keys to your repo.
+
+Codex plans and reviews. MiMo Code or Reasonix TUI executes in an isolated Git Worktree. Codex starts from a compact Review Package, then escalates only to focused diffs, files, or logs when risk requires it.
+
+Windows-first alpha. Feedback and clean-machine testing welcome.
+```
 
 ## Manual Checks After Publishing
 
