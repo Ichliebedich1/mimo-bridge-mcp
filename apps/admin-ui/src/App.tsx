@@ -119,6 +119,8 @@ const effortLabels: Record<ReasoningEffort, string> = {
   high: '高',
 };
 
+const DEFAULT_ULTRA_SPEED_PRICING = { input: 9, output: 18, cache_hit: 0.075 };
+
 const DEFAULT_ROUTING_PROFILES: RoutingProfiles = {
   default_scenario: 'normal',
   scenarios: {
@@ -173,9 +175,11 @@ const DEFAULT_ROUTING_PROFILES: RoutingProfiles = {
     'reasonix-tui': ['deepseek-v4-flash', 'deepseek-v4-pro'],
   },
   reasoning_efforts: ['low', 'medium', 'high'],
+  enable_mimo_pro_ultra_speed: false,
   pricing_per_1m_cny: {
     flash: { input: 1, output: 3, cache_hit: 0.02 },
     pro: { input: 3, output: 6, cache_hit: 0.025 },
+    ultra_speed: DEFAULT_ULTRA_SPEED_PRICING,
   },
 };
 
@@ -343,7 +347,7 @@ function App() {
   }
 
   async function handleSaveRoutingProfiles(next: RoutingProfiles) {
-    const result = await runAction('正在保存模型路由设置…', '模型路由设置已保存。', () => saveRoutingProfiles({ scenarios: next.scenarios }));
+    const result = await runAction('正在保存模型路由设置…', '模型路由设置已保存。', () => saveRoutingProfiles({ scenarios: next.scenarios, enable_mimo_pro_ultra_speed: next.enable_mimo_pro_ultra_speed }));
     if (result) {
       setRoutingProfiles(result);
     }
@@ -1636,6 +1640,32 @@ function RoutingSettingsPage({
     });
   }
 
+  function toggleUltraSpeed(enabled: boolean) {
+    setDraft((current) => {
+      if (!current) return current;
+      const next = structuredClone(current);
+      const ultraSpeedModel = 'mimo-v2.5-pro-ultra-speed';
+      next.enable_mimo_pro_ultra_speed = enabled;
+      if (enabled) {
+        if (!next.allowed_models.mimo.includes(ultraSpeedModel)) {
+          next.allowed_models.mimo = [...next.allowed_models.mimo, ultraSpeedModel];
+        }
+      } else {
+        next.allowed_models.mimo = next.allowed_models.mimo.filter((model) => model !== ultraSpeedModel);
+        for (const scenario of Object.keys(next.scenarios) as TaskScenario[]) {
+          const selection = next.scenarios[scenario].current;
+          if (selection.agent_id === 'mimo' && selection.model === ultraSpeedModel) {
+            next.scenarios[scenario].current = { ...selection, model: scenario === 'simple' || scenario === 'normal' ? 'mimo-v2.5-flash' : 'mimo-v2.5-pro' };
+          }
+        }
+      }
+      return next;
+    });
+  }
+
+  const ultraSpeedEnabled = draft.enable_mimo_pro_ultra_speed === true;
+  const ultraSpeedPricing = draft.pricing_per_1m_cny.ultra_speed ?? DEFAULT_ULTRA_SPEED_PRICING;
+
   return (
     <div className="page-grid">
       <section className="panel wide">
@@ -1650,6 +1680,13 @@ function RoutingSettingsPage({
             当前显示的是内置默认策略，因为后台还没有返回 `/api/routing-profiles`。如果保存失败，请先重启 MiMo Bridge 后台再刷新页面。
           </div>
         )}
+        <div className="ultra-speed-toggle">
+          <label className="toggle-row">
+            <input checked={ultraSpeedEnabled} onChange={(event) => toggleUltraSpeed(event.target.checked)} type="checkbox" />
+            <span>启用 MiMo V2.5 Pro Ultra Speed（内测，高速高价）</span>
+          </label>
+          <p className="field-help">默认关闭。约为 Pro 3 倍价格，不支持多模态，适合很急的复杂任务或大输出任务。开启后可在模型下拉中选择。</p>
+        </div>
         <div className="routing-grid">
           {(Object.keys(scenarioLabels) as TaskScenario[]).map((scenario) => {
             const item = draft.scenarios[scenario];
@@ -1714,6 +1751,7 @@ function RoutingSettingsPage({
             <ul>
               <li><code>mimo-v2.5-flash</code>：支持多模态；flash 价格，适合简单/普通任务。</li>
               <li><code>mimo-v2.5-pro</code>：不支持多模态；pro 价格，适合复杂/高风险任务。</li>
+              {ultraSpeedEnabled && <li><code>mimo-v2.5-pro-ultra-speed</code>：不支持多模态；ultra_speed 价格（约 Pro 3 倍），适合很急的复杂/大输出任务。</li>}
             </ul>
           </div>
           <div className="model-card">
@@ -1728,6 +1766,7 @@ function RoutingSettingsPage({
             <ul>
               <li>flash：输入 ¥{draft.pricing_per_1m_cny.flash.input}，输出 ¥{draft.pricing_per_1m_cny.flash.output}，缓存命中 ¥{draft.pricing_per_1m_cny.flash.cache_hit}</li>
               <li>pro：输入 ¥{draft.pricing_per_1m_cny.pro.input}，输出 ¥{draft.pricing_per_1m_cny.pro.output}，缓存命中 ¥{draft.pricing_per_1m_cny.pro.cache_hit}</li>
+              {ultraSpeedEnabled && <li>ultra_speed：输入 ¥{ultraSpeedPricing.input}，输出 ¥{ultraSpeedPricing.output}，缓存命中 ¥{ultraSpeedPricing.cache_hit}</li>}
             </ul>
           </div>
         </div>

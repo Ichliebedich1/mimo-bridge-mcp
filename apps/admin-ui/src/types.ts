@@ -31,9 +31,11 @@ export type RoutingProfiles = {
   }>;
   allowed_models: Record<RoutingAgentId, string[]>;
   reasoning_efforts: ReasoningEffort[];
+  enable_mimo_pro_ultra_speed?: boolean;
   pricing_per_1m_cny: {
     flash: { input: number; output: number; cache_hit: number };
     pro: { input: number; output: number; cache_hit: number };
+    ultra_speed?: { input: number; output: number; cache_hit: number };
   };
 };
 

@@ -186,7 +186,7 @@ export async function fetchRoutingProfiles(): Promise<RoutingProfiles> {
   return unwrap(await getJson<RoutingProfiles>('/api/routing-profiles'));
 }
 
-export async function saveRoutingProfiles(input: { scenarios: Partial<RoutingProfiles['scenarios']> | Record<string, unknown> }): Promise<RoutingProfiles> {
+export async function saveRoutingProfiles(input: { scenarios: Partial<RoutingProfiles['scenarios']> | Record<string, unknown>; enable_mimo_pro_ultra_speed?: boolean }): Promise<RoutingProfiles> {
   return unwrap(await putJson<RoutingProfiles>('/api/routing-profiles', input));
 }
 

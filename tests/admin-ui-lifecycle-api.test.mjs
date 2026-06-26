@@ -169,3 +169,43 @@ test("admin UI routing settings API saves profiles with PUT", async () => {
     mock.restore();
   }
 });
+
+test("admin UI routing settings API saves enable_mimo_pro_ultra_speed flag", async () => {
+  const mock = installFetchMock();
+  try {
+    await saveRoutingProfiles({
+      scenarios: {
+        normal: {
+          current: {
+            agent_id: "mimo",
+            model: "mimo-v2.5-pro-ultra-speed",
+            reasoning_effort: "high",
+          },
+        },
+      },
+      enable_mimo_pro_ultra_speed: true,
+    });
+
+    assert.strictEqual(mock.calls.length, 1);
+    assert.strictEqual(mock.calls[0].method, "PUT");
+    assert.strictEqual(mock.calls[0].path, "/api/routing-profiles");
+    assert.strictEqual(mock.calls[0].body.enable_mimo_pro_ultra_speed, true);
+    assert.strictEqual(mock.calls[0].body.scenarios.normal.current.model, "mimo-v2.5-pro-ultra-speed");
+  } finally {
+    mock.restore();
+  }
+});
+
+test("admin UI routing settings API omits enable_mimo_pro_ultra_speed when undefined", async () => {
+  const mock = installFetchMock();
+  try {
+    await saveRoutingProfiles({
+      scenarios: {},
+    });
+
+    assert.strictEqual(mock.calls.length, 1);
+    assert.strictEqual(mock.calls[0].body.enable_mimo_pro_ultra_speed, undefined);
+  } finally {
+    mock.restore();
+  }
+});
