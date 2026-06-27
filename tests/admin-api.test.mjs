@@ -520,7 +520,14 @@ test("admin API maps mutating routes to their dedicated handlers", async () => {
       use_worktree: false,
       priority: 5,
     });
-    await callApi(fixture.context, "POST", "/api/tasks/" + fixture.taskId + "/replies", { message: "continue", priority: 4 });
+    await callApi(fixture.context, "POST", "/api/tasks/" + fixture.taskId + "/replies", {
+      message: "continue",
+      priority: 4,
+      routing_mode: "manual",
+      task_scenario: "complex",
+      model: "mimo-v2.5-pro",
+      reasoning_effort: "high",
+    });
     await callApi(fixture.context, "POST", "/api/tasks/" + fixture.taskId + "/cancel", {});
     await callApi(fixture.context, "POST", "/api/tasks/" + fixture.taskId + "/finish", { status: "accepted" });
     await callApi(fixture.context, "POST", "/api/tasks/" + fixture.taskId + "/worktree", { action: "merge" });
@@ -531,6 +538,8 @@ test("admin API maps mutating routes to their dedicated handlers", async () => {
       ["startTask", "replyTask", "cancelTask", "finishTask", "mergeTask", "tokenStatus"]
     );
     assert.strictEqual(fixture.calls[1][1].message, "continue");
+    assert.strictEqual(fixture.calls[1][1].model, "mimo-v2.5-pro");
+    assert.strictEqual(fixture.calls[1][1].reasoning_effort, "high");
     assert.strictEqual(fixture.calls[3][1].status, "accepted");
     assert.strictEqual(fixture.calls[4][1].action, "merge");
     assert.strictEqual(fixture.calls[5][1].reset, true);

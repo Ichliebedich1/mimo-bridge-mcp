@@ -298,4 +298,10 @@ export interface GetTaskInput {
 export interface ReplyTaskInput {
   task_id: string;
   message: string;
+  routing_mode?: RoutingMode;
+  task_scenario?: TaskScenario;
+  model?: string;
+  reasoning_effort?: ReasoningEffort;
+  has_images?: boolean;
+  attachments?: TaskAttachmentInput[];
 }

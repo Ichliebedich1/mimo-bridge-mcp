@@ -458,8 +458,8 @@ test("reply command posts message to MiMo task reply route", async () => {
   });
 
   try {
-    const result = await runClient(["reply", "--task-id", "task_reply"], {
-      stdin: JSON.stringify({ message: "继续处理\n多行中文", priority: 4 }),
+    const result = await runClient(["reply", "--task-id", "task_reply", "--model", "mimo-v2.5-pro", "--reasoning-effort", "high"], {
+      stdin: JSON.stringify({ message: "继续处理\n多行中文", priority: 4, task_scenario: "complex" }),
       env: { MIMO_BRIDGE_URL: mock.baseUrl },
     });
     assert.equal(result.code, 0);
@@ -469,6 +469,9 @@ test("reply command posts message to MiMo task reply route", async () => {
     assert.equal(out.status, "running");
     assert.equal(receivedBody.message, "继续处理\n多行中文");
     assert.equal(receivedBody.priority, 4);
+    assert.equal(receivedBody.task_scenario, "complex");
+    assert.equal(receivedBody.model, "mimo-v2.5-pro");
+    assert.equal(receivedBody.reasoning_effort, "high");
   } finally {
     await closeServer(mock.server);
   }
@@ -491,7 +494,7 @@ test("agent-reply command posts message to generic agent reply route", async () 
   });
 
   try {
-    const result = await runClient(["agent-reply", "--agent-id", "reasonix-tui", "--task-id", "task_agent_reply", "--message", "继续"], {
+    const result = await runClient(["agent-reply", "--agent-id", "reasonix-tui", "--task-id", "task_agent_reply", "--message", "继续", "--model", "deepseek-v4-pro", "--reasoning-effort", "medium"], {
       env: { MIMO_BRIDGE_URL: mock.baseUrl },
     });
     assert.equal(result.code, 0);
@@ -501,6 +504,8 @@ test("agent-reply command posts message to generic agent reply route", async () 
     assert.equal(out.agent, "reasonix-tui");
     assert.equal(receivedBody.message, "继续");
     assert.equal(receivedBody.agent_id, "reasonix-tui");
+    assert.equal(receivedBody.model, "deepseek-v4-pro");
+    assert.equal(receivedBody.reasoning_effort, "medium");
   } finally {
     await closeServer(mock.server);
   }

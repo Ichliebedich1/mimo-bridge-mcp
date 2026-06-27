@@ -1,5 +1,5 @@
 import { writeFileSync } from "node:fs";
-import type { TaskConfig } from "../types.js";
+import type { RoutingConfig, TaskConfig } from "../types.js";
 
 export function buildTaskBrief(config: TaskConfig): string {
   const lines: string[] = [];
@@ -112,12 +112,35 @@ export function writeTaskBrief(config: TaskConfig, taskId: string, round: number
   return briefPath;
 }
 
-export function buildReplyBrief(message: string): string {
-  return `# 任务说明\n\n## 回复内容\n\n${message}\n`;
+export function buildReplyBrief(message: string, routing?: RoutingConfig): string {
+  const lines = [
+    "# 任务说明",
+    "",
+    "## 回复内容",
+    "",
+    message,
+    "",
+  ];
+  if (routing) {
+    lines.push(
+      "## 模型路由（本轮回复）",
+      "",
+      `- **Routing Mode**: ${routing.routing_mode}`,
+      `- **Task Scenario**: ${routing.task_scenario}`,
+      `- **Agent**: ${routing.agent_id}`,
+      `- **Model**: ${routing.model}`,
+      `- **Thinking Effort**: ${routing.reasoning_effort}`,
+      `- **Reason**: ${routing.routing_reason}`,
+      "",
+      "请按上述模型路由继续处理本轮回复。若你认为模型选择不合适，请在总结中说明。",
+      "",
+    );
+  }
+  return lines.join("\n");
 }
 
-export function writeReplyBrief(message: string, taskId: string, round: number, briefsDir: string): string {
-  const briefContent = buildReplyBrief(message);
+export function writeReplyBrief(message: string, taskId: string, round: number, briefsDir: string, routing?: RoutingConfig): string {
+  const briefContent = buildReplyBrief(message, routing);
   const briefPath = `${briefsDir}/${taskId}-round-${round}.md`;
 
   writeFileSync(briefPath, briefContent, "utf-8");

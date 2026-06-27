@@ -3,6 +3,7 @@ import type {
   FocusedTaskResult,
   FullTaskResult,
   LiveTaskView,
+  ReplyTaskOptions,
   RiskFlag,
   RoutingProfiles,
   Task,
@@ -105,6 +106,7 @@ type ListTasksResponse = {
     origin_codex_thread_id?: string | null;
     origin_codex_thread_url?: string | null;
     origin_source?: string | null;
+    routing?: Task['routing'];
   }>;
 };
 
@@ -130,6 +132,7 @@ type ReviewPackageResponse = {
   generated_at?: string;
   review_recommendation: string;
   truncated: boolean;
+  routing?: Task['routing'];
 };
 
 type GetTaskResponse = {
@@ -178,6 +181,7 @@ type GetTaskResponse = {
   origin_codex_thread_id?: string | null;
   origin_codex_thread_url?: string | null;
   origin_source?: string | null;
+  routing?: Task['routing'];
 };
 
 type TokenStatusResponse = unknown;
@@ -323,13 +327,20 @@ export async function createTask(input: CreateTaskInput): Promise<TaskActionResu
   return unwrap(await postJson<TaskActionResult>('/api/agent-tasks', input));
 }
 
-export async function replyTask(taskId: string, message: string, priority = 5, agent = 'mimo', attachments: CreateTaskInput['attachments'] = []): Promise<TaskActionResult> {
+export async function replyTask(
+  taskId: string,
+  message: string,
+  priority = 5,
+  agent = 'mimo',
+  attachments: CreateTaskInput['attachments'] = [],
+  options: ReplyTaskOptions = {},
+): Promise<TaskActionResult> {
   const encodedTaskId = encodeURIComponent(taskId);
-  const body = { message, priority, agent_id: agent, attachments };
+  const body = { message, priority, agent_id: agent, attachments, ...options };
   if (agent && agent !== 'mimo') {
     return unwrap(await postJson<TaskActionResult>('/api/agent-tasks/' + encodedTaskId + '/replies', body));
   }
-  return unwrap(await postJson<TaskActionResult>('/api/tasks/' + encodedTaskId + '/replies', { message, priority, attachments }));
+  return unwrap(await postJson<TaskActionResult>('/api/tasks/' + encodedTaskId + '/replies', { message, priority, attachments, ...options }));
 }
 
 export async function cancelTask(taskId: string, agent = 'mimo'): Promise<TaskActionResult> {
@@ -493,6 +504,7 @@ function toUiTask(task: ListTasksResponse['tasks'][number]): Task {
     canDelete: Boolean(task.can_delete),
     deleteBlockers: task.delete_blockers ?? [],
     deleteLabel: task.delete_label ?? '不可删除',
+    routing: task.routing ?? null,
     source: 'api',
     originCodexThreadId: task.origin_codex_thread_id ?? null,
     originCodexThreadUrl: task.origin_codex_thread_url ?? null,
@@ -527,6 +539,7 @@ function detailToUiTask(response: GetTaskResponse): Task {
       canDelete: Boolean(response.can_delete),
       deleteBlockers: response.delete_blockers ?? [],
       deleteLabel: response.delete_label ?? '不可删除',
+      routing: response.routing ?? null,
       source: 'api',
       originCodexThreadId: response.origin_codex_thread_id ?? null,
       originCodexThreadUrl: response.origin_codex_thread_url ?? null,
@@ -568,6 +581,7 @@ function detailToUiTask(response: GetTaskResponse): Task {
     canDelete: Boolean(response.can_delete),
     deleteBlockers: response.delete_blockers ?? [],
     deleteLabel: response.delete_label ?? '不可删除',
+    routing: response.routing ?? review.routing ?? null,
     source: 'api',
     originCodexThreadId: response.origin_codex_thread_id ?? null,
     originCodexThreadUrl: response.origin_codex_thread_url ?? null,

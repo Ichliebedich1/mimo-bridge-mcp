@@ -6,6 +6,7 @@ import { validateSessionId } from "../services/path-guard.js";
 import { writeReplyBrief } from "../services/prompt-builder.js";
 import { persistTaskAttachments } from "../services/task-attachments.js";
 import { runMimoTask } from "../services/mimo-runner.js";
+import { resolveRouting } from "../services/model-routing.js";
 import { globalRunningTasks, type RunningTaskRegistry } from "../services/running-tasks.js";
 import { globalTaskQueue, type TaskQueue } from "../services/task-queue.js";
 import { refreshReviewPackage } from "../services/review-package.js";
@@ -77,6 +78,11 @@ export const ReplyTaskSchema = z.object({
   task_id: z.string().min(1, "任务 ID 不能为空"),
   message: z.string().min(1, "回复消息不能为空"),
   priority: z.number().int().min(0).max(10).default(5),
+  routing_mode: z.enum(["auto", "manual"]).optional(),
+  task_scenario: z.enum(["multimodal", "simple", "normal", "complex", "high_risk"]).optional(),
+  model: z.string().optional(),
+  reasoning_effort: z.enum(["low", "medium", "high"]).optional(),
+  has_images: z.boolean().default(false),
   attachments: z.array(z.object({
     name: z.string().min(1).max(160),
     mime_type: z.string().optional(),
@@ -254,11 +260,20 @@ export function createReplyTaskHandler(
       if (!persistedAttachments.ok) {
         return { error: persistedAttachments.error };
       }
+      const routing = resolveReplyRouting(task, input, config.routingProfiles, persistedAttachments.attachments);
+      if (!routing.ok) {
+        return { error: routing.error };
+      }
+      if (routing.config) {
+        task.config.routing = routing.config;
+        taskStore.saveTask(task);
+      }
       writeReplyBrief(
         buildReplyMessageWithAttachments(input.message, persistedAttachments.attachments),
         task.task_id,
         task.current_round,
-        `${config.runtimeDir}/briefs`
+        `${config.runtimeDir}/briefs`,
+        task.config.routing
       );
 
       const taskId = task.task_id;
@@ -312,6 +327,36 @@ function validateMimoReplyTarget(task: TaskState): string | null {
     return sessionValidation.reason ?? "Invalid MiMo session ID";
   }
   return null;
+}
+
+function resolveReplyRouting(
+  task: TaskState,
+  input: ReplyTaskInput,
+  routingProfiles: Config["routingProfiles"],
+  attachments: TaskAttachment[]
+): { ok: true; config: TaskState["config"]["routing"] | null } | { ok: false; error: string } {
+  const hasImages = input.has_images || attachments.some((attachment) => attachment.kind === "image");
+  const hasOverride = input.routing_mode !== undefined ||
+    input.task_scenario !== undefined ||
+    input.model !== undefined ||
+    input.reasoning_effort !== undefined ||
+    hasImages;
+  if (!hasOverride) {
+    return { ok: true, config: task.config.routing ?? null };
+  }
+
+  const agentKind = task.agent === "mimo" || task.agent === "reasonix-tui" ? task.agent : "unknown";
+  const result = resolveRouting(agentKind, {
+    routing_mode: input.routing_mode ?? (input.model || input.reasoning_effort ? "manual" : task.config.routing?.routing_mode),
+    task_scenario: input.task_scenario ?? task.config.routing?.task_scenario,
+    model: input.model,
+    reasoning_effort: input.reasoning_effort,
+    has_images: hasImages,
+  }, routingProfiles);
+  if (!result.ok) {
+    return result;
+  }
+  return { ok: true, config: result.config };
 }
 
 function persistReplyAttachments(

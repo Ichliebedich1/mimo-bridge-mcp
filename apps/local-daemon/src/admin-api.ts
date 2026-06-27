@@ -48,6 +48,11 @@ const AgentStartTaskBodySchema = StartTaskBodySchema.extend({
 const ReplyBodySchema = z.object({
   message: z.string().min(1),
   priority: z.number().int().min(0).max(10).default(5),
+  routing_mode: z.enum(["auto", "manual"]).optional(),
+  task_scenario: z.enum(["multimodal", "simple", "normal", "complex", "high_risk"]).optional(),
+  model: z.string().optional(),
+  reasoning_effort: z.enum(["low", "medium", "high"]).optional(),
+  has_images: z.boolean().default(false),
   attachments: z.array(z.object({
     name: z.string().min(1).max(160),
     mime_type: z.string().optional(),
@@ -543,6 +548,7 @@ function augmentListTasksResult(data: unknown, context: ToolContext, config: Dae
         can_reply: reply.can_reply,
         reply_blockers: reply.reply_blockers,
         reply_label: reply.reply_label,
+        routing: stored.config.routing ?? null,
         origin_codex_thread_id: stored.config.origin_codex_thread_id ?? null,
         origin_codex_thread_url: stored.config.origin_codex_thread_url ?? null,
         origin_source: stored.config.origin_source ?? null,
@@ -578,6 +584,7 @@ function augmentTaskResult(data: unknown, context: ToolContext, config: DaemonCo
     can_reply: reply.can_reply,
     reply_blockers: reply.reply_blockers,
     reply_label: reply.reply_label,
+    routing: stored.config.routing ?? null,
     origin_codex_thread_id: stored.config.origin_codex_thread_id ?? null,
     origin_codex_thread_url: stored.config.origin_codex_thread_url ?? null,
     origin_source: stored.config.origin_source ?? null,

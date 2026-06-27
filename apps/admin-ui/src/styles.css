@@ -1235,6 +1235,31 @@ select:focus {
   margin-bottom: 10px;
 }
 
+.reply-routing-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+  margin-bottom: 12px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: #ffffff;
+}
+
+.reply-routing-grid label {
+  display: grid;
+  gap: 6px;
+  color: #344054;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.reply-routing-note {
+  align-self: end;
+  color: var(--muted);
+  font-size: 12px;
+}
+
 .advanced-box {
   color: var(--muted);
 }

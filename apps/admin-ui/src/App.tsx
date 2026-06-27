@@ -41,6 +41,7 @@ import type {
   LiveTaskView,
   QueueItem,
   ReasoningEffort,
+  ReplyTaskOptions,
   RiskFlag,
   RoutingAgentId,
   RoutingMode,
@@ -342,8 +343,8 @@ function App() {
     }
   }
 
-  async function handleReply(taskId: string, message: string, priority: number, agent: string, attachments: CreateTaskAttachment[] = []) {
-    await runAction('正在发送回复…', '回复已发送，执行 Agent 将继续处理。', () => replyTask(taskId, message, priority, agent, attachments), {
+  async function handleReply(taskId: string, message: string, priority: number, agent: string, attachments: CreateTaskAttachment[] = [], options: ReplyTaskOptions = {}) {
+    await runAction('正在发送回复…', '回复已发送，执行 Agent 将继续处理。', () => replyTask(taskId, message, priority, agent, attachments, options), {
       refreshTaskId: taskId,
     });
   }
@@ -591,11 +592,12 @@ function App() {
           {page === 'system' && <SystemPage agents={agents} health={health} apiError={apiError} />}
           {page === 'detail' &&
             (selectedTask ? (
-              <TaskDetailPage
-                actionBusy={actionBusy}
-                task={selectedTask}
-                tasks={tasks}
-                onOpenTask={openTask}
+	              <TaskDetailPage
+	                actionBusy={actionBusy}
+	                task={selectedTask}
+	                tasks={tasks}
+	                routingProfiles={routingProfiles}
+	                onOpenTask={openTask}
                 onCancel={confirmCancel}
                 onDiscardAndAbandon={confirmDiscardAndAbandon}
                 onDeleteTask={confirmDeleteTask}
@@ -1165,6 +1167,7 @@ function CreateTaskPage({
 function TaskDetailPage({
   task,
   tasks,
+  routingProfiles,
   actionBusy,
   onOpenTask,
   onReply,
@@ -1180,11 +1183,12 @@ function TaskDetailPage({
   onOpenTaskTarget,
   onRefresh,
 }: {
-  task: Task;
-  tasks: Task[];
-  actionBusy: string | null;
-  onOpenTask: (taskId: string) => void;
-  onReply: (taskId: string, message: string, priority: number, agent: string, attachments?: CreateTaskAttachment[]) => Promise<void>;
+	task: Task;
+	tasks: Task[];
+  routingProfiles: RoutingProfiles | null;
+	actionBusy: string | null;
+	onOpenTask: (taskId: string) => void;
+	onReply: (taskId: string, message: string, priority: number, agent: string, attachments?: CreateTaskAttachment[], options?: ReplyTaskOptions) => Promise<void>;
   onCancel: (taskId: string) => void;
   onFinish: (taskId: string, status: 'accepted' | 'abandoned') => void;
   onMergeAndAccept: (taskId: string) => void;
@@ -1205,6 +1209,8 @@ function TaskDetailPage({
   const [localError, setLocalError] = useState<string | null>(null);
   const [replyMessage, setReplyMessage] = useState('');
   const [replyAttachments, setReplyAttachments] = useState<CreateTaskAttachment[]>([]);
+  const [replyModel, setReplyModel] = useState('');
+  const [replyEffort, setReplyEffort] = useState<ReasoningEffort>('medium');
   const [replying, setReplying] = useState(false);
   const [handoffMessage, setHandoffMessage] = useState<string | null>(null);
   const [handoffPrompt, setHandoffPrompt] = useState<string | null>(null);
@@ -1218,6 +1224,8 @@ function TaskDetailPage({
     setLocalError(null);
     setReplyMessage('');
     setReplyAttachments([]);
+    setReplyModel('');
+    setReplyEffort('medium');
     setHandoffMessage(null);
     setHandoffPrompt(null);
     setShowLiveViewer(false);
@@ -1231,6 +1239,21 @@ function TaskDetailPage({
   const hasBlocker = task.riskFlags.some((risk) => riskMeta[risk].severity === 'blocker');
   const hasAttention = task.riskFlags.length > 0 && !hasBlocker;
   const canDelete = task.canDelete;
+  const replyAgentId = task.agent === 'reasonix-tui' ? 'reasonix-tui' : 'mimo';
+  const fallbackModels = replyAgentId === 'mimo' ? ['mimo-v2.5-flash', 'mimo-v2.5-pro'] : ['deepseek-v4-flash', 'deepseek-v4-pro'];
+  const replyAllowedModels = routingProfiles?.allowed_models[replyAgentId] ?? fallbackModels;
+  const replyEffectiveModel = replyAllowedModels.includes(replyModel) ? replyModel : replyAllowedModels[0] ?? '';
+  const replyHasImageAttachment = replyAttachments.some((attachment) => attachment.kind === 'image');
+  const replyScenario = replyHasImageAttachment ? 'multimodal' : task.routing?.task_scenario ?? 'normal';
+  const replyModelForSubmit = replyHasImageAttachment && replyAgentId === 'mimo' ? 'mimo-v2.5-flash' : replyEffectiveModel;
+
+  useEffect(() => {
+    const agentId = task.agent === 'reasonix-tui' ? 'reasonix-tui' : 'mimo';
+    const models = routingProfiles?.allowed_models[agentId] ?? (agentId === 'mimo' ? ['mimo-v2.5-flash', 'mimo-v2.5-pro'] : ['deepseek-v4-flash', 'deepseek-v4-pro']);
+    const preferredModel = task.routing?.model && models.includes(task.routing.model) ? task.routing.model : models[0] ?? '';
+    setReplyModel(preferredModel);
+    setReplyEffort(task.routing?.reasoning_effort ?? 'medium');
+  }, [routingProfiles, task.agent, task.id, task.routing?.model, task.routing?.reasoning_effort]);
 
   async function loadFocused() {
     if (!selectedFile) {
@@ -1272,19 +1295,33 @@ function TaskDetailPage({
     }
   }
 
-  async function submitReply() {
-    const message = replyMessage.trim();
-    if (!message) {
-      setLocalError('请先填写要发送给执行 Agent 的回复。');
+	  async function submitReply() {
+	    const message = replyMessage.trim();
+	    if (!message) {
+	      setLocalError('请先填写要发送给执行 Agent 的回复。');
+	      return;
+	    }
+    if (replyHasImageAttachment && replyAgentId !== 'mimo') {
+      setLocalError('Reasonix TUI 当前不支持图片/多模态回复附件，请改用文本说明或交给 MiMo。');
       return;
     }
-    setLocalError(null);
-    setReplying(true);
-    try {
-      await onReply(task.id, message, task.priority, task.agent, replyAttachments);
-      setReplyMessage('');
-      setReplyAttachments([]);
-    } finally {
+    if (!replyModelForSubmit) {
+      setLocalError('当前 Agent 没有可用模型，无法发送回复。');
+      return;
+    }
+	    setLocalError(null);
+	    setReplying(true);
+	    try {
+      await onReply(task.id, message, task.priority, task.agent, replyAttachments, {
+        routing_mode: 'manual',
+        task_scenario: replyScenario,
+        model: replyModelForSubmit,
+        reasoning_effort: replyEffort,
+        has_images: replyHasImageAttachment,
+      });
+	      setReplyMessage('');
+	      setReplyAttachments([]);
+	    } finally {
       setReplying(false);
     }
   }
@@ -1467,15 +1504,46 @@ function TaskDetailPage({
                 ? `${task.replyLabel}。失败任务也可以在保留会话时继续修复。`
                 : `暂不可回复：${task.replyBlockers.length > 0 ? task.replyBlockers.join('；') : '当前任务没有可恢复会话或状态不允许。'}`}
             </div>
-            <textarea
-              disabled={!canReply || Boolean(actionBusy) || replying}
-              onChange={(event) => setReplyMessage(event.target.value)}
-              onPaste={handleReplyPaste}
-              placeholder={'说明需要 ' + agentDisplayName(task.agent) + ' 继续修复的问题，或给出下一步要求。'}
-              rows={5}
-              value={replyMessage}
-            />
-            <div className="attachment-box reply-attachments">
+	            <textarea
+	              disabled={!canReply || Boolean(actionBusy) || replying}
+	              onChange={(event) => setReplyMessage(event.target.value)}
+	              onPaste={handleReplyPaste}
+	              placeholder={'说明需要 ' + agentDisplayName(task.agent) + ' 继续修复的问题，或给出下一步要求。'}
+	              rows={5}
+	              value={replyMessage}
+	            />
+            <div className="reply-routing-grid">
+              <label>
+                本轮模型
+                <select
+                  disabled={!canReply || Boolean(actionBusy) || replying || replyHasImageAttachment}
+                  value={replyModelForSubmit}
+                  onChange={(event) => setReplyModel(event.target.value)}
+                >
+                  {replyAllowedModels.map((modelName) => (
+                    <option key={modelName} value={modelName}>{modelName}</option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                思考强度
+                <select
+                  disabled={!canReply || Boolean(actionBusy) || replying}
+                  value={replyEffort}
+                  onChange={(event) => setReplyEffort(event.target.value as ReasoningEffort)}
+                >
+                  {(routingProfiles?.reasoning_efforts ?? (['low', 'medium', 'high'] as ReasoningEffort[])).map((effort) => (
+                    <option key={effort} value={effort}>{effortLabels[effort]}</option>
+                  ))}
+                </select>
+              </label>
+              <div className="reply-routing-note">
+                {replyHasImageAttachment && replyAgentId === 'mimo'
+                  ? '检测到图片附件，本轮会自动使用 mimo-v2.5-flash。'
+                  : `继续使用 ${agentDisplayName(task.agent)} 会话，只切换该 Agent 的模型/强度。`}
+              </div>
+            </div>
+	            <div className="attachment-box reply-attachments">
               <div className="attachment-head">
                 <div>
                   <strong>回复附件</strong>

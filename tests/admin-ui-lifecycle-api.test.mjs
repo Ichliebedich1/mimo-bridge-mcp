@@ -105,8 +105,18 @@ test("admin UI reply API sends attachments to MiMo and generic agent routes", as
   ];
 
   try {
-    await replyTask("task_1", "continue", 4, "mimo", attachments);
-    await replyTask("task_2", "continue", 6, "reasonix-tui", attachments);
+    await replyTask("task_1", "continue", 4, "mimo", attachments, {
+      routing_mode: "manual",
+      task_scenario: "complex",
+      model: "mimo-v2.5-pro",
+      reasoning_effort: "high",
+    });
+    await replyTask("task_2", "continue", 6, "reasonix-tui", attachments, {
+      routing_mode: "manual",
+      task_scenario: "normal",
+      model: "deepseek-v4-pro",
+      reasoning_effort: "medium",
+    });
 
     assert.deepStrictEqual(
       mock.calls.map((call) => [call.method, call.path]),
@@ -118,9 +128,13 @@ test("admin UI reply API sends attachments to MiMo and generic agent routes", as
     assert.strictEqual(mock.calls[0].body.message, "continue");
     assert.strictEqual(mock.calls[0].body.priority, 4);
     assert.strictEqual(mock.calls[0].body.attachments[0].name, "reply.png");
+    assert.strictEqual(mock.calls[0].body.model, "mimo-v2.5-pro");
+    assert.strictEqual(mock.calls[0].body.reasoning_effort, "high");
     assert.strictEqual(mock.calls[1].body.agent_id, "reasonix-tui");
     assert.strictEqual(mock.calls[1].body.priority, 6);
     assert.strictEqual(mock.calls[1].body.attachments[0].name, "reply.png");
+    assert.strictEqual(mock.calls[1].body.model, "deepseek-v4-pro");
+    assert.strictEqual(mock.calls[1].body.reasoning_effort, "medium");
   } finally {
     mock.restore();
   }

@@ -314,9 +314,21 @@ test("mimo_reply_task keeps follow-up rounds in the saved Worktree and re-audits
       }
     );
 
-    const started = await replyTask.handler({ task_id: task.task_id, message: "continue" });
+    const started = await replyTask.handler({
+      task_id: task.task_id,
+      message: "continue",
+      routing_mode: "manual",
+      task_scenario: "complex",
+      model: "mimo-v2.5-pro",
+      reasoning_effort: "high",
+    });
     assert.strictEqual(started.status, "running");
     assert.strictEqual(runnerOptions.task.config.workspace_path, info.worktreePath);
+    assert.strictEqual(runnerOptions.task.config.routing.model, "mimo-v2.5-pro");
+    assert.strictEqual(runnerOptions.task.config.routing.reasoning_effort, "high");
+    const replyBrief = readFileSync(taskStore.getBriefPath(task.task_id, runnerOptions.task.current_round), "utf-8");
+    assert.match(replyBrief, /模型路由（本轮回复）/);
+    assert.match(replyBrief, /mimo-v2\.5-pro/);
 
     writeFileSync(join(info.worktreePath, "outside.txt"), "follow-up outside change\n");
     completeReply({

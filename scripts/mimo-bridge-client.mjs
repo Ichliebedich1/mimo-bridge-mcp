@@ -187,6 +187,34 @@ function getAgentId(args, input = {}) {
   return String(args["agent-id"] || args.agent_id || input.agent_id || "");
 }
 
+function buildReplyBody(input, args, extra = {}) {
+  const body = {
+    message: input.message,
+    ...extra,
+  };
+  const fields = [
+    ["priority", args.priority ?? input.priority],
+    ["routing_mode", args["routing-mode"] ?? args.routing_mode ?? input.routing_mode],
+    ["task_scenario", args["task-scenario"] ?? args.task_scenario ?? input.task_scenario],
+    ["model", args.model ?? input.model],
+    ["reasoning_effort", args["reasoning-effort"] ?? args.reasoning_effort ?? input.reasoning_effort],
+    ["has_images", args["has-images"] ?? args.has_images ?? input.has_images],
+    ["attachments", input.attachments],
+  ];
+  for (const [field, value] of fields) {
+    if (value !== undefined) {
+      body[field] = field === "priority" ? Number(value) : normalizeBooleanField(value);
+    }
+  }
+  return body;
+}
+
+function normalizeBooleanField(value) {
+  if (value === "true") return true;
+  if (value === "false") return false;
+  return value;
+}
+
 async function agentStartOperation({ args, baseUrl, stdin }) {
   let input;
   try {
@@ -331,13 +359,10 @@ async function replyOperation({ args, baseUrl, stdin }) {
     return failure("reply", "Missing required field: message or --message");
   }
 
-  const response = await fetchJson(baseUrl, `/api/tasks/${encodeURIComponent(taskId)}/replies`, {
-    method: "POST",
-    body: JSON.stringify({
-      message: input.message,
-      ...(input.priority !== undefined ? { priority: input.priority } : {}),
-    }),
-  });
+	  const response = await fetchJson(baseUrl, `/api/tasks/${encodeURIComponent(taskId)}/replies`, {
+	    method: "POST",
+	    body: JSON.stringify(buildReplyBody(input, args)),
+	  });
   return normalizeRestEnvelope("reply", response, (data) => ({
     task_id: data.task_id ?? taskId,
     status: data.status,
@@ -361,14 +386,10 @@ async function agentReplyOperation({ args, baseUrl, stdin }) {
   }
 
   const agentId = getAgentId(args, input);
-  const response = await fetchJson(baseUrl, `/api/agent-tasks/${encodeURIComponent(taskId)}/replies`, {
-    method: "POST",
-    body: JSON.stringify({
-      message: input.message,
-      ...(input.priority !== undefined ? { priority: input.priority } : {}),
-      ...(agentId ? { agent_id: agentId } : {}),
-    }),
-  });
+	  const response = await fetchJson(baseUrl, `/api/agent-tasks/${encodeURIComponent(taskId)}/replies`, {
+	    method: "POST",
+	    body: JSON.stringify(buildReplyBody(input, args, agentId ? { agent_id: agentId } : {})),
+	  });
   return normalizeRestEnvelope("agent-reply", response, (data) => ({
     task_id: data.task_id ?? taskId,
     agent: (data.agent ?? agentId) || undefined,
@@ -591,14 +612,14 @@ function helpOperation() {
       "node scripts/mimo-bridge-client.mjs health",
       "node scripts/mimo-bridge-client.mjs start --json .\\runtime\\client-requests\\task.json",
       "node scripts/mimo-bridge-client.mjs wait --task-id task_xxx --timeout-seconds 1800",
-      "node scripts/mimo-bridge-client.mjs reply --task-id task_xxx --json .\\runtime\\client-requests\\reply.json",
+      "node scripts/mimo-bridge-client.mjs reply --task-id task_xxx --json .\\runtime\\client-requests\\reply.json --model mimo-v2.5-pro --reasoning-effort high",
       "node scripts/mimo-bridge-client.mjs start-and-wait --json .\\runtime\\client-requests\\task.json --timeout-seconds 1800",
       "node scripts/mimo-bridge-client.mjs review --task-id task_xxx --detail-level review --max-chars 8000",
       "node scripts/mimo-bridge-client.mjs recover --limit 10 --max-chars 8000",
       "node scripts/mimo-bridge-client.mjs agent-list",
       "node scripts/mimo-bridge-client.mjs agent-start --agent-id reasonix-tui --json .\\runtime\\client-requests\\task.json",
       "node scripts/mimo-bridge-client.mjs agent-wait --agent-id reasonix-tui --task-id task_xxx --timeout-seconds 1800",
-      "node scripts/mimo-bridge-client.mjs agent-reply --agent-id reasonix-tui --task-id task_xxx --json .\\runtime\\client-requests\\reply.json",
+      "node scripts/mimo-bridge-client.mjs agent-reply --agent-id reasonix-tui --task-id task_xxx --json .\\runtime\\client-requests\\reply.json --model deepseek-v4-pro --reasoning-effort high",
       "node scripts/mimo-bridge-client.mjs agent-start-and-wait --agent-id reasonix-tui --json .\\runtime\\client-requests\\task.json --timeout-seconds 1800",
       "node scripts/mimo-bridge-client.mjs agent-review --agent-id reasonix-tui --task-id task_xxx --detail-level review --max-chars 8000",
       "node scripts/mimo-bridge-client.mjs agent-tasks --agent-id reasonix-tui --limit 10",

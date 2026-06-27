@@ -21,6 +21,12 @@ export type RoutingSelection = {
   reasoning_effort: ReasoningEffort;
 };
 
+export type TaskRouting = RoutingSelection & {
+  routing_mode: RoutingMode;
+  task_scenario: TaskScenario;
+  routing_reason?: string;
+};
+
 export type RoutingProfiles = {
   default_scenario: TaskScenario;
   scenarios: Record<TaskScenario, {
@@ -89,6 +95,7 @@ export type Task = {
   canDelete: boolean;
   deleteBlockers: string[];
   deleteLabel: string;
+  routing?: TaskRouting | null;
   source?: 'mock' | 'api';
   originCodexThreadId?: string | null;
   originCodexThreadUrl?: string | null;
@@ -136,6 +143,14 @@ export type TaskActionResult = {
   target_name?: string;
   queue_position?: number;
   [key: string]: unknown;
+};
+
+export type ReplyTaskOptions = {
+  routing_mode?: RoutingMode;
+  task_scenario?: TaskScenario;
+  model?: string;
+  reasoning_effort?: ReasoningEffort;
+  has_images?: boolean;
 };
 
 export type FocusedTaskResult = {
