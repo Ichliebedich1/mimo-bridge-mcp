@@ -125,9 +125,6 @@ export function tasksConflict(a: QueuedTask, b: QueuedTask): boolean {
   if (!a.agentId || !b.agentId) {
     return true;
   }
-  if (a.agentId && b.agentId && a.agentId === b.agentId) {
-    return true;
-  }
   if (!a.workspacePath || !b.workspacePath) {
     return true;
   }
@@ -158,4 +155,4 @@ function pathsOverlap(left: string, right: string): boolean {
   return left === right || left.startsWith(right + "/") || right.startsWith(left + "/");
 }
 
-export const globalTaskQueue = new TaskQueue(2);
+export const globalTaskQueue = new TaskQueue(4);

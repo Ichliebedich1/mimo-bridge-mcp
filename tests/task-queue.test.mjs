@@ -277,7 +277,7 @@ describe("task-queue", () => {
     await new Promise((resolve) => setImmediate(resolve));
   });
 
-  it("should queue same-agent tasks even when paths differ", async () => {
+  it("should run same-agent tasks in parallel when editable paths do not overlap", async () => {
     const queue = new TaskQueue(2);
     const executed = [];
     let releaseFirst;
@@ -312,15 +312,15 @@ describe("task-queue", () => {
     });
 
     await new Promise((resolve) => setImmediate(resolve));
-    assert.strictEqual(startedImmediately, false);
-    assert.deepStrictEqual(executed, ["task_one"]);
-    assert.strictEqual(queue.size, 1);
+    assert.strictEqual(startedImmediately, true);
+    assert.deepStrictEqual(executed, ["task_one", "task_two"]);
+    assert.strictEqual(queue.size, 0);
+    assert.strictEqual(queue.running, 1);
     releaseFirst();
     await new Promise((resolve) => setImmediate(resolve));
-    assert.deepStrictEqual(executed, ["task_one", "task_two"]);
   });
 
-  it("should queue overlapping editable paths across different agents", async () => {
+  it("should queue overlapping editable paths across agents, including the same agent", async () => {
     const queue = new TaskQueue(2);
     const executed = [];
     let releaseFirst;
@@ -343,7 +343,7 @@ describe("task-queue", () => {
 
     const startedImmediately = queue.enqueue({
       taskId: "task_child",
-      agentId: "reasonix-tui",
+      agentId: "mimo",
       workspacePath: testDir,
       editablePaths: ["src/components"],
       priority: 5,

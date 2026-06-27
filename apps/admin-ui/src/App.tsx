@@ -28,6 +28,7 @@ import {
   type TaskOpenAction,
 } from './api';
 import { CODEX_NEW_THREAD_URL, copyCodexReviewPrompt, resolveCodexHandoffUrl } from './codex-handoff.mjs';
+import { groupLiveEvents, liveToolGroupPreview } from './live-viewer-events';
 import { shouldSyncRoutingDraftFromServer } from './routing-draft';
 import { canAbandonTaskStatus, canAcceptTaskStatus, canCancelTaskStatus, canDiscardWorktreeStatus, canReplyTaskStatus } from './task-actions';
 import type {
@@ -2269,6 +2270,7 @@ function LiveViewerPanel({ taskId, onClose }: { taskId: string; onClose: () => v
       system: events.filter((event) => event.kind === 'event').length,
     };
   }, [data]);
+  const liveItems = useMemo(() => groupLiveEvents(data?.events ?? []), [data]);
 
   useEffect(() => {
     let cancelled = false;
@@ -2341,29 +2343,36 @@ function LiveViewerPanel({ taskId, onClose }: { taskId: string; onClose: () => v
           {!loading && !error && data && data.events.length === 0 && (
             <div className="lane-empty">暂无运行事件。</div>
           )}
-          {!loading && !error && data && data.events.map((event, index) => (
-            event.kind === 'message' ? (
-              <article className="live-message-card" key={index}>
+          {!loading && !error && data && liveItems.map((item) => (
+            item.type === 'tool_group' ? (
+              <details className="live-tool-group" key={item.key}>
+                <summary className="live-tool-group-summary">
+                  <span className={'live-event-kind tool'}>工具调用组</span>
+                  <span className="live-event-time">
+                    {formatEventTime(item.events[0].event.timestamp)} - {formatEventTime(item.events[item.events.length - 1].event.timestamp)}
+                  </span>
+                  <span className="live-event-status">{item.events.length} 次</span>
+                  <span className="live-event-preview">{liveToolGroupPreview(item.events.map((entry) => entry.event))}</span>
+                </summary>
+                <div className="live-tool-group-body">
+                  {item.events.map((entry) => (
+                    <LiveCollapsedEvent event={entry.event} key={entry.index} />
+                  ))}
+                </div>
+              </details>
+            ) : item.event.kind === 'message' ? (
+              <article className="live-message-card" key={item.key}>
                 <div className="live-message-avatar" aria-hidden="true">AI</div>
                 <div className="live-message-body">
                   <div className="live-message-meta">
-                    <span className={'live-event-kind ' + event.kind}>{liveEventLabel(event)}</span>
-                    <span className="live-event-time">{formatEventTime(event.timestamp)}</span>
+                    <span className={'live-event-kind ' + item.event.kind}>{liveEventLabel(item.event)}</span>
+                    <span className="live-event-time">{formatEventTime(item.event.timestamp)}</span>
                   </div>
-                  <pre className="live-message-text">{event.summary}</pre>
+                  <pre className="live-message-text">{item.event.summary}</pre>
                 </div>
               </article>
             ) : (
-              <details className={'live-event-card collapsed ' + event.kind} key={index}>
-                <summary className="live-event-collapsed-summary">
-                  <span className="live-event-time">{formatEventTime(event.timestamp)}</span>
-                  <span className={'live-event-kind ' + event.kind}>{liveEventLabel(event)}</span>
-                  {event.tool && <span className="live-event-tool">{event.tool}</span>}
-                  {event.status && <span className="live-event-status">{event.status}</span>}
-                  <span className="live-event-preview">{liveEventPreview(event)}</span>
-                </summary>
-                <pre className="live-event-summary">{event.summary}</pre>
-              </details>
+              <LiveCollapsedEvent event={item.event} key={item.key} />
             )
           ))}
         </div>
@@ -2373,6 +2382,21 @@ function LiveViewerPanel({ taskId, onClose }: { taskId: string; onClose: () => v
         </div>
       </section>
     </div>
+  );
+}
+
+function LiveCollapsedEvent({ event }: { event: LiveEvent }) {
+  return (
+    <details className={'live-event-card collapsed ' + event.kind}>
+      <summary className="live-event-collapsed-summary">
+        <span className="live-event-time">{formatEventTime(event.timestamp)}</span>
+        <span className={'live-event-kind ' + event.kind}>{liveEventLabel(event)}</span>
+        {event.tool && <span className="live-event-tool">{event.tool}</span>}
+        {event.status && <span className="live-event-status">{event.status}</span>}
+        <span className="live-event-preview">{liveEventPreview(event)}</span>
+      </summary>
+      <pre className="live-event-summary">{event.summary}</pre>
+    </details>
   );
 }
 

@@ -24,7 +24,7 @@ Reasonix should eventually reach the same project role as MiMo:
 
 P6.0-P6.25 are implemented locally. The runtime now has an Agent Registry, Reasonix TUI probe, Reasonix one-shot runner, generic low-token task get/wait/reply tools, generic lifecycle/status tools for cancel/finish/merge/delete/queue/token, safe client Agent commands including replies/recovery/listing/token status, Reasonix session mapping through `agent_session_path`, Admin UI agent selector/badge/reply/lifecycle/detail-read/open-action support, agent-aware Codex review handoff prompts, agent-aware queue scheduling, Reasonix live/session parsing for the read-only live viewer, safe local folder opening, safe Reasonix GUI companion opening, explicit Reasonix token/cost extraction when session fields exist, bounded generic task listing/recovery, generic Review Package summary fields, terminal-task Worktree cleanup for failed/cancelled/abandoned tasks, failed-task reply capability visibility, and low-cost model routing/profile configuration. Existing `mimo_*` MCP tools remain compatible.
 
-Current concurrency boundary: the global task queue allows at most two running write tasks. It can run one MiMo task and one Reasonix TUI task at the same time only when both tasks have known workspace metadata and their editable paths do not overlap. Two MiMo tasks still queue behind each other, two Reasonix tasks still queue behind each other, and any task with unknown workspace/editable-path metadata is treated conservatively and queued.
+Current concurrency boundary: the global task queue allows up to four running write tasks. It can run multiple MiMo and/or Reasonix TUI tasks at the same time when all tasks have known workspace metadata and their editable paths do not overlap. Any task with unknown workspace/editable-path metadata is treated conservatively and queued.
 
 P6.22 cleanup detail: terminal tasks (`failed`, `cancelled`, `abandoned`) that still have a Worktree can be cleaned through the Admin UI "丢弃 Worktree 并放弃" flow. The backend only relaxes discard/abandon cleanup; merge and accept remain strict. Stale records where the Worktree folder is already gone are handled by validating the saved Worktree root/task-id shape, pruning Git worktree metadata, deleting the task branch best-effort, and clearing the task Worktree record. Active/running cancellation cleanup remains a separate audit item.
 
@@ -306,20 +306,21 @@ Tasks:
 - Track active editable paths per agent.
 - Allow disjoint tasks on different agents.
 - Queue or reject overlapping tasks.
-- Keep one write task per agent initially.
+- Allow multiple write tasks per agent when editable paths are known and disjoint.
 
 Acceptance:
 
 - MiMo and Reasonix can run concurrently on different editable paths.
+- Two MiMo tasks or two Reasonix tasks can also run concurrently when their editable paths are disjoint.
 - Overlap is blocked or queued deterministically.
 
 Status:
 
 - Implemented as P6.4 first queue slice.
 - `TaskQueue` stores `agentId`, `workspacePath`, and `editablePaths`.
-- `globalTaskQueue` concurrency is 2 so a machine can run one MiMo task and one Reasonix task when safe.
-- Same-agent tasks always queue, even when their paths differ.
-- Different-agent tasks queue when editable paths overlap.
+- `globalTaskQueue` concurrency is 4 so a machine can run several disjoint write tasks when safe.
+- Same-agent tasks can run in parallel when editable paths are known and disjoint.
+- Any tasks queue when editable paths overlap.
 - Missing agent/workspace/path metadata is treated conservatively and queues instead of running in parallel.
 
 ### P6.5 Reasonix Session Continuation

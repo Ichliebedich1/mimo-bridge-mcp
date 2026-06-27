@@ -1584,6 +1584,55 @@ select:focus {
   margin-bottom: 0;
 }
 
+.live-tool-group {
+  border: 1px solid rgba(124, 58, 237, 0.22);
+  border-radius: 16px;
+  background: #fbf8ff;
+  margin-bottom: 12px;
+  overflow: hidden;
+}
+
+.live-tool-group:last-child {
+  margin-bottom: 0;
+}
+
+.live-tool-group-summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 14px;
+  cursor: pointer;
+  color: var(--ink);
+  list-style: none;
+}
+
+.live-tool-group-summary::-webkit-details-marker {
+  display: none;
+}
+
+.live-tool-group-summary::before {
+  content: ">";
+  color: var(--purple);
+  font-size: 10px;
+  transform: translateY(-1px);
+}
+
+.live-tool-group[open] > .live-tool-group-summary::before {
+  content: "v";
+}
+
+.live-tool-group-body {
+  display: grid;
+  gap: 8px;
+  padding: 0 12px 12px;
+}
+
+.live-tool-group-body .live-event-card {
+  margin-bottom: 0;
+  background: #ffffff;
+}
+
 .live-message-card {
   display: grid;
   grid-template-columns: 38px minmax(0, 1fr);
