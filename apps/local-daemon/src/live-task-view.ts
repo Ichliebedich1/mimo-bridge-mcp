@@ -15,6 +15,7 @@ export interface LiveEvent {
 
 export interface LiveTaskView {
   task_id: string;
+  agent: string;
   status: string;
   current_round: number;
   updated_at: string;
@@ -65,17 +66,19 @@ export function readLiveTaskView(
   }
 
   const isLive = task.status === "running";
-  const logRound = findLogRound(taskStore, taskId, task.current_round, isLive);
-  const logPath = taskStore.getLogPath(taskId, logRound);
+  const logRounds = findLogRounds(taskStore, taskId, task.current_round);
+  const displayRound = isLive ? task.current_round : logRounds[logRounds.length - 1] ?? task.current_round;
+  const logPaths = logRounds.map((round) => taskStore.getLogPath(taskId, round));
 
-  if (!existsSync(logPath)) {
+  if (logPaths.length === 0) {
     const reasonixOnly = task.agent === "reasonix-tui" && task.agent_session_path
       ? parseReasonixSessionTail(task.agent_session_path, maxEvents, maxChars)
       : { events: [], truncated: false };
     return {
       task_id: task.task_id,
+      agent: task.agent,
       status: task.status,
-      current_round: logRound,
+      current_round: displayRound,
       updated_at: task.updated_at,
       is_live: isLive,
       events: reasonixOnly.events,
@@ -83,12 +86,13 @@ export function readLiveTaskView(
     };
   }
 
-  const result = readMergedLiveEvents(task.agent, task.agent_session_path, logPath, maxEvents, maxChars);
+  const result = readMergedLiveEvents(task.agent, task.agent_session_path, logPaths, maxEvents, maxChars);
 
   return {
     task_id: task.task_id,
+    agent: task.agent,
     status: task.status,
-    current_round: logRound,
+    current_round: displayRound,
     updated_at: task.updated_at,
     is_live: isLive,
     events: result.events,
@@ -99,25 +103,29 @@ export function readLiveTaskView(
 function readMergedLiveEvents(
   agent: string,
   agentSessionPath: string | null | undefined,
-  logPath: string,
+  logPaths: string[],
   maxEvents: number,
   maxChars: number,
 ): { events: LiveEvent[]; truncated: boolean } {
-  const runtimeResult = readTailEvents(logPath, maxEvents, maxChars);
+  const runtimeResult = readTailEventsFromPaths(logPaths, maxEvents, maxChars);
   if (agent !== "reasonix-tui" || !agentSessionPath) {
-    return runtimeResult;
+    return agent === "reasonix-tui"
+      ? { events: filterReasonixRuntimeEvents(runtimeResult.events), truncated: runtimeResult.truncated }
+      : runtimeResult;
   }
 
   const sessionResult = parseReasonixSessionTail(agentSessionPath, maxEvents, maxChars);
   if (sessionResult.events.length === 0) {
+    const runtimeEvents = filterReasonixRuntimeEvents(runtimeResult.events);
     return {
-      events: runtimeResult.events,
+      events: runtimeEvents,
       truncated: runtimeResult.truncated || sessionResult.truncated,
     };
   }
 
+  const runtimeEvents = filterReasonixRuntimeEvents(runtimeResult.events).filter((event) => event.kind === "tool");
   return boundLiveEvents(
-    dedupeLiveEvents([...runtimeResult.events, ...sessionResult.events])
+    dedupeLiveEvents([...runtimeEvents, ...sessionResult.events])
       .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()),
     maxEvents,
     maxChars,
@@ -125,16 +133,27 @@ function readMergedLiveEvents(
   );
 }
 
-function findLogRound(taskStore: TaskStore, taskId: string, currentRound: number, isLive: boolean): number {
-  if (isLive) {
-    return currentRound;
-  }
-  for (let round = currentRound; round >= 1; round--) {
+function filterReasonixRuntimeEvents(events: LiveEvent[]): LiveEvent[] {
+  return events.filter((event) => {
+    if (event.kind === "tool") return true;
+    const type = event.event_type.toLowerCase();
+    const summary = event.summary.trim();
+    if (type.includes("stderr")) return true;
+    if (/reasonix tui task (started|completed|failed)/i.test(summary)) return true;
+    if (/reasonix \[session\] mapped/i.test(summary)) return true;
+    if (/agent\.max_steps|paused after/i.test(summary)) return true;
+    return false;
+  });
+}
+
+function findLogRounds(taskStore: TaskStore, taskId: string, currentRound: number): number[] {
+  const rounds: number[] = [];
+  for (let round = 1; round <= Math.max(1, currentRound); round++) {
     if (existsSync(taskStore.getLogPath(taskId, round))) {
-      return round;
+      rounds.push(round);
     }
   }
-  return currentRound;
+  return rounds;
 }
 
 export function parseJsonlTail(
@@ -222,6 +241,31 @@ function readTailEvents(
   } finally {
     closeSync(fd);
   }
+}
+
+function readTailEventsFromPaths(
+  filePaths: string[],
+  maxEvents: number,
+  maxChars: number,
+): { events: LiveEvent[]; truncated: boolean } {
+  if (filePaths.length === 0) {
+    return { events: [], truncated: false };
+  }
+
+  const events: LiveEvent[] = [];
+  let truncated = false;
+  for (const filePath of filePaths) {
+    const result = readTailEvents(filePath, maxEvents, maxChars);
+    events.push(...result.events);
+    truncated = truncated || result.truncated;
+  }
+
+  return boundLiveEvents(
+    events.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()),
+    maxEvents,
+    maxChars,
+    truncated,
+  );
 }
 
 function dedupeLiveEvents(events: LiveEvent[]): LiveEvent[] {

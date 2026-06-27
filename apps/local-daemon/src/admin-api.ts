@@ -8,6 +8,7 @@ import { readLiveTaskView, parseLiveParams } from "./live-task-view.js";
 import { getPendingReviewCount } from "../../../src/services/pending-reviews.js";
 import { computeTaskReplyCapability } from "../../../src/services/task-reply-capability.js";
 import { createOpenTaskTargetHandler } from "./task-open-actions.js";
+import { selectWorkspaceFolder } from "./workspace-folder-picker.js";
 import { getRoutingProfiles, normalizeRoutingProfilesConfig } from "../../../src/services/model-routing.js";
 import { resolveConfigPath, savePersistentConfig } from "./daemon-config.js";
 
@@ -129,6 +130,12 @@ export async function handleAdminApi(
 
     if (req.method === "GET" && url.pathname === "/api/routing-profiles") {
       sendJson(res, 200, ok(getRoutingProfiles(config.mcpConfig?.routingProfiles)));
+      return true;
+    }
+
+    if (req.method === "POST" && url.pathname === "/api/workspace-folder/select") {
+      const data = await selectWorkspaceFolder(config);
+      sendJson(res, "error" in data ? 500 : 200, "error" in data ? fail(data.error) : ok(data));
       return true;
     }
 

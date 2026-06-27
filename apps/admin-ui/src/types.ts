@@ -200,6 +200,7 @@ export type LiveEvent = {
 
 export type LiveTaskView = {
   task_id: string;
+  agent?: string;
   status: TaskStatus;
   current_round: number;
   updated_at: string;

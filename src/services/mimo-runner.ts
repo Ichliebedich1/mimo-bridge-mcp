@@ -154,6 +154,7 @@ function recordMimoTokenUsage(task: TaskState, parsed: ReturnType<ReturnType<typ
       cacheReadTokens: usage.cache_read_tokens,
       cacheWriteTokens: usage.cache_write_tokens,
       agent: "mimo",
+      model: task.config.routing?.model ?? "mimo:unknown",
     }
   );
 }

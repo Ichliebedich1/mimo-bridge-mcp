@@ -226,6 +226,7 @@ function recordReasonixTokenUsage(task: TaskState, sessionPath: string | null): 
       cacheReadTokens: usage.cache_read_tokens,
       cacheWriteTokens: usage.cache_write_tokens,
       agent: "reasonix-tui",
+      model: task.config.routing?.model ?? "reasonix-tui:unknown",
     },
   );
 }

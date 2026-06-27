@@ -21,6 +21,7 @@ import {
   replyTask,
   resetTokenBudget,
   saveRoutingProfiles,
+  selectWorkspaceFolder,
   worktreeTask,
   type AgentStatusResponse,
   type HealthResponse,
@@ -279,12 +280,12 @@ function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  async function refreshTaskDetail(taskId: string) {
+  async function refreshTaskDetail(taskId: string, agentOverride?: string) {
     if (!apiReachable) {
       return;
     }
     try {
-      const agent = tasks.find((candidate) => candidate.id === taskId)?.agent ?? 'mimo';
+      const agent = agentOverride ?? tasks.find((candidate) => candidate.id === taskId)?.agent ?? 'mimo';
       const task = await fetchTask(taskId, agent);
       setTasks((current) => mergeTask(current, task));
       setApiError(null);
@@ -340,7 +341,7 @@ function App() {
     if (taskId) {
       setSelectedTaskId(taskId);
       setPage('detail');
-      await refreshTaskDetail(taskId);
+      await refreshTaskDetail(taskId, input.agent_id || 'mimo');
     }
   }
 
@@ -837,6 +838,7 @@ function CreateTaskPage({
   const [hasImages, setHasImages] = useState(false);
   const [attachments, setAttachments] = useState<CreateTaskAttachment[]>([]);
   const [formError, setFormError] = useState<string | null>(null);
+  const [selectingWorkspace, setSelectingWorkspace] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
   const currentScenario = routingProfiles?.scenarios[taskScenario] ?? null;
@@ -962,6 +964,21 @@ function CreateTaskPage({
     });
   }
 
+  async function chooseWorkspaceFolder() {
+    setFormError(null);
+    setSelectingWorkspace(true);
+    try {
+      const result = await selectWorkspaceFolder();
+      if (result.selected && result.path) {
+        setWorkspacePath(result.path);
+      }
+    } catch (error) {
+      setFormError('打开文件夹选择器失败：' + errorMessage(error));
+    } finally {
+      setSelectingWorkspace(false);
+    }
+  }
+
   return (
     <div className="create-layout">
       <section className="panel">
@@ -1084,7 +1101,12 @@ function CreateTaskPage({
           </div>
           <label>
             <span>工作区路径 *</span>
-            <input value={workspacePath} onChange={(event) => setWorkspacePath(event.target.value)} placeholder="C:\Users\...\mimo-bridge-mcp" />
+            <div className="path-picker-row">
+              <input value={workspacePath} onChange={(event) => setWorkspacePath(event.target.value)} placeholder="C:\Users\...\mimo-bridge-mcp" />
+              <button className="button soft" disabled={selectingWorkspace || actionBusy || submitting} onClick={() => void chooseWorkspaceFolder()} type="button">
+                {selectingWorkspace ? '选择中…' : '选择文件夹'}
+              </button>
+            </div>
             <small className="field-help">必须是允许根目录下的 Windows 绝对路径。</small>
           </label>
           <div className="split-fields">
@@ -1212,6 +1234,7 @@ function TaskDetailPage({
   const [replyAttachments, setReplyAttachments] = useState<CreateTaskAttachment[]>([]);
   const [replyModel, setReplyModel] = useState('');
   const [replyEffort, setReplyEffort] = useState<ReasoningEffort>('medium');
+  const [replyRoutingDirty, setReplyRoutingDirty] = useState(false);
   const [replying, setReplying] = useState(false);
   const [handoffMessage, setHandoffMessage] = useState<string | null>(null);
   const [handoffPrompt, setHandoffPrompt] = useState<string | null>(null);
@@ -1227,6 +1250,7 @@ function TaskDetailPage({
     setReplyAttachments([]);
     setReplyModel('');
     setReplyEffort('medium');
+    setReplyRoutingDirty(false);
     setHandoffMessage(null);
     setHandoffPrompt(null);
     setShowLiveViewer(false);
@@ -1249,12 +1273,15 @@ function TaskDetailPage({
   const replyModelForSubmit = replyHasImageAttachment && replyAgentId === 'mimo' ? 'mimo-v2.5-flash' : replyEffectiveModel;
 
   useEffect(() => {
+    if (replyRoutingDirty) {
+      return;
+    }
     const agentId = task.agent === 'reasonix-tui' ? 'reasonix-tui' : 'mimo';
     const models = routingProfiles?.allowed_models[agentId] ?? (agentId === 'mimo' ? ['mimo-v2.5-flash', 'mimo-v2.5-pro'] : ['deepseek-v4-flash', 'deepseek-v4-pro']);
     const preferredModel = task.routing?.model && models.includes(task.routing.model) ? task.routing.model : models[0] ?? '';
     setReplyModel(preferredModel);
     setReplyEffort(task.routing?.reasoning_effort ?? 'medium');
-  }, [routingProfiles, task.agent, task.id, task.routing?.model, task.routing?.reasoning_effort]);
+  }, [replyRoutingDirty, routingProfiles, task.agent, task.id, task.routing?.model, task.routing?.reasoning_effort]);
 
   async function loadFocused() {
     if (!selectedFile) {
@@ -1519,7 +1546,10 @@ function TaskDetailPage({
                 <select
                   disabled={!canReply || Boolean(actionBusy) || replying || replyHasImageAttachment}
                   value={replyModelForSubmit}
-                  onChange={(event) => setReplyModel(event.target.value)}
+                  onChange={(event) => {
+                    setReplyRoutingDirty(true);
+                    setReplyModel(event.target.value);
+                  }}
                 >
                   {replyAllowedModels.map((modelName) => (
                     <option key={modelName} value={modelName}>{modelName}</option>
@@ -1531,7 +1561,10 @@ function TaskDetailPage({
                 <select
                   disabled={!canReply || Boolean(actionBusy) || replying}
                   value={replyEffort}
-                  onChange={(event) => setReplyEffort(event.target.value as ReasoningEffort)}
+                  onChange={(event) => {
+                    setReplyRoutingDirty(true);
+                    setReplyEffort(event.target.value as ReasoningEffort);
+                  }}
                 >
                   {(routingProfiles?.reasoning_efforts ?? (['low', 'medium', 'high'] as ReasoningEffort[])).map((effort) => (
                     <option key={effort} value={effort}>{effortLabels[effort]}</option>
@@ -1752,37 +1785,77 @@ function QueuePage({ queueItems, onOpenTask }: { queueItems: QueueItem[]; onOpen
 
 function TokenPage({ tokenStatus, onReset, actionBusy }: { tokenStatus: unknown; onReset: () => void; actionBusy: boolean }) {
   const token = readTokenStatus(tokenStatus);
+  const [timeRange, setTimeRange] = useState<TokenTimeRange>('24h');
+  const [modelFilter, setModelFilter] = useState('all');
+  const usage = token.usageFor(timeRange, modelFilter);
 
   return (
     <div className="page-grid">
       <section className="panel wide token-panel">
-        <PanelHeader title="Token 预算" helper="来自 MiMo 事件和 Reasonix 会话 JSONL 中的真实 tokens/cost，按当前守护进程运行期累计。" />
-        <div className="token-empty">
-          <div className="orb">◌</div>
-          <h2>{token.connected ? 'Token API 已连接' : '统计暂不可用'}</h2>
-          <p>
-            {token.connected
-              ? '当前显示来自本地守护进程的 token-budget 状态；完成新的 MiMo 或 Reasonix 任务后，会自动累计日志中明确提供的真实 token 和 cost。'
-              : '暂时无法读取本地守护进程的 token-budget 状态。'}
-          </p>
-          <div className="token-grid">
-            <MetricCard label="输入 Token" value={token.input} tone="neutral" helper={token.helper} />
-            <MetricCard label="输出 Token" value={token.output} tone="neutral" helper={token.helper} />
-            <MetricCard label="总 Token" value={token.total} tone="neutral" helper={'已记录 ' + token.historyCount + ' 条用量事件'} />
-            <MetricCard label="缓存读取" value={token.cacheRead} tone="neutral" helper="缓存命中相关 token" />
-            <MetricCard label="缓存写入" value={token.cacheWrite} tone="neutral" helper="写入缓存相关 token" />
-            <MetricCard label="预估成本" value={token.cost} tone="neutral" helper={token.costHelper} />
+        <div className="token-dashboard-head">
+          <PanelHeader title="Token 预算" helper="按时间、模型和 Agent 查看真实 token/cost；命中率 = 缓存命中输入 / 总输入。" />
+          <div className="token-filters">
+            <label>
+              时间
+              <select value={timeRange} onChange={(event) => setTimeRange(event.target.value as TokenTimeRange)}>
+                {TOKEN_RANGE_OPTIONS.map((option) => <option key={option.key} value={option.key}>{option.label}</option>)}
+              </select>
+            </label>
+            <label>
+              模型
+              <select value={modelFilter} onChange={(event) => setModelFilter(event.target.value)}>
+                <option value="all">全部模型</option>
+                {token.models.map((modelName) => <option key={modelName} value={modelName}>{modelName}</option>)}
+              </select>
+            </label>
           </div>
-          {token.connected && (
+        </div>
+
+        {!token.connected ? (
+          <div className="token-empty">
+            <div className="orb">◌</div>
+            <h2>统计暂不可用</h2>
+            <p>暂时无法读取本地守护进程的 token-budget 状态。</p>
+          </div>
+        ) : (
+          <>
+            <div className="token-hero">
+              <div className="token-primary-card">
+                <span>真实消耗 Tokens</span>
+                <strong>{formatCompactToken(usage.raw.total_tokens)}</strong>
+                <small>筛选范围：{TOKEN_RANGE_LABELS[timeRange]} / {modelFilter === 'all' ? '全部模型' : modelFilter}</small>
+              </div>
+              <div className="token-side-card">
+                <span>总请求数</span>
+                <strong>{token.historyCount}</strong>
+                <small>当前 daemon 运行期记录</small>
+              </div>
+              <div className="token-side-card">
+                <span>总成本</span>
+                <strong>{usage.cost}</strong>
+                <small>人民币预估</small>
+              </div>
+            </div>
+
+            <div className="token-grid">
+              <MetricCard label="新增输入" value={usage.input} tone="neutral" helper="不含缓存命中输入" />
+              <MetricCard label="Output" value={usage.output} tone="neutral" helper="含 Reasoning 输出时按输出计" />
+              <MetricCard label="缓存创建" value={usage.cacheWrite} tone="neutral" helper="写入缓存 token" />
+              <MetricCard label="缓存命中" value={usage.cacheRead} tone="neutral" helper="命中输入 token" />
+              <MetricCard label="缓存命中率" value={usage.hitRate} tone="neutral" helper="缓存命中输入 / 总输入" />
+            </div>
+
             <div className="token-breakdown">
               <TokenUsageTable title="按时间窗口" rows={token.timeRanges} />
+              <TokenUsageTable title="按模型" rows={token.modelRows} emptyText="暂无模型用量记录" />
               <TokenUsageTable title="按 Agent" rows={token.agents} emptyText="暂无 Agent 用量记录" />
             </div>
-          )}
-          <button className="button danger" disabled={actionBusy} onClick={onReset} type="button">
-            重置预算（需确认）
-          </button>
-        </div>
+
+            <button className="button danger" disabled={actionBusy} onClick={onReset} type="button">
+              重置预算（需确认）
+            </button>
+          </>
+        )}
       </section>
     </div>
   );
@@ -1803,6 +1876,7 @@ function TokenUsageTable({ title, rows, emptyText = '暂无用量记录' }: { ti
               <th>输出</th>
               <th>总量</th>
               <th>缓存</th>
+              <th>命中率</th>
               <th>成本</th>
             </tr>
           </thead>
@@ -1814,6 +1888,7 @@ function TokenUsageTable({ title, rows, emptyText = '暂无用量记录' }: { ti
                 <td>{row.output}</td>
                 <td>{row.total}</td>
                 <td>{row.cache}</td>
+                <td>{row.hitRate}</td>
                 <td>{row.cost}</td>
               </tr>
             ))}
@@ -2365,7 +2440,7 @@ function LiveViewerPanel({ taskId, onClose }: { taskId: string; onClose: () => v
                 <div className="live-message-avatar" aria-hidden="true">AI</div>
                 <div className="live-message-body">
                   <div className="live-message-meta">
-                    <span className={'live-event-kind ' + item.event.kind}>{liveEventLabel(item.event)}</span>
+                    <span className={'live-event-kind ' + item.event.kind}>{liveEventLabel(item.event, data.agent)}</span>
                     <span className="live-event-time">{formatEventTime(item.event.timestamp)}</span>
                   </div>
                   <pre className="live-message-text">{item.event.summary}</pre>
@@ -2470,10 +2545,18 @@ function mergeTaskListPreservingDetail(current: Task[], incoming: Task[]): Task[
     }
     return {
       ...previous,
+      agent: task.agent,
       status: task.status,
       summary: task.summary || previous.summary,
       updatedAt: task.updatedAt,
       riskFlags: task.riskFlags.length > 0 ? task.riskFlags : previous.riskFlags,
+      canReply: task.canReply,
+      replyBlockers: task.replyBlockers,
+      replyLabel: task.replyLabel,
+      canDelete: task.canDelete,
+      deleteBlockers: task.deleteBlockers,
+      deleteLabel: task.deleteLabel,
+      routing: task.routing ?? previous.routing,
     };
   });
 }
@@ -2484,8 +2567,33 @@ type TokenUsageRow = {
   output: string;
   total: string;
   cache: string;
+  cacheRead: string;
+  cacheWrite: string;
+  hitRate: string;
   cost: string;
+  raw: TokenRawUsage;
 };
+
+type TokenRawUsage = {
+  input_tokens: number;
+  output_tokens: number;
+  total_tokens: number;
+  estimated_cost: number;
+  cache_read_tokens: number;
+  cache_write_tokens: number;
+};
+
+type TokenTimeRange = '1h' | '24h' | '7d' | '30d' | 'all';
+
+const TOKEN_RANGE_OPTIONS: Array<{ key: TokenTimeRange; label: string }> = [
+  { key: '1h', label: '近 1 小时' },
+  { key: '24h', label: '近 24 小时' },
+  { key: '7d', label: '近 7 天' },
+  { key: '30d', label: '近 30 天' },
+  { key: 'all', label: '全部' },
+];
+
+const TOKEN_RANGE_LABELS = Object.fromEntries(TOKEN_RANGE_OPTIONS.map((item) => [item.key, item.label])) as Record<TokenTimeRange, string>;
 
 function readTokenStatus(tokenStatus: unknown): {
   connected: boolean;
@@ -2500,7 +2608,11 @@ function readTokenStatus(tokenStatus: unknown): {
   historyCount: number;
   timeRanges: TokenUsageRow[];
   agents: TokenUsageRow[];
+  modelRows: TokenUsageRow[];
+  models: string[];
+  usageFor: (range: TokenTimeRange, model: string) => TokenUsageRow;
 } {
+  const emptyRow = makeTokenUsageRow('全部', null);
   if (!isRecord(tokenStatus)) {
     return {
       connected: false,
@@ -2515,6 +2627,9 @@ function readTokenStatus(tokenStatus: unknown): {
       historyCount: 0,
       timeRanges: [],
       agents: [],
+      modelRows: [],
+      models: [],
+      usageFor: () => emptyRow,
     };
   }
   const used = isRecord(tokenStatus.used) ? tokenStatus.used : null;
@@ -2528,6 +2643,8 @@ function readTokenStatus(tokenStatus: unknown): {
   const cost = formatCny(costNumber);
   const timeRanges = readTimeRangeRows(analytics);
   const agents = readAgentRows(analytics);
+  const modelRows = readModelRows(analytics);
+  const models = modelRows.map((row) => row.label);
   const historyCount = typeof analytics?.history_count === 'number' ? analytics.history_count : 0;
   return {
     connected: true,
@@ -2542,6 +2659,16 @@ function readTokenStatus(tokenStatus: unknown): {
     historyCount,
     timeRanges,
     agents,
+    modelRows,
+    models,
+    usageFor: (range, modelName) => {
+      if (modelName === 'all') {
+        return makeTokenUsageRow(TOKEN_RANGE_LABELS[range], isRecord(analytics?.time_ranges) ? analytics.time_ranges[range] : null);
+      }
+      const byRange = isRecord(analytics?.time_ranges_by_model) ? analytics.time_ranges_by_model : null;
+      const rangeRecord = isRecord(byRange?.[range]) ? byRange[range] : null;
+      return makeTokenUsageRow(modelName, rangeRecord?.[modelName]);
+    },
   };
 }
 
@@ -2565,17 +2692,39 @@ function readAgentRows(analytics: Record<string, unknown> | null): TokenUsageRow
     .map(([agent, usage]) => makeTokenUsageRow(agent, usage));
 }
 
+function readModelRows(analytics: Record<string, unknown> | null): TokenUsageRow[] {
+  const byModel = isRecord(analytics?.by_model) ? analytics.by_model : null;
+  if (!byModel) return [];
+  return Object.entries(byModel)
+    .sort(([modelA], [modelB]) => modelA.localeCompare(modelB))
+    .map(([model, usage]) => makeTokenUsageRow(model, usage));
+}
+
 function makeTokenUsageRow(label: string, usage: unknown): TokenUsageRow {
   const record = isRecord(usage) ? usage : null;
   const cacheRead = readUsageNumber(record, 'cache_read_tokens');
   const cacheWrite = readUsageNumber(record, 'cache_write_tokens');
+  const input = readUsageNumber(record, 'input_tokens');
+  const totalInput = input + cacheRead;
+  const raw = {
+    input_tokens: input,
+    output_tokens: readUsageNumber(record, 'output_tokens'),
+    total_tokens: readUsageNumber(record, 'total_tokens'),
+    estimated_cost: readUsageNumber(record, 'estimated_cost'),
+    cache_read_tokens: cacheRead,
+    cache_write_tokens: cacheWrite,
+  };
   return {
     label,
-    input: formatTokenNumber(readUsageNumber(record, 'input_tokens')),
-    output: formatTokenNumber(readUsageNumber(record, 'output_tokens')),
-    total: formatTokenNumber(readUsageNumber(record, 'total_tokens')),
+    input: formatTokenNumber(raw.input_tokens),
+    output: formatTokenNumber(raw.output_tokens),
+    total: formatTokenNumber(raw.total_tokens),
     cache: formatTokenNumber(cacheRead + cacheWrite),
-    cost: formatCny(readUsageNumber(record, 'estimated_cost')),
+    cacheRead: formatTokenNumber(cacheRead),
+    cacheWrite: formatTokenNumber(cacheWrite),
+    hitRate: totalInput > 0 ? ((cacheRead / totalInput) * 100).toFixed(1) + '%' : '0.0%',
+    cost: formatCny(raw.estimated_cost),
+    raw,
   };
 }
 
@@ -2586,6 +2735,14 @@ function readUsageNumber(record: Record<string, unknown> | null, field: string):
 
 function formatTokenNumber(value: number): string {
   return Math.max(0, Math.floor(value)).toLocaleString();
+}
+
+function formatCompactToken(value: number): string {
+  const safe = Math.max(0, Math.floor(value));
+  if (safe >= 10000) {
+    return (safe / 10000).toFixed(safe >= 1000000 ? 1 : 2) + ' 万';
+  }
+  return safe.toLocaleString();
 }
 
 function formatCny(value: number): string {
@@ -2642,8 +2799,8 @@ function formatEventTime(isoString: string): string {
   return date.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 }
 
-function liveEventLabel(event: LiveEvent): string {
-  if (event.kind === 'message') return 'Agent 回复';
+function liveEventLabel(event: LiveEvent, agent?: string): string {
+  if (event.kind === 'message') return agentDisplayName(agent ?? 'mimo') + ' 回复';
   if (event.kind === 'tool') return '工具调用';
   return '事件';
 }

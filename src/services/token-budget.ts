@@ -13,6 +13,7 @@ export interface TokenUsageRecordOptions {
   cacheReadTokens?: number;
   cacheWriteTokens?: number;
   agent?: string;
+  model?: string;
 }
 
 export interface TokenBudgetConfig {
@@ -39,6 +40,8 @@ export interface TokenBudgetStatus {
 
 export interface TokenUsageAnalytics {
   by_agent: Record<string, TokenUsage>;
+  by_model: Record<string, TokenUsage>;
+  time_ranges_by_model: Record<"1h" | "24h" | "7d" | "30d" | "all", Record<string, TokenUsage>>;
   time_ranges: Record<"1h" | "24h" | "7d" | "30d" | "all", TokenUsage>;
   history_count: number;
 }
@@ -54,7 +57,7 @@ const DEFAULT_BUDGET: TokenBudgetConfig = {
 export class TokenBudgetManager {
   private budget: TokenBudgetConfig;
   private usage: TokenUsage;
-  private history: Array<{ timestamp: number; usage: TokenUsage; context: string; agent: string }>;
+  private history: Array<{ timestamp: number; usage: TokenUsage; context: string; agent: string; model: string }>;
 
   constructor(budget: Partial<TokenBudgetConfig> = {}) {
     this.budget = { ...DEFAULT_BUDGET, ...budget };
@@ -70,7 +73,7 @@ export class TokenBudgetManager {
     return { ...this.usage };
   }
 
-  getHistory(): Array<{ timestamp: number; usage: TokenUsage; context: string; agent: string }> {
+  getHistory(): Array<{ timestamp: number; usage: TokenUsage; context: string; agent: string; model: string }> {
     return [...this.history];
   }
 
@@ -86,6 +89,7 @@ export class TokenBudgetManager {
     const cacheReadTokens = Math.max(0, Math.floor(options.cacheReadTokens ?? 0));
     const cacheWriteTokens = Math.max(0, Math.floor(options.cacheWriteTokens ?? 0));
     const agent = options.agent?.trim() || inferAgentFromContext(context);
+    const model = options.model?.trim() || inferModelFromContext(context, agent);
     const cost = typeof options.estimatedCost === "number"
       ? Math.max(0, options.estimatedCost)
       : this.estimateCost(safeInputTokens, safeOutputTokens);
@@ -110,6 +114,7 @@ export class TokenBudgetManager {
       usage,
       context,
       agent,
+      model,
     });
 
     return this.getStatus();
@@ -123,6 +128,7 @@ export class TokenBudgetManager {
       "30d": 30 * 24 * 60 * 60 * 1000,
     };
     const by_agent: Record<string, TokenUsage> = {};
+    const by_model: Record<string, TokenUsage> = {};
     const time_ranges: TokenUsageAnalytics["time_ranges"] = {
       "1h": emptyUsage(),
       "24h": emptyUsage(),
@@ -130,18 +136,28 @@ export class TokenBudgetManager {
       "30d": emptyUsage(),
       all: emptyUsage(),
     };
+    const time_ranges_by_model: TokenUsageAnalytics["time_ranges_by_model"] = {
+      "1h": {},
+      "24h": {},
+      "7d": {},
+      "30d": {},
+      all: {},
+    };
 
     for (const record of this.history) {
       addUsage(by_agent[record.agent] ??= emptyUsage(), record.usage);
+      addUsage(by_model[record.model] ??= emptyUsage(), record.usage);
       addUsage(time_ranges.all, record.usage);
+      addUsage(time_ranges_by_model.all[record.model] ??= emptyUsage(), record.usage);
       for (const [key, windowMs] of Object.entries(ranges) as Array<[keyof typeof ranges, number]>) {
         if (now - record.timestamp <= windowMs) {
           addUsage(time_ranges[key], record.usage);
+          addUsage(time_ranges_by_model[key][record.model] ??= emptyUsage(), record.usage);
         }
       }
     }
 
-    return { by_agent, time_ranges, history_count: this.history.length };
+    return { by_agent, by_model, time_ranges_by_model, time_ranges, history_count: this.history.length };
   }
 
   getStatus(): TokenBudgetStatus {
@@ -269,4 +285,19 @@ function inferAgentFromContext(context: string): string {
   if (lowered.includes("reasonix")) return "reasonix-tui";
   if (lowered.includes("mimo")) return "mimo";
   return "unknown";
+}
+
+function inferModelFromContext(context: string, agent: string): string {
+  const lowered = context.toLowerCase();
+  const knownModels = [
+    "mimo-v2.5-pro-ultraspeed",
+    "mimo-v2.5-flash",
+    "mimo-v2.5-pro",
+    "deepseek-v4-flash",
+    "deepseek-v4-pro",
+  ];
+  for (const model of knownModels) {
+    if (lowered.includes(model)) return model;
+  }
+  return `${agent || "unknown"}:unknown`;
 }

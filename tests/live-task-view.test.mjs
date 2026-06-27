@@ -447,7 +447,11 @@ test("readLiveTaskView merges Reasonix session messages into live events", () =>
     taskStore.updateTaskStatus(task.task_id, "running");
 
     const logPath = taskStore.getLogPath(task.task_id, 1);
-    writeFileSync(logPath, JSON.stringify({ type: "start", timestamp: Date.now(), summary: "Reasonix TUI task started." }) + "\n", "utf-8");
+    writeFileSync(logPath, [
+      JSON.stringify({ type: "start", timestamp: Date.now(), summary: "Reasonix TUI task started." }),
+      JSON.stringify({ type: "text", timestamp: Date.now() + 1, summary: "noisy duplicate chunk A" }),
+      JSON.stringify({ type: "text", timestamp: Date.now() + 2, summary: "noisy duplicate chunk B" }),
+    ].join("\n") + "\n", "utf-8");
 
     const sessionPath = join(dir, "reasonix-session.jsonl");
     writeFileSync(sessionPath, [
@@ -460,9 +464,12 @@ test("readLiveTaskView merges Reasonix session messages into live events", () =>
 
     const result = readLiveTaskView(taskStore, task.task_id, 20, 8000);
     assert.ok(!("error" in result));
+    assert.strictEqual(result.agent, "reasonix-tui");
     assert.ok(result.events.some((event) => event.kind === "message" && event.summary.includes("检查文件")));
     assert.ok(result.events.some((event) => event.kind === "tool" && event.tool === "shell"));
     const serialized = JSON.stringify(result);
+    assert.strictEqual(serialized.includes("noisy duplicate chunk A"), false);
+    assert.strictEqual(serialized.includes("noisy duplicate chunk B"), false);
     assert.strictEqual(serialized.includes("task brief should not show"), false);
     assert.strictEqual(serialized.includes("hidden"), false);
     assert.strictEqual(serialized.includes(sessionPath), false);
@@ -525,6 +532,45 @@ test("readLiveTaskView uses the latest completed log round after current_round a
     assert.strictEqual(result.current_round, 1);
     assert.strictEqual(result.events.length, 1);
     assert.strictEqual(result.events[0].summary, "round one complete");
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("readLiveTaskView keeps previous round messages after a reply creates a new round", () => {
+  const dir = tmpDir();
+  try {
+    const taskStore = new TaskStore(dir);
+    const task = taskStore.createTask({
+      objective: "multi-round live view",
+      workspace_path: "C:\\workspace",
+      editable_paths: [],
+      readonly_paths: [],
+      acceptance_criteria: [],
+      max_rounds: 5,
+      runtime_timeout_seconds: 900,
+    });
+    writeFileSync(
+      taskStore.getLogPath(task.task_id, 1),
+      JSON.stringify({ type: "text", timestamp: 1700000000000, summary: "first round answer" }) + "\n",
+      "utf-8",
+    );
+    taskStore.updateTaskSession(task.task_id, "ses_round_1");
+    writeFileSync(
+      taskStore.getLogPath(task.task_id, 2),
+      JSON.stringify({ type: "text", timestamp: 1700000001000, summary: "second round answer" }) + "\n",
+      "utf-8",
+    );
+    taskStore.updateTaskSession(task.task_id, "ses_round_2");
+    taskStore.updateTaskStatus(task.task_id, "review");
+
+    const result = readLiveTaskView(taskStore, task.task_id, 40, 8000);
+    assert.ok(!("error" in result));
+    assert.strictEqual(result.current_round, 2);
+    assert.deepStrictEqual(result.events.map((event) => event.summary), [
+      "first round answer",
+      "second round answer",
+    ]);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

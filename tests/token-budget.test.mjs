@@ -218,12 +218,14 @@ describe("token-budget", () => {
       cacheReadTokens: 100,
       cacheWriteTokens: 100,
       agent: "mimo",
+      model: "mimo-v2.5-flash",
     });
     manager.recordUsage(2000, 1000, "reasonix task", {
       totalTokens: 3200,
       cacheReadTokens: 150,
       cacheWriteTokens: 50,
       agent: "reasonix-tui",
+      model: "deepseek-v4-pro",
     });
 
     const analytics = manager.getAnalytics();
@@ -231,7 +233,10 @@ describe("token-budget", () => {
     assert.strictEqual(analytics.history_count, 2);
     assert.strictEqual(analytics.by_agent.mimo.input_tokens, 1000);
     assert.strictEqual(analytics.by_agent["reasonix-tui"].output_tokens, 1000);
+    assert.strictEqual(analytics.by_model["mimo-v2.5-flash"].input_tokens, 1000);
+    assert.strictEqual(analytics.by_model["deepseek-v4-pro"].output_tokens, 1000);
     assert.strictEqual(analytics.time_ranges.all.total_tokens, 4900);
+    assert.strictEqual(analytics.time_ranges_by_model.all["mimo-v2.5-flash"].cache_read_tokens, 100);
     assert.strictEqual(analytics.time_ranges.all.cache_read_tokens, 250);
     assert.strictEqual(analytics.time_ranges["24h"].cache_write_tokens, 150);
   });

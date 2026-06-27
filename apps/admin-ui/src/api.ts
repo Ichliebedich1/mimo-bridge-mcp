@@ -186,6 +186,12 @@ type GetTaskResponse = {
 
 type TokenStatusResponse = unknown;
 
+type WorkspaceFolderSelectResponse = {
+  selected: boolean;
+  path?: string;
+  message: string;
+};
+
 export async function fetchRoutingProfiles(): Promise<RoutingProfiles> {
   return unwrap(await getJson<RoutingProfiles>('/api/routing-profiles'));
 }
@@ -317,6 +323,10 @@ export async function fetchQueue(): Promise<QueueStatusResponse> {
 
 export async function fetchTokenBudget(): Promise<TokenStatusResponse> {
   return unwrap(await getJson<TokenStatusResponse>('/api/token-budget'));
+}
+
+export async function selectWorkspaceFolder(): Promise<WorkspaceFolderSelectResponse> {
+  return unwrap(await postJson<WorkspaceFolderSelectResponse>('/api/workspace-folder/select', {}));
 }
 
 export async function createTask(input: CreateTaskInput): Promise<TaskActionResult> {

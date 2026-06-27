@@ -4,7 +4,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
-import { createOpenTaskTargetHandler, resolveOpenTarget } from "../apps/local-daemon/dist/apps/local-daemon/src/task-open-actions.js";
+import { buildExecutableLaunch, createOpenTaskTargetHandler, resolveOpenTarget } from "../apps/local-daemon/dist/apps/local-daemon/src/task-open-actions.js";
 import { TaskStore } from "../dist/services/task-store.js";
 
 function tmpDir() {
@@ -546,4 +546,24 @@ test("createOpenTaskTargetHandler marks Reasonix session terminal as visible", a
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
+});
+
+test("buildExecutableLaunch verifies visible CMD creation on Windows", () => {
+  if (process.platform !== "win32") {
+    return;
+  }
+  const launch = buildExecutableLaunch("cmd.exe", ["/k", "echo hello"], {
+    cwd: process.cwd(),
+    env: { REASONIX_HOME: "C:\\ReasonixData", REASONIX_LANG: "zh" },
+    visibleTerminal: true,
+  });
+  assert.strictEqual(launch.command, "powershell.exe");
+  assert.strictEqual(launch.windowsHide, true);
+  assert.strictEqual(launch.waitForExit, true);
+  const encoded = launch.args[launch.args.length - 1];
+  const script = Buffer.from(encoded, "base64").toString("utf16le");
+  assert.match(script, /Start-Process/);
+  assert.match(script, /-WindowStyle Normal/);
+  assert.match(script, /-PassThru/);
+  assert.match(script, /process\.Id/);
 });

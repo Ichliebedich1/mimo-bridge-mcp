@@ -367,6 +367,12 @@ function buildOpenedMessage(kind: OpenTaskTargetResult["target_kind"]): string {
   if (kind === "reasonix_gui") {
     return "Opened the Reasonix GUI with the configured REASONIX_HOME.";
   }
+  if (kind === "mimo_session_terminal") {
+    return "Opened a visible CMD window for the MiMo session.";
+  }
+  if (kind === "reasonix_session_terminal") {
+    return "Opened a visible CMD window for the Reasonix session.";
+  }
   return "Opened the Reasonix session folder.";
 }
 
@@ -390,6 +396,13 @@ async function defaultOpenPath(pathToOpen: string): Promise<OpenPathResult> {
 
 async function defaultOpenExecutable(command: string, args: string[], options: OpenExecutableOptions): Promise<OpenPathResult> {
   return new Promise((resolvePromise) => {
+    let settled = false;
+    const settle = (result: OpenPathResult) => {
+      if (settled) return;
+      settled = true;
+      resolvePromise(result);
+    };
+
     try {
       const launch = buildExecutableLaunch(command, args, options);
       const child = spawn(launch.command, launch.args, {
@@ -399,35 +412,52 @@ async function defaultOpenExecutable(command: string, args: string[], options: O
         stdio: "ignore",
         windowsHide: launch.windowsHide,
       });
-      child.once("error", (error) => resolvePromise({ ok: false, error: error.message }));
+      child.once("error", (error) => settle({ ok: false, error: error.message }));
       child.unref();
-      resolvePromise({ ok: true });
+
+      if (!launch.waitForExit) {
+        settle({ ok: true });
+        return;
+      }
+
+      const timeout = setTimeout(() => {
+        settle({ ok: true });
+      }, 5000);
+      child.once("close", (code) => {
+        clearTimeout(timeout);
+        settle(code === 0
+          ? { ok: true }
+          : { ok: false, error: `Visible terminal launcher exited with code ${code}.` });
+      });
     } catch (error) {
-      resolvePromise({ ok: false, error: error instanceof Error ? error.message : String(error) });
+      settle({ ok: false, error: error instanceof Error ? error.message : String(error) });
     }
   });
 }
 
-function buildExecutableLaunch(
+export function buildExecutableLaunch(
   command: string,
   args: string[],
   options: OpenExecutableOptions,
-): { command: string; args: string[]; env?: NodeJS.ProcessEnv; windowsHide: boolean } {
+): { command: string; args: string[]; env?: NodeJS.ProcessEnv; windowsHide: boolean; waitForExit: boolean } {
   if (process.platform !== "win32" || !options.visibleTerminal) {
-    return { command, args, env: options.env, windowsHide: false };
+    return { command, args, env: options.env, windowsHide: false, waitForExit: false };
   }
 
   const script = [
+    `$ErrorActionPreference = 'Stop'`,
     `$env:REASONIX_HOME = ${toPowerShellString(options.env?.REASONIX_HOME)}`,
     `$env:REASONIX_LANG = ${toPowerShellString(options.env?.REASONIX_LANG ?? process.env.REASONIX_LANG ?? "zh")}`,
     `$argumentList = @(${args.map(toPowerShellString).join(", ")})`,
-    `Start-Process -FilePath ${toPowerShellString(command)} -ArgumentList $argumentList -WorkingDirectory ${toPowerShellString(options.cwd ?? process.cwd())} -WindowStyle Normal`,
+    `$process = Start-Process -FilePath ${toPowerShellString(command)} -ArgumentList $argumentList -WorkingDirectory ${toPowerShellString(options.cwd ?? process.cwd())} -WindowStyle Normal -PassThru`,
+    `if (-not $process -or -not $process.Id) { throw 'Visible terminal process was not created.' }`,
   ].join("; ");
   return {
     command: "powershell.exe",
     args: ["-NoProfile", "-ExecutionPolicy", "Bypass", "-EncodedCommand", Buffer.from(script, "utf16le").toString("base64")],
     env: options.env,
     windowsHide: true,
+    waitForExit: true,
   };
 }
 
