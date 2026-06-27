@@ -15,6 +15,8 @@ export interface ReasonixTokenUsageSummary {
   output_tokens: number;
   total_tokens: number;
   estimated_cost: number | null;
+  cache_read_tokens: number;
+  cache_write_tokens: number;
   events_count: number;
 }
 
@@ -136,6 +138,8 @@ export function extractReasonixTokenUsageFromFile(filePath: string | null | unde
     usage.input_tokens += eventUsage.input_tokens;
     usage.output_tokens += eventUsage.output_tokens;
     usage.total_tokens += eventUsage.total_tokens;
+    usage.cache_read_tokens += eventUsage.cache_read_tokens;
+    usage.cache_write_tokens += eventUsage.cache_write_tokens;
     if (eventUsage.estimated_cost !== null) {
       usage.estimated_cost = (usage.estimated_cost ?? 0) + eventUsage.estimated_cost;
     }
@@ -281,6 +285,8 @@ function parseTokenUsageObject(value: unknown, costSource: unknown): ReasonixTok
     output_tokens: output + reasoning,
     total_tokens: total,
     estimated_cost: cost > 0 ? cost : null,
+    cache_read_tokens: cacheRead,
+    cache_write_tokens: cacheWrite,
     events_count: 1,
   };
 }
@@ -513,6 +519,8 @@ function emptyTokenUsage(): ReasonixTokenUsageSummary {
     output_tokens: 0,
     total_tokens: 0,
     estimated_cost: null,
+    cache_read_tokens: 0,
+    cache_write_tokens: 0,
     events_count: 0,
   };
 }

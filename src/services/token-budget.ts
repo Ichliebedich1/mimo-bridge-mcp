@@ -3,11 +3,16 @@ export interface TokenUsage {
   output_tokens: number;
   total_tokens: number;
   estimated_cost: number;
+  cache_read_tokens: number;
+  cache_write_tokens: number;
 }
 
 export interface TokenUsageRecordOptions {
   totalTokens?: number;
   estimatedCost?: number;
+  cacheReadTokens?: number;
+  cacheWriteTokens?: number;
+  agent?: string;
 }
 
 export interface TokenBudgetConfig {
@@ -32,6 +37,12 @@ export interface TokenBudgetStatus {
   exceeded: boolean;
 }
 
+export interface TokenUsageAnalytics {
+  by_agent: Record<string, TokenUsage>;
+  time_ranges: Record<"1h" | "24h" | "7d" | "30d" | "all", TokenUsage>;
+  history_count: number;
+}
+
 const DEFAULT_BUDGET: TokenBudgetConfig = {
   max_input_tokens: 100000,
   max_output_tokens: 50000,
@@ -43,11 +54,11 @@ const DEFAULT_BUDGET: TokenBudgetConfig = {
 export class TokenBudgetManager {
   private budget: TokenBudgetConfig;
   private usage: TokenUsage;
-  private history: Array<{ timestamp: number; usage: TokenUsage; context: string }>;
+  private history: Array<{ timestamp: number; usage: TokenUsage; context: string; agent: string }>;
 
   constructor(budget: Partial<TokenBudgetConfig> = {}) {
     this.budget = { ...DEFAULT_BUDGET, ...budget };
-    this.usage = { input_tokens: 0, output_tokens: 0, total_tokens: 0, estimated_cost: 0 };
+    this.usage = emptyUsage();
     this.history = [];
   }
 
@@ -59,7 +70,7 @@ export class TokenBudgetManager {
     return { ...this.usage };
   }
 
-  getHistory(): Array<{ timestamp: number; usage: TokenUsage; context: string }> {
+  getHistory(): Array<{ timestamp: number; usage: TokenUsage; context: string; agent: string }> {
     return [...this.history];
   }
 
@@ -72,6 +83,9 @@ export class TokenBudgetManager {
     const safeInputTokens = Math.max(0, Math.floor(inputTokens));
     const safeOutputTokens = Math.max(0, Math.floor(outputTokens));
     const totalTokens = Math.max(0, Math.floor(options.totalTokens ?? safeInputTokens + safeOutputTokens));
+    const cacheReadTokens = Math.max(0, Math.floor(options.cacheReadTokens ?? 0));
+    const cacheWriteTokens = Math.max(0, Math.floor(options.cacheWriteTokens ?? 0));
+    const agent = options.agent?.trim() || inferAgentFromContext(context);
     const cost = typeof options.estimatedCost === "number"
       ? Math.max(0, options.estimatedCost)
       : this.estimateCost(safeInputTokens, safeOutputTokens);
@@ -80,14 +94,54 @@ export class TokenBudgetManager {
     this.usage.output_tokens += safeOutputTokens;
     this.usage.total_tokens += totalTokens;
     this.usage.estimated_cost += cost;
+    this.usage.cache_read_tokens += cacheReadTokens;
+    this.usage.cache_write_tokens += cacheWriteTokens;
 
+    const usage = {
+      input_tokens: safeInputTokens,
+      output_tokens: safeOutputTokens,
+      total_tokens: totalTokens,
+      estimated_cost: cost,
+      cache_read_tokens: cacheReadTokens,
+      cache_write_tokens: cacheWriteTokens,
+    };
     this.history.push({
       timestamp: Date.now(),
-      usage: { input_tokens: safeInputTokens, output_tokens: safeOutputTokens, total_tokens: totalTokens, estimated_cost: cost },
+      usage,
       context,
+      agent,
     });
 
     return this.getStatus();
+  }
+
+  getAnalytics(now: number = Date.now()): TokenUsageAnalytics {
+    const ranges = {
+      "1h": 60 * 60 * 1000,
+      "24h": 24 * 60 * 60 * 1000,
+      "7d": 7 * 24 * 60 * 60 * 1000,
+      "30d": 30 * 24 * 60 * 60 * 1000,
+    };
+    const by_agent: Record<string, TokenUsage> = {};
+    const time_ranges: TokenUsageAnalytics["time_ranges"] = {
+      "1h": emptyUsage(),
+      "24h": emptyUsage(),
+      "7d": emptyUsage(),
+      "30d": emptyUsage(),
+      all: emptyUsage(),
+    };
+
+    for (const record of this.history) {
+      addUsage(by_agent[record.agent] ??= emptyUsage(), record.usage);
+      addUsage(time_ranges.all, record.usage);
+      for (const [key, windowMs] of Object.entries(ranges) as Array<[keyof typeof ranges, number]>) {
+        if (now - record.timestamp <= windowMs) {
+          addUsage(time_ranges[key], record.usage);
+        }
+      }
+    }
+
+    return { by_agent, time_ranges, history_count: this.history.length };
   }
 
   getStatus(): TokenBudgetStatus {
@@ -96,6 +150,8 @@ export class TokenBudgetManager {
       output_tokens: Math.max(0, this.budget.max_output_tokens - this.usage.output_tokens),
       total_tokens: Math.max(0, this.budget.max_total_tokens - this.usage.total_tokens),
       estimated_cost: Math.max(0, this.budget.max_cost - this.usage.estimated_cost),
+      cache_read_tokens: 0,
+      cache_write_tokens: 0,
     };
 
     const utilization = {
@@ -133,7 +189,7 @@ export class TokenBudgetManager {
   }
 
   reset(): void {
-    this.usage = { input_tokens: 0, output_tokens: 0, total_tokens: 0, estimated_cost: 0 };
+    this.usage = emptyUsage();
     this.history = [];
   }
 
@@ -155,14 +211,16 @@ export class TokenBudgetManager {
       "## 当前使用情况",
       `- 输入 tokens: ${status.used.input_tokens.toLocaleString()} / ${status.budget.max_input_tokens.toLocaleString()} (${status.utilization.input_percent.toFixed(1)}%)`,
       `- 输出 tokens: ${status.used.output_tokens.toLocaleString()} / ${status.budget.max_output_tokens.toLocaleString()} (${status.utilization.output_percent.toFixed(1)}%)`,
+      `- 缓存读取 tokens: ${status.used.cache_read_tokens.toLocaleString()}`,
+      `- 缓存写入 tokens: ${status.used.cache_write_tokens.toLocaleString()}`,
       `- 总 tokens: ${status.used.total_tokens.toLocaleString()} / ${status.budget.max_total_tokens.toLocaleString()} (${status.utilization.total_percent.toFixed(1)}%)`,
-      `- 预估成本: $${status.used.estimated_cost.toFixed(4)} / $${status.budget.max_cost.toFixed(2)} (${status.utilization.cost_percent.toFixed(1)}%)`,
+      `- 预估成本: ¥${status.used.estimated_cost.toFixed(4)} / ¥${status.budget.max_cost.toFixed(2)} (${status.utilization.cost_percent.toFixed(1)}%)`,
       "",
       "## 剩余配额",
       `- 输入 tokens: ${status.remaining.input_tokens.toLocaleString()}`,
       `- 输出 tokens: ${status.remaining.output_tokens.toLocaleString()}`,
       `- 总 tokens: ${status.remaining.total_tokens.toLocaleString()}`,
-      `- 预估成本: $${status.remaining.estimated_cost.toFixed(4)}`,
+      `- 预估成本: ¥${status.remaining.estimated_cost.toFixed(4)}`,
       "",
     ];
 
@@ -185,3 +243,30 @@ export class TokenBudgetManager {
 }
 
 export const globalTokenBudget = new TokenBudgetManager();
+
+function emptyUsage(): TokenUsage {
+  return {
+    input_tokens: 0,
+    output_tokens: 0,
+    total_tokens: 0,
+    estimated_cost: 0,
+    cache_read_tokens: 0,
+    cache_write_tokens: 0,
+  };
+}
+
+function addUsage(target: TokenUsage, usage: TokenUsage): void {
+  target.input_tokens += usage.input_tokens;
+  target.output_tokens += usage.output_tokens;
+  target.total_tokens += usage.total_tokens;
+  target.estimated_cost += usage.estimated_cost;
+  target.cache_read_tokens += usage.cache_read_tokens;
+  target.cache_write_tokens += usage.cache_write_tokens;
+}
+
+function inferAgentFromContext(context: string): string {
+  const lowered = context.toLowerCase();
+  if (lowered.includes("reasonix")) return "reasonix-tui";
+  if (lowered.includes("mimo")) return "mimo";
+  return "unknown";
+}

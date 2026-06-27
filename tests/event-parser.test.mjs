@@ -281,5 +281,7 @@ describe("event-parser", () => {
     assert.strictEqual(usage.output_tokens, 37);
     assert.strictEqual(usage.total_tokens, 170);
     assert.strictEqual(usage.estimated_cost, 0.016);
+    assert.strictEqual(usage.cache_read_tokens, 15);
+    assert.strictEqual(usage.cache_write_tokens, 8);
   });
 });

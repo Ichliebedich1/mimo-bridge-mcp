@@ -2,7 +2,6 @@
 
 ## Pending
 
-- Token budget page v2: add time-range statistics, separate MiMo vs Reasonix token usage, include cache-hit tokens, and display estimated cost in CNY. Current TokenBudget plumbing records real events, but the UI still needs richer aggregation.
 - Investigate task detail "open conversation in CMD" false success: Admin UI reports success for MiMo/Reasonix session terminal actions, but no visible CMD window appears for the user. Audit launcher/task-open-actions process spawning, windowsHide/detached flags, installed-vs-source environment, and whether daemon service/session isolation prevents interactive windows.
 - Reasonix reliability pass remains required: repeated delegated tasks fail or stop early. The current local runner work-in-progress attempts auto-resume for `agent.max_steps`, but it still needs focused tests, review, and a clean commit before using Reasonix for implementation again.
 - Make task completion/failure wake Codex or reliably break out to recovery. Current state is still insufficient: during the Ultra Speed delegation, MiMo completed and Reasonix failed, but Codex remained stuck in a long wait. The recovery inbox helps after interruption, but the collaboration loop still needs a stronger mechanism so terminal task state triggers review/intervention promptly without Codex polling full state.
@@ -19,6 +18,7 @@
 
 ## Completed
 
+- Token budget page v2: TokenBudgetManager now records cache read/write tokens, groups usage by Agent, exposes 1h/24h/7d/30d/all analytics through token status, and the Admin UI Token page displays total/cache/cost in CNY plus per-time-window and per-Agent tables. Verified with root/local-daemon/admin-ui builds, focused token/parser tests, and admin API/UI lifecycle tests.
 - Safe-client JSON request BOM handling: `scripts/mimo-bridge-client.mjs` now strips a leading UTF-8 BOM from both `--json` files and stdin before parsing, so Codex-created request files no longer fail with `Unexpected token '﻿'` before reaching MiMo/Reasonix. Verified with `node --test tests\mimo-bridge-client.test.mjs` passing 31/31, including BOM file/stdin regressions.
 - Persistent config and build-free `start-production.ps1`.
 - Windows launcher lifecycle controller and CLI: start/stop/restart/open/log/status, duplicate-instance guard, port-conflict report, first-run config wizard, desktop shortcut command, and opt-in autostart command.

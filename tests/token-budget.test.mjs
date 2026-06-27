@@ -59,6 +59,8 @@ describe("token-budget", () => {
     assert.strictEqual(status.used.input_tokens, 1000);
     assert.strictEqual(status.used.output_tokens, 500);
     assert.strictEqual(status.used.total_tokens, 1500);
+    assert.strictEqual(status.used.cache_read_tokens, 0);
+    assert.strictEqual(status.used.cache_write_tokens, 0);
     assert.ok(status.used.estimated_cost > 0);
   });
 
@@ -67,15 +69,21 @@ describe("token-budget", () => {
     const status = manager.recordUsage(100, 40, "mimo task", {
       totalTokens: 250,
       estimatedCost: 0.023,
+      cacheReadTokens: 12,
+      cacheWriteTokens: 3,
+      agent: "mimo",
     });
 
     assert.strictEqual(status.used.input_tokens, 100);
     assert.strictEqual(status.used.output_tokens, 40);
     assert.strictEqual(status.used.total_tokens, 250);
     assert.strictEqual(status.used.estimated_cost, 0.023);
+    assert.strictEqual(status.used.cache_read_tokens, 12);
+    assert.strictEqual(status.used.cache_write_tokens, 3);
 
     const history = manager.getHistory();
     assert.strictEqual(history.length, 1);
+    assert.strictEqual(history[0].agent, "mimo");
     assert.strictEqual(history[0].usage.total_tokens, 250);
     assert.strictEqual(history[0].usage.estimated_cost, 0.023);
   });
@@ -166,6 +174,8 @@ describe("token-budget", () => {
     assert.strictEqual(usage.output_tokens, 0);
     assert.strictEqual(usage.total_tokens, 0);
     assert.strictEqual(usage.estimated_cost, 0);
+    assert.strictEqual(usage.cache_read_tokens, 0);
+    assert.strictEqual(usage.cache_write_tokens, 0);
   });
 
   it("should update budget", () => {
@@ -199,6 +209,32 @@ describe("token-budget", () => {
     assert.ok(report.includes("5,000"));
     assert.ok(report.includes("2,000"));
   });
+
+  it("should aggregate usage by agent and time range", () => {
+    const manager = new TokenBudgetManager();
+
+    manager.recordUsage(1000, 500, "mimo task", {
+      totalTokens: 1700,
+      cacheReadTokens: 100,
+      cacheWriteTokens: 100,
+      agent: "mimo",
+    });
+    manager.recordUsage(2000, 1000, "reasonix task", {
+      totalTokens: 3200,
+      cacheReadTokens: 150,
+      cacheWriteTokens: 50,
+      agent: "reasonix-tui",
+    });
+
+    const analytics = manager.getAnalytics();
+
+    assert.strictEqual(analytics.history_count, 2);
+    assert.strictEqual(analytics.by_agent.mimo.input_tokens, 1000);
+    assert.strictEqual(analytics.by_agent["reasonix-tui"].output_tokens, 1000);
+    assert.strictEqual(analytics.time_ranges.all.total_tokens, 4900);
+    assert.strictEqual(analytics.time_ranges.all.cache_read_tokens, 250);
+    assert.strictEqual(analytics.time_ranges["24h"].cache_write_tokens, 150);
+  });
 });
 
 describe("token-status handler", () => {
@@ -223,6 +259,8 @@ describe("token-status handler", () => {
     assert.strictEqual(result.status, "ok");
     assert.strictEqual(result.used.input_tokens, 1000);
     assert.strictEqual(result.used.output_tokens, 500);
+    assert.strictEqual(result.analytics.history_count, 1);
+    assert.strictEqual(result.analytics.time_ranges.all.total_tokens, 1500);
     assert.ok(result.report);
   });
 

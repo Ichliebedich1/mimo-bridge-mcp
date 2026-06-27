@@ -1300,9 +1300,55 @@ select:focus {
 
 .token-grid {
   display: grid;
-  grid-template-columns: repeat(3, 180px);
+  width: min(980px, 100%);
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
   gap: 12px;
   margin: 18px 0;
+}
+
+.token-breakdown {
+  display: grid;
+  width: min(980px, 100%);
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 14px;
+  margin: 8px 0 22px;
+}
+
+.token-table-card {
+  width: 100%;
+  overflow: auto;
+  text-align: left;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.8);
+}
+
+.token-table-card h3 {
+  margin: 0;
+  padding: 14px 16px 8px;
+}
+
+.token-table-card p {
+  margin: 0;
+  padding: 0 16px 16px;
+}
+
+.token-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.token-table th,
+.token-table td {
+  padding: 10px 12px;
+  border-top: 1px solid var(--line);
+  white-space: nowrap;
+}
+
+.token-table th {
+  color: var(--muted);
+  font-weight: 600;
 }
 
 .system-grid {

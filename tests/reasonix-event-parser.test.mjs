@@ -111,6 +111,8 @@ test("extractReasonixTokenUsageFromFile reads explicit usage fields only", () =>
           prompt_tokens: 120,
           completion_tokens: 35,
           total_tokens: 155,
+          cache_read_tokens: 9,
+          cache_write_tokens: 4,
         },
         cost: 0.0042,
       }),
@@ -122,6 +124,7 @@ test("extractReasonixTokenUsageFromFile reads explicit usage fields only", () =>
           output: 5,
           reasoning: 3,
           total: 18,
+          cache: { read: 2, write: 1 },
         },
       }),
     ].join("\n") + "\n", "utf-8");
@@ -131,6 +134,8 @@ test("extractReasonixTokenUsageFromFile reads explicit usage fields only", () =>
     assert.strictEqual(usage.output_tokens, 43);
     assert.strictEqual(usage.total_tokens, 173);
     assert.strictEqual(usage.estimated_cost, 0.0042);
+    assert.strictEqual(usage.cache_read_tokens, 11);
+    assert.strictEqual(usage.cache_write_tokens, 5);
     assert.strictEqual(usage.events_count, 2);
   } finally {
     rmSync(dir, { recursive: true, force: true });
@@ -147,6 +152,8 @@ test("extractReasonixTokenUsageFromFile does not invent token usage", () => {
       output_tokens: 0,
       total_tokens: 0,
       estimated_cost: null,
+      cache_read_tokens: 0,
+      cache_write_tokens: 0,
       events_count: 0,
     });
   } finally {

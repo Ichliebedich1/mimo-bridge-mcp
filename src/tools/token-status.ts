@@ -28,6 +28,7 @@ export function createTokenStatusHandler(
       }
 
       const status = tokenBudget.getStatus();
+      const analytics = tokenBudget.getAnalytics();
       const report = tokenBudget.generateReport();
 
       return {
@@ -35,6 +36,7 @@ export function createTokenStatusHandler(
         used: status.used,
         remaining: status.remaining,
         utilization: status.utilization,
+        analytics,
         warnings: status.warnings,
         exceeded: status.exceeded,
         report,

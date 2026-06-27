@@ -223,6 +223,9 @@ function recordReasonixTokenUsage(task: TaskState, sessionPath: string | null): 
     {
       totalTokens: usage.total_tokens,
       estimatedCost: usage.estimated_cost ?? undefined,
+      cacheReadTokens: usage.cache_read_tokens,
+      cacheWriteTokens: usage.cache_write_tokens,
+      agent: "reasonix-tui",
     },
   );
 }

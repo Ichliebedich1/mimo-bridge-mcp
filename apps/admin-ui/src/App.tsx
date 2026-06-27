@@ -1699,13 +1699,58 @@ function TokenPage({ tokenStatus, onReset, actionBusy }: { tokenStatus: unknown;
           <div className="token-grid">
             <MetricCard label="输入 Token" value={token.input} tone="neutral" helper={token.helper} />
             <MetricCard label="输出 Token" value={token.output} tone="neutral" helper={token.helper} />
+            <MetricCard label="总 Token" value={token.total} tone="neutral" helper={'已记录 ' + token.historyCount + ' 条用量事件'} />
+            <MetricCard label="缓存读取" value={token.cacheRead} tone="neutral" helper="缓存命中相关 token" />
+            <MetricCard label="缓存写入" value={token.cacheWrite} tone="neutral" helper="写入缓存相关 token" />
             <MetricCard label="预估成本" value={token.cost} tone="neutral" helper={token.costHelper} />
           </div>
+          {token.connected && (
+            <div className="token-breakdown">
+              <TokenUsageTable title="按时间窗口" rows={token.timeRanges} />
+              <TokenUsageTable title="按 Agent" rows={token.agents} emptyText="暂无 Agent 用量记录" />
+            </div>
+          )}
           <button className="button danger" disabled={actionBusy} onClick={onReset} type="button">
             重置预算（需确认）
           </button>
         </div>
       </section>
+    </div>
+  );
+}
+
+function TokenUsageTable({ title, rows, emptyText = '暂无用量记录' }: { title: string; rows: TokenUsageRow[]; emptyText?: string }) {
+  return (
+    <div className="token-table-card">
+      <h3>{title}</h3>
+      {rows.length === 0 ? (
+        <p>{emptyText}</p>
+      ) : (
+        <table className="token-table">
+          <thead>
+            <tr>
+              <th>范围</th>
+              <th>输入</th>
+              <th>输出</th>
+              <th>总量</th>
+              <th>缓存</th>
+              <th>成本</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row) => (
+              <tr key={row.label}>
+                <td>{row.label}</td>
+                <td>{row.input}</td>
+                <td>{row.output}</td>
+                <td>{row.total}</td>
+                <td>{row.cache}</td>
+                <td>{row.cost}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
     </div>
   );
 }
@@ -2321,36 +2366,118 @@ function mergeTaskListPreservingDetail(current: Task[], incoming: Task[]): Task[
   });
 }
 
+type TokenUsageRow = {
+  label: string;
+  input: string;
+  output: string;
+  total: string;
+  cache: string;
+  cost: string;
+};
+
 function readTokenStatus(tokenStatus: unknown): {
   connected: boolean;
   input: string;
   output: string;
+  total: string;
+  cacheRead: string;
+  cacheWrite: string;
   cost: string;
   helper: string;
   costHelper: string;
+  historyCount: number;
+  timeRanges: TokenUsageRow[];
+  agents: TokenUsageRow[];
 } {
   if (!isRecord(tokenStatus)) {
     return {
       connected: false,
       input: '—',
       output: '—',
+      total: '—',
+      cacheRead: '—',
+      cacheWrite: '—',
       cost: '—',
       helper: '等待真实数据',
       costHelper: '等待 API 数据',
+      historyCount: 0,
+      timeRanges: [],
+      agents: [],
     };
   }
   const used = isRecord(tokenStatus.used) ? tokenStatus.used : null;
-  const input = typeof used?.input_tokens === 'number' ? used.input_tokens.toLocaleString() : '—';
-  const output = typeof used?.output_tokens === 'number' ? used.output_tokens.toLocaleString() : '—';
-  const cost = typeof used?.estimated_cost === 'number' ? '$' + used.estimated_cost.toFixed(4) : '—';
+  const analytics = isRecord(tokenStatus.analytics) ? tokenStatus.analytics : null;
+  const input = formatTokenNumber(readUsageNumber(used, 'input_tokens'));
+  const output = formatTokenNumber(readUsageNumber(used, 'output_tokens'));
+  const total = formatTokenNumber(readUsageNumber(used, 'total_tokens'));
+  const cacheRead = formatTokenNumber(readUsageNumber(used, 'cache_read_tokens'));
+  const cacheWrite = formatTokenNumber(readUsageNumber(used, 'cache_write_tokens'));
+  const costNumber = readUsageNumber(used, 'estimated_cost');
+  const cost = formatCny(costNumber);
+  const timeRanges = readTimeRangeRows(analytics);
+  const agents = readAgentRows(analytics);
+  const historyCount = typeof analytics?.history_count === 'number' ? analytics.history_count : 0;
   return {
     connected: true,
     input,
     output,
+    total,
+    cacheRead,
+    cacheWrite,
     cost,
-    helper: input === '0' || output === '0' ? 'API 已连接；暂无完成任务 token' : '来自真实 Agent 事件',
-    costHelper: cost === '$0.0000' ? 'API 已连接；暂无完成任务成本' : '来自真实 Agent 事件',
+    helper: total === '0' ? 'API 已连接；暂无完成任务 token' : '来自真实 Agent 事件',
+    costHelper: cost === '¥0.0000' ? 'API 已连接；暂无完成任务成本' : '来自真实 Agent 事件',
+    historyCount,
+    timeRanges,
+    agents,
   };
+}
+
+function readTimeRangeRows(analytics: Record<string, unknown> | null): TokenUsageRow[] {
+  const ranges = isRecord(analytics?.time_ranges) ? analytics.time_ranges : null;
+  const labels = [
+    ['1h', '近 1 小时'],
+    ['24h', '近 24 小时'],
+    ['7d', '近 7 天'],
+    ['30d', '近 30 天'],
+    ['all', '全部'],
+  ] as const;
+  return labels.map(([key, label]) => makeTokenUsageRow(label, ranges?.[key]));
+}
+
+function readAgentRows(analytics: Record<string, unknown> | null): TokenUsageRow[] {
+  const byAgent = isRecord(analytics?.by_agent) ? analytics.by_agent : null;
+  if (!byAgent) return [];
+  return Object.entries(byAgent)
+    .sort(([agentA], [agentB]) => agentA.localeCompare(agentB))
+    .map(([agent, usage]) => makeTokenUsageRow(agent, usage));
+}
+
+function makeTokenUsageRow(label: string, usage: unknown): TokenUsageRow {
+  const record = isRecord(usage) ? usage : null;
+  const cacheRead = readUsageNumber(record, 'cache_read_tokens');
+  const cacheWrite = readUsageNumber(record, 'cache_write_tokens');
+  return {
+    label,
+    input: formatTokenNumber(readUsageNumber(record, 'input_tokens')),
+    output: formatTokenNumber(readUsageNumber(record, 'output_tokens')),
+    total: formatTokenNumber(readUsageNumber(record, 'total_tokens')),
+    cache: formatTokenNumber(cacheRead + cacheWrite),
+    cost: formatCny(readUsageNumber(record, 'estimated_cost')),
+  };
+}
+
+function readUsageNumber(record: Record<string, unknown> | null, field: string): number {
+  const value = record?.[field];
+  return typeof value === 'number' && Number.isFinite(value) ? value : 0;
+}
+
+function formatTokenNumber(value: number): string {
+  return Math.max(0, Math.floor(value)).toLocaleString();
+}
+
+function formatCny(value: number): string {
+  return '¥' + Math.max(0, value).toFixed(4);
 }
 
 function splitLines(value: string): string[] {

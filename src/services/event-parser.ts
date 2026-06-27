@@ -26,6 +26,8 @@ export interface MimoTokenUsageSummary {
   output_tokens: number;
   total_tokens: number;
   estimated_cost: number | null;
+  cache_read_tokens: number;
+  cache_write_tokens: number;
   events_count: number;
 }
 
@@ -207,6 +209,8 @@ export function extractTokenUsage(result: ParsedResult): MimoTokenUsageSummary {
   let outputTokens = 0;
   let totalTokens = 0;
   let estimatedCost = 0;
+  let cacheReadTokens = 0;
+  let cacheWriteTokens = 0;
   let hasCost = false;
   let eventsCount = 0;
 
@@ -225,6 +229,8 @@ export function extractTokenUsage(result: ParsedResult): MimoTokenUsageSummary {
 
     inputTokens += input;
     outputTokens += output + reasoning;
+    cacheReadTokens += cacheRead;
+    cacheWriteTokens += cacheWrite;
     totalTokens += total > 0 ? total : input + output + reasoning + cacheRead + cacheWrite;
 
     const cost = finiteNumber(event.part?.cost);
@@ -240,6 +246,8 @@ export function extractTokenUsage(result: ParsedResult): MimoTokenUsageSummary {
     output_tokens: outputTokens,
     total_tokens: totalTokens,
     estimated_cost: hasCost ? estimatedCost : null,
+    cache_read_tokens: cacheReadTokens,
+    cache_write_tokens: cacheWriteTokens,
     events_count: eventsCount,
   };
 }
