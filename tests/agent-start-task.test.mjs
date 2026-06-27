@@ -229,7 +229,7 @@ test("agent_start_task auto routing can select Reasonix from scenario profile", 
       "--model",
       "deepseek-v4-flash",
       "--max-steps",
-      "10",
+      "20",
     ]);
   } finally {
     if (previousArgsPath === undefined) {

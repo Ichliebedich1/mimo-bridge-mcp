@@ -22,7 +22,7 @@ export interface ReasonixRunnerHandle {
   cancel: () => void;
 }
 
-const MAX_AUTO_RESUME_ATTEMPTS = 2;
+const MAX_AUTO_RESUME_ATTEMPTS = 4;
 
 export function runReasonixTuiTask(
   options: ReasonixRunnerOptions,

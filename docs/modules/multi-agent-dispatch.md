@@ -58,7 +58,7 @@ Implemented behavior:
 - Routing snapshots are stored in task config, task briefs, and Review Package.
 - MiMo stores the user-facing selected model in task config, task briefs, and Review Package. Before execution, `mimo-runner` maps Bridge labels to MiMo CLI `provider/model` names: `mimo-v2.5-flash -> xiaomi/mimo-v2.5`, `mimo-v2.5-pro -> xiaomi/mimo-v2.5-pro`. Already-qualified values containing `/` pass through unchanged.
 - MiMo reasoning effort maps to `--variant`: low=`minimal`, medium=`high`, high=`max`.
-- Reasonix receives the selected model through `--model`; reasoning effort maps to `--max-steps` as low=10, medium=20, high=40.
+- Reasonix receives the selected model through `--model`; reasoning effort maps to `--max-steps` as low=20, medium=40, high=80. This higher floor reduces false failures from `agent.max_steps` pauses.
 - Multimodal/image tasks are forced to MiMo `mimo-v2.5-flash`.
 - Model lists are enforced: MiMo supports `mimo-v2.5-flash` / `mimo-v2.5-pro`; Reasonix supports `deepseek-v4-flash` / `deepseek-v4-pro`.
 - Pricing metadata is exposed in profiles: flash input ¥1/output ¥3/cache-hit ¥0.02 per 1M; pro input ¥3/output ¥6/cache-hit ¥0.025 per 1M.

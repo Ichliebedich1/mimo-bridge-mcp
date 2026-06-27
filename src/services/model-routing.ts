@@ -254,11 +254,11 @@ export function isMultimodalModel(model: string): boolean {
 export function reasoningEffortToMaxSteps(effort: ReasoningEffort): number {
   switch (effort) {
     case "low":
-      return 10;
-    case "medium":
       return 20;
-    case "high":
+    case "medium":
       return 40;
+    case "high":
+      return 80;
   }
 }
 

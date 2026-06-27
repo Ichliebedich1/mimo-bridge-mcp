@@ -110,9 +110,9 @@ test("routing profile normalization accepts UI scenario objects with current sel
 });
 
 test("reasoning effort maps to Reasonix max steps", () => {
-  assert.strictEqual(reasoningEffortToMaxSteps("low"), 10);
-  assert.strictEqual(reasoningEffortToMaxSteps("medium"), 20);
-  assert.strictEqual(reasoningEffortToMaxSteps("high"), 40);
+  assert.strictEqual(reasoningEffortToMaxSteps("low"), 20);
+  assert.strictEqual(reasoningEffortToMaxSteps("medium"), 40);
+  assert.strictEqual(reasoningEffortToMaxSteps("high"), 80);
 });
 
 test("ultra speed is disabled by default: not in allowed_models and rejected by validation", () => {
