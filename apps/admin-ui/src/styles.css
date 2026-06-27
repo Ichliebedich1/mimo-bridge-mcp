@@ -1537,6 +1537,25 @@ select:focus {
   font-size: 13px;
 }
 
+.live-viewer-summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 14px;
+  margin-bottom: 12px;
+  padding: 10px 12px;
+  border: 1px solid #bfdbfe;
+  border-radius: 16px;
+  background: #eff6ff;
+  color: #1e3a8a;
+  font-size: 13px;
+}
+
+.live-viewer-summary strong {
+  font-size: 16px;
+  color: #172554;
+}
+
 .live-viewer-events {
   flex: 1;
   overflow-y: auto;
@@ -1563,6 +1582,60 @@ select:focus {
 
 .live-event-card:last-child {
   margin-bottom: 0;
+}
+
+.live-message-card {
+  display: grid;
+  grid-template-columns: 38px minmax(0, 1fr);
+  gap: 12px;
+  margin-bottom: 14px;
+  align-items: flex-start;
+}
+
+.live-message-card:last-child {
+  margin-bottom: 0;
+}
+
+.live-message-avatar {
+  width: 38px;
+  height: 38px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 14px;
+  background: linear-gradient(135deg, #2563eb, #7c3aed);
+  color: #ffffff;
+  font-size: 12px;
+  font-weight: 900;
+  box-shadow: 0 10px 24px rgba(37, 99, 235, 0.24);
+}
+
+.live-message-body {
+  min-width: 0;
+  border: 1px solid rgba(37, 99, 235, 0.22);
+  border-radius: 18px;
+  border-top-left-radius: 8px;
+  padding: 14px 16px;
+  background: #ffffff;
+  box-shadow: 0 12px 34px rgba(15, 23, 42, 0.08);
+}
+
+.live-message-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.live-message-text {
+  margin: 0;
+  color: #0f172a;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+  line-height: 1.72;
+  font-family: Inter, "Microsoft YaHei", "PingFang SC", Arial, sans-serif;
+  font-size: 14px;
 }
 
 .live-event-card.message {

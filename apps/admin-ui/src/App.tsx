@@ -2261,6 +2261,14 @@ function LiveViewerPanel({ taskId, onClose }: { taskId: string; onClose: () => v
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [expanded, setExpanded] = useState(false);
+  const liveStats = useMemo(() => {
+    const events = data?.events ?? [];
+    return {
+      messages: events.filter((event) => event.kind === 'message').length,
+      tools: events.filter((event) => event.kind === 'tool').length,
+      system: events.filter((event) => event.kind === 'event').length,
+    };
+  }, [data]);
 
   useEffect(() => {
     let cancelled = false;
@@ -2318,6 +2326,15 @@ function LiveViewerPanel({ taskId, onClose }: { taskId: string; onClose: () => v
           </div>
         )}
 
+        {data && (
+          <div className="live-viewer-summary" aria-label="运行事件统计">
+            <span><strong>{liveStats.messages}</strong> 条回复</span>
+            <span><strong>{liveStats.tools}</strong> 个工具调用</span>
+            <span><strong>{liveStats.system}</strong> 条系统事件</span>
+            <span className="muted-text">优先展示 Agent 可见回复，工具调用默认折叠。</span>
+          </div>
+        )}
+
         <div className="live-viewer-events">
           {loading && <div className="lane-empty">加载中…</div>}
           {error && <div className="notice-banner error"><span>!</span><p>{error}</p></div>}
@@ -2326,12 +2343,15 @@ function LiveViewerPanel({ taskId, onClose }: { taskId: string; onClose: () => v
           )}
           {!loading && !error && data && data.events.map((event, index) => (
             event.kind === 'message' ? (
-              <article className={'live-event-card ' + event.kind} key={index}>
-                <div className="live-event-card-header">
-                  <span className="live-event-time">{formatEventTime(event.timestamp)}</span>
-                  <span className={'live-event-kind ' + event.kind}>{liveEventLabel(event)}</span>
+              <article className="live-message-card" key={index}>
+                <div className="live-message-avatar" aria-hidden="true">AI</div>
+                <div className="live-message-body">
+                  <div className="live-message-meta">
+                    <span className={'live-event-kind ' + event.kind}>{liveEventLabel(event)}</span>
+                    <span className="live-event-time">{formatEventTime(event.timestamp)}</span>
+                  </div>
+                  <pre className="live-message-text">{event.summary}</pre>
                 </div>
-                <pre className="live-event-summary">{event.summary}</pre>
               </article>
             ) : (
               <details className={'live-event-card collapsed ' + event.kind} key={index}>
@@ -2599,7 +2619,7 @@ function formatEventTime(isoString: string): string {
 }
 
 function liveEventLabel(event: LiveEvent): string {
-  if (event.kind === 'message') return 'MiMo 回复';
+  if (event.kind === 'message') return 'Agent 回复';
   if (event.kind === 'tool') return '工具调用';
   return '事件';
 }

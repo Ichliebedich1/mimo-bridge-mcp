@@ -138,6 +138,7 @@ Let Codex split and review work while MiMo performs bounded coding tasks through
 ## Risks / Blockers
 
 - Live viewer boundary: it can display visible MiMo text and sanitized tool output that exists in JSONL logs; it cannot display private/hidden model reasoning that the CLI does not emit.
+- Latest live viewer UI refinement: the admin UI now shows reply/tool/system counts, renders Agent-visible replies as chat-style primary cards, and leaves tool/system events collapsed by default. This improves readability for MiMo/Reasonix runtime viewing without changing the bounded backend log exposure model.
 
 - `tests/runner-integration.test.mjs` hangs on Windows and is excluded from normal regression.
 - Windows PTY tests can print `AttachConsole failed` and `TimeoutNaNWarning`; judge by exit code and regression result.

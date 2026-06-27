@@ -143,6 +143,7 @@ This file is the project-local long-term memory. Update it after each meaningful
 - Local Bridge config now includes `C:\Users\86172\Desktop\MiMo Code project\Mimo Code 会话管理` in `%LOCALAPPDATA%\MiMoBridge\config.json` allowedRoots so MiMo can work on that external project. This is local machine state, not a Git-tracked code change and must be recreated on another computer.
 
 - Live viewer enhancement completed and locally verified: `/api/tasks/:id/live` now shows more MiMo-visible runtime text from `part.text`, `state.output`, `state.metadata.output`, and `state.error` in the existing `summary` field. Local paths/session/stdin/token/password values are sanitized; summary budget is raised from 200 to 1000 chars; admin UI live viewer is wider and preserves multiline text. Boundary: this cannot show hidden model chain-of-thought, only text already emitted into MiMo JSONL logs.
+- Live viewer presentation refinement completed on 2026-06-27: the admin UI now counts reply/tool/system events, renders Agent-visible replies as primary chat-style message cards, and keeps tool calls/system events folded by default. This is a UI-only improvement on top of the bounded `/api/tasks/:id/live` data path; it still does not expose hidden reasoning or unbounded logs.
 
 - Win11 support is treated as the same Windows x64 release line as Win10 because both are NT 10.x and the current stack is Node/PowerShell/localhost.
 - The installer is a MinGW resource-stub EXE that embeds install.ps1 and the portable payload; it should not require system Node on the target computer.

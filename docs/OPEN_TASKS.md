@@ -33,6 +33,7 @@
 - Follow-up MiMo rounds stay inside their task Worktree and are re-audited.
 - Read-only live-run viewer with bounded JSONL tail parsing and no stdin/control surface.
 - Live viewer enhancement: surfaces MiMo-visible text/tool output summaries from JSONL logs, preserves multiline text, and sanitizes local paths/session/stdin/token/password values.
+- Live viewer presentation refinement: Admin UI shows reply/tool/system counts, displays Agent replies as primary chat-style cards, and keeps tool/system events collapsed by default.
 - Real Codex -> MCP -> MiMo -> review -> merge collaboration workflow.
 - Normal regression after live viewer: 223/223.
 - Temporary detached daemon proof using an on-demand Scheduled Task with no trigger.
