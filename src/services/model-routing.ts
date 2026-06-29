@@ -11,7 +11,9 @@ import type {
 
 export const TASK_SCENARIOS: TaskScenario[] = ["multimodal", "simple", "normal", "complex", "high_risk"];
 export const REASONING_EFFORTS: ReasoningEffort[] = ["low", "medium", "high"];
-export const MIMO_MODELS = ["mimo-v2.5-flash", "mimo-v2.5-pro"] as const;
+export const MIMO_BASE_MODEL = "mimo-v2.5" as const;
+export const MIMO_LEGACY_BASE_MODEL = "mimo-v2.5-flash" as const;
+export const MIMO_MODELS = [MIMO_BASE_MODEL, "mimo-v2.5-pro"] as const;
 export const MIMO_ULTRA_SPEED_MODEL = "mimo-v2.5-pro-ultraspeed" as const;
 export const REASONIX_MODELS = ["deepseek-v4-flash", "deepseek-v4-pro"] as const;
 
@@ -46,28 +48,28 @@ const BASE_SCENARIOS: Record<TaskScenario, Omit<ScenarioRoutingProfile, "current
     description: "多模态/图片任务",
     supports_multimodal: true,
     recommended: {
-      mimo: { model: "mimo-v2.5-flash", reasoning_effort: "medium", reason: "只有 MiMo flash 支持多模态输入" },
+      mimo: { model: MIMO_BASE_MODEL, reasoning_effort: "medium", reason: "只有 MiMo V2.5 支持多模态输入" },
       "reasonix-tui": { model: "deepseek-v4-flash", reasoning_effort: "medium", reason: "Reasonix 当前不支持多模态，仅作为文本任务参考" },
     },
-    default_current: { agent_id: "mimo", model: "mimo-v2.5-flash", reasoning_effort: "medium" },
+    default_current: { agent_id: "mimo", model: MIMO_BASE_MODEL, reasoning_effort: "medium" },
   },
   simple: {
     description: "简单文本、文档、小 UI 调整",
     supports_multimodal: false,
     recommended: {
-      mimo: { model: "mimo-v2.5-flash", reasoning_effort: "low", reason: "简单任务优先用 flash 降低成本" },
+      mimo: { model: MIMO_BASE_MODEL, reasoning_effort: "low", reason: "简单任务优先用 V2.5 降低成本" },
       "reasonix-tui": { model: "deepseek-v4-flash", reasoning_effort: "low", reason: "简单任务优先用 flash 降低成本" },
     },
-    default_current: { agent_id: "mimo", model: "mimo-v2.5-flash", reasoning_effort: "low" },
+    default_current: { agent_id: "mimo", model: MIMO_BASE_MODEL, reasoning_effort: "low" },
   },
   normal: {
     description: "普通代码任务",
     supports_multimodal: false,
     recommended: {
-      mimo: { model: "mimo-v2.5-flash", reasoning_effort: "medium", reason: "普通任务默认用 flash，中等强度" },
+      mimo: { model: MIMO_BASE_MODEL, reasoning_effort: "medium", reason: "普通任务默认用 V2.5，中等强度" },
       "reasonix-tui": { model: "deepseek-v4-flash", reasoning_effort: "medium", reason: "普通任务默认用 flash，中等强度" },
     },
-    default_current: { agent_id: "mimo", model: "mimo-v2.5-flash", reasoning_effort: "medium" },
+    default_current: { agent_id: "mimo", model: MIMO_BASE_MODEL, reasoning_effort: "medium" },
   },
   complex: {
     description: "复杂运行时、Git、安装包、安全边界任务",
@@ -172,18 +174,19 @@ export function resolveRouting(
     return { ok: false, error: `未知任务场景: ${scenario}` };
   }
   if (scenario === "multimodal" && agentId !== "mimo") {
-    return { ok: false, error: "多模态任务只能使用 MiMo 的 mimo-v2.5-flash 模型" };
+    return { ok: false, error: "多模态任务只能使用 MiMo 的 mimo-v2.5 模型" };
   }
 
   const defaultSelection = getSelectionForAgent(agentId, scenario, profiles);
-  const model = options.model ?? defaultSelection.model;
+  const requestedModel = options.model ?? defaultSelection.model;
+  const model = normalizeModelForAgent(agentId, requestedModel);
   const effort = options.reasoning_effort ?? (routingMode === "manual" ? "medium" : defaultSelection.reasoning_effort);
   const modelValidation = validateModelForAgent(agentId, model, profiles);
   if (!modelValidation.ok) {
     return modelValidation;
   }
-  if (scenario === "multimodal" && model !== "mimo-v2.5-flash") {
-    return { ok: false, error: "多模态任务必须使用 mimo-v2.5-flash；mimo-v2.5-pro 和 mimo-v2.5-pro-ultraspeed 不支持多模态" };
+  if (scenario === "multimodal" && !isMultimodalModel(model)) {
+    return { ok: false, error: "多模态任务必须使用 mimo-v2.5；mimo-v2.5-pro 和 mimo-v2.5-pro-ultraspeed 不支持多模态" };
   }
 
   const profile = getRoutingProfiles(profiles).scenarios[scenario];
@@ -222,20 +225,21 @@ export function selectRoutingAgent(
 
 export function validateModelForAgent(agent: AgentKind | RoutingAgentId, model: string, config?: RoutingProfilesConfig): { ok: true } | { ok: false; error: string } {
   const agentId = agentKindToRoutingAgent(agent);
+  const normalizedModel = normalizeModelForAgent(agentId, model);
   if (agentId === "mimo") {
-    if (model === MIMO_ULTRA_SPEED_MODEL) {
+    if (normalizedModel === MIMO_ULTRA_SPEED_MODEL) {
       if (!config?.enable_mimo_pro_ultra_speed) {
-        return { ok: false, error: `MiMo 不支持模型 "${model}"，Ultra Speed 未启用` };
+        return { ok: false, error: `MiMo 不支持模型 "${normalizedModel}"，Ultra Speed 未启用` };
       }
       return { ok: true };
     }
-    if (!MIMO_MODELS.includes(model as typeof MIMO_MODELS[number])) {
+    if (!MIMO_MODELS.includes(normalizedModel as typeof MIMO_MODELS[number])) {
       return { ok: false, error: `MiMo 不支持模型 "${model}"，允许的模型: ${MIMO_MODELS.join(", ")}` };
     }
     return { ok: true };
   }
   if (agentId === "reasonix-tui") {
-    if (!REASONIX_MODELS.includes(model as typeof REASONIX_MODELS[number])) {
+    if (!REASONIX_MODELS.includes(normalizedModel as typeof REASONIX_MODELS[number])) {
       return { ok: false, error: `Reasonix 不支持模型 "${model}"，允许的模型: ${REASONIX_MODELS.join(", ")}` };
     }
     return { ok: true };
@@ -248,7 +252,7 @@ export function canAgentHandleMultimodal(agent: AgentKind | RoutingAgentId): boo
 }
 
 export function isMultimodalModel(model: string): boolean {
-  return model === "mimo-v2.5-flash";
+  return normalizeModelForAgent("mimo", model) === MIMO_BASE_MODEL;
 }
 
 export function reasoningEffortToMaxSteps(effort: ReasoningEffort): number {
@@ -279,12 +283,13 @@ function normalizeScenarioSelection(scenario: TaskScenario, input: unknown, conf
   if (!isRecord(input)) return null;
   const candidate = isRecord(input.current) ? input.current : input;
   const agentId = candidate.agent_id === "mimo" || candidate.agent_id === "reasonix-tui" ? candidate.agent_id : null;
-  const model = typeof candidate.model === "string" ? candidate.model : null;
+  const rawModel = typeof candidate.model === "string" ? candidate.model : null;
   const effort = REASONING_EFFORTS.includes(candidate.reasoning_effort as ReasoningEffort)
     ? candidate.reasoning_effort as ReasoningEffort
     : null;
-  if (!agentId || !model || !effort) return null;
-  if (scenario === "multimodal" && (agentId !== "mimo" || model !== "mimo-v2.5-flash")) return null;
+  if (!agentId || !rawModel || !effort) return null;
+  const model = normalizeModelForAgent(agentId, rawModel);
+  if (scenario === "multimodal" && (agentId !== "mimo" || !isMultimodalModel(model))) return null;
   if (model === MIMO_ULTRA_SPEED_MODEL && !config?.enable_mimo_pro_ultra_speed) return null;
   if (!validateModelForAgent(agentId, model, config).ok) return null;
   return { agent_id: agentId, model, reasoning_effort: effort };
@@ -301,6 +306,13 @@ function agentKindToRoutingAgent(agent: AgentKind | RoutingAgentId): RoutingAgen
     return agent;
   }
   return null;
+}
+
+function normalizeModelForAgent(agent: RoutingAgentId | null, model: string): string {
+  if (agent === "mimo" && model === MIMO_LEGACY_BASE_MODEL) {
+    return MIMO_BASE_MODEL;
+  }
+  return model;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

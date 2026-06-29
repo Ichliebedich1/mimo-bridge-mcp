@@ -1106,7 +1106,7 @@ test("admin API GET /api/routing-profiles returns current routing settings", asy
     assert.strictEqual(result.body.data.scenarios.simple.current.agent_id, "reasonix-tui");
     assert.strictEqual(result.body.data.scenarios.simple.current.model, "deepseek-v4-flash");
     assert.strictEqual(result.body.data.enable_mimo_pro_ultra_speed, true);
-    assert.ok(result.body.data.allowed_models.mimo.includes("mimo-v2.5-flash"));
+    assert.ok(result.body.data.allowed_models.mimo.includes("mimo-v2.5"));
     assert.ok(result.body.data.allowed_models.mimo.includes("mimo-v2.5-pro-ultraspeed"));
     assert.ok(result.body.data.allowed_models["reasonix-tui"].includes("deepseek-v4-pro"));
   } finally {

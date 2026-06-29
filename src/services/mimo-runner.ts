@@ -195,6 +195,7 @@ export function resolveMimoCliModel(model: string | undefined): string | null {
   if (model.includes("/")) return model;
 
   switch (model) {
+    case "mimo-v2.5":
     case "mimo-v2.5-flash":
       return "xiaomi/mimo-v2.5";
     case "mimo-v2.5-pro":

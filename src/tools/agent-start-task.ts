@@ -61,7 +61,7 @@ export function createAgentStartTaskHandler(
         if (!validation.ok) return { error: validation.error };
       }
       if (input.task_scenario === "multimodal" && !canAgentHandleMultimodal(agent.kind)) {
-        return { error: "Reasonix 不支持多模态任务，请使用 MiMo 的 mimo-v2.5-flash" };
+        return { error: "Reasonix 不支持多模态任务，请使用 MiMo 的 mimo-v2.5" };
       }
 
       const handler = createStartTaskHandler(config, taskStore, {

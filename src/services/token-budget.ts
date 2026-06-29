@@ -291,8 +291,9 @@ function inferModelFromContext(context: string, agent: string): string {
   const lowered = context.toLowerCase();
   const knownModels = [
     "mimo-v2.5-pro-ultraspeed",
-    "mimo-v2.5-flash",
     "mimo-v2.5-pro",
+    "mimo-v2.5-flash",
+    "mimo-v2.5",
     "deepseek-v4-flash",
     "deepseek-v4-pro",
   ];

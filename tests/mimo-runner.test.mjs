@@ -20,6 +20,7 @@ function makeTask(routing) {
 }
 
 test("resolveMimoCliModel maps Bridge model labels to MiMo CLI provider/model names", () => {
+  assert.equal(resolveMimoCliModel("mimo-v2.5"), "xiaomi/mimo-v2.5");
   assert.equal(resolveMimoCliModel("mimo-v2.5-flash"), "xiaomi/mimo-v2.5");
   assert.equal(resolveMimoCliModel("mimo-v2.5-pro"), "xiaomi/mimo-v2.5-pro");
   assert.equal(resolveMimoCliModel("mimo-v2.5-pro-ultraspeed"), "xiaomi/mimo-v2.5-pro-ultraspeed");

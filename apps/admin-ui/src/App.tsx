@@ -132,28 +132,28 @@ const DEFAULT_ROUTING_PROFILES: RoutingProfiles = {
       description: '多模态/图片任务',
       supports_multimodal: true,
       recommended: {
-        mimo: { model: 'mimo-v2.5-flash', reasoning_effort: 'medium', reason: '只有 MiMo flash 支持多模态输入' },
+        mimo: { model: 'mimo-v2.5', reasoning_effort: 'medium', reason: '只有 MiMo V2.5 支持多模态输入' },
         'reasonix-tui': { model: 'deepseek-v4-flash', reasoning_effort: 'medium', reason: 'Reasonix 当前不支持多模态，仅作为文本任务参考' },
       },
-      current: { agent_id: 'mimo', model: 'mimo-v2.5-flash', reasoning_effort: 'medium' },
+      current: { agent_id: 'mimo', model: 'mimo-v2.5', reasoning_effort: 'medium' },
     },
     simple: {
       description: '简单文本、文档、小 UI 调整',
       supports_multimodal: false,
       recommended: {
-        mimo: { model: 'mimo-v2.5-flash', reasoning_effort: 'low', reason: '简单任务优先用 flash 降低成本' },
+        mimo: { model: 'mimo-v2.5', reasoning_effort: 'low', reason: '简单任务优先用 V2.5 降低成本' },
         'reasonix-tui': { model: 'deepseek-v4-flash', reasoning_effort: 'low', reason: '简单任务优先用 flash 降低成本' },
       },
-      current: { agent_id: 'mimo', model: 'mimo-v2.5-flash', reasoning_effort: 'low' },
+      current: { agent_id: 'mimo', model: 'mimo-v2.5', reasoning_effort: 'low' },
     },
     normal: {
       description: '普通代码任务',
       supports_multimodal: false,
       recommended: {
-        mimo: { model: 'mimo-v2.5-flash', reasoning_effort: 'medium', reason: '普通任务默认用 flash，中等强度' },
+        mimo: { model: 'mimo-v2.5', reasoning_effort: 'medium', reason: '普通任务默认用 V2.5，中等强度' },
         'reasonix-tui': { model: 'deepseek-v4-flash', reasoning_effort: 'medium', reason: '普通任务默认用 flash，中等强度' },
       },
-      current: { agent_id: 'mimo', model: 'mimo-v2.5-flash', reasoning_effort: 'medium' },
+      current: { agent_id: 'mimo', model: 'mimo-v2.5', reasoning_effort: 'medium' },
     },
     complex: {
       description: '复杂运行时、Git、安装包、安全边界任务',
@@ -175,7 +175,7 @@ const DEFAULT_ROUTING_PROFILES: RoutingProfiles = {
     },
   },
   allowed_models: {
-    mimo: ['mimo-v2.5-flash', 'mimo-v2.5-pro'],
+    mimo: ['mimo-v2.5', 'mimo-v2.5-pro'],
     'reasonix-tui': ['deepseek-v4-flash', 'deepseek-v4-pro'],
   },
   reasoning_efforts: ['low', 'medium', 'high'],
@@ -843,10 +843,10 @@ function CreateTaskPage({
 
   const currentScenario = routingProfiles?.scenarios[taskScenario] ?? null;
   const selectedRoutingAgent = agentId === 'reasonix-tui' ? 'reasonix-tui' : 'mimo';
-  const allowedModels = routingProfiles?.allowed_models[selectedRoutingAgent] ?? (selectedRoutingAgent === 'mimo' ? ['mimo-v2.5-flash', 'mimo-v2.5-pro'] : ['deepseek-v4-flash', 'deepseek-v4-pro']);
+  const allowedModels = routingProfiles?.allowed_models[selectedRoutingAgent] ?? (selectedRoutingAgent === 'mimo' ? ['mimo-v2.5', 'mimo-v2.5-pro'] : ['deepseek-v4-flash', 'deepseek-v4-pro']);
   const autoSelection = currentScenario?.current;
   const effectiveAgentId = routingMode === 'auto' ? autoSelection?.agent_id ?? 'mimo' : selectedRoutingAgent;
-  const effectiveModel = routingMode === 'auto' ? autoSelection?.model ?? 'mimo-v2.5-flash' : (model || allowedModels[0] || '');
+  const effectiveModel = routingMode === 'auto' ? autoSelection?.model ?? 'mimo-v2.5' : (model || allowedModels[0] || '');
   const effectiveEffort = routingMode === 'auto' ? autoSelection?.reasoning_effort ?? 'medium' : reasoningEffort;
 
   useEffect(() => {
@@ -895,11 +895,11 @@ function CreateTaskPage({
     }
     const attachmentHasImages = attachments.some((attachment) => attachment.kind === 'image');
     if ((hasImages || attachmentHasImages) && routingMode === 'manual') {
-      setFormError('多模态任务请使用 Auto 模式，系统会强制选择 MiMo flash。');
+      setFormError('多模态任务请使用 Auto 模式，系统会强制选择 MiMo V2.5。');
       return;
     }
-    if (routingMode === 'manual' && taskScenario === 'multimodal' && (selectedRoutingAgent !== 'mimo' || effectiveModel !== 'mimo-v2.5-flash')) {
-      setFormError('多模态任务只能使用 MiMo 的 mimo-v2.5-flash。');
+    if (routingMode === 'manual' && taskScenario === 'multimodal' && (selectedRoutingAgent !== 'mimo' || effectiveModel !== 'mimo-v2.5')) {
+      setFormError('多模态任务只能使用 MiMo 的 mimo-v2.5。');
       return;
     }
 
@@ -1011,7 +1011,7 @@ function CreateTaskPage({
           </div>
           <label className="toggle-row">
             <input checked={hasImages} onChange={(event) => setHasImages(event.target.checked)} type="checkbox" />
-            <span>包含图片/多模态输入（自动使用 MiMo flash）</span>
+            <span>包含图片/多模态输入（自动使用 MiMo V2.5）</span>
           </label>
           <div className="routing-preview">
             <strong>本次将使用</strong>
@@ -1265,19 +1265,19 @@ function TaskDetailPage({
   const hasAttention = task.riskFlags.length > 0 && !hasBlocker;
   const canDelete = task.canDelete;
   const replyAgentId = task.agent === 'reasonix-tui' ? 'reasonix-tui' : 'mimo';
-  const fallbackModels = replyAgentId === 'mimo' ? ['mimo-v2.5-flash', 'mimo-v2.5-pro'] : ['deepseek-v4-flash', 'deepseek-v4-pro'];
+  const fallbackModels = replyAgentId === 'mimo' ? ['mimo-v2.5', 'mimo-v2.5-pro'] : ['deepseek-v4-flash', 'deepseek-v4-pro'];
   const replyAllowedModels = routingProfiles?.allowed_models[replyAgentId] ?? fallbackModels;
   const replyEffectiveModel = replyAllowedModels.includes(replyModel) ? replyModel : replyAllowedModels[0] ?? '';
   const replyHasImageAttachment = replyAttachments.some((attachment) => attachment.kind === 'image');
   const replyScenario = replyHasImageAttachment ? 'multimodal' : task.routing?.task_scenario ?? 'normal';
-  const replyModelForSubmit = replyHasImageAttachment && replyAgentId === 'mimo' ? 'mimo-v2.5-flash' : replyEffectiveModel;
+  const replyModelForSubmit = replyHasImageAttachment && replyAgentId === 'mimo' ? 'mimo-v2.5' : replyEffectiveModel;
 
   useEffect(() => {
     if (replyRoutingDirty) {
       return;
     }
     const agentId = task.agent === 'reasonix-tui' ? 'reasonix-tui' : 'mimo';
-    const models = routingProfiles?.allowed_models[agentId] ?? (agentId === 'mimo' ? ['mimo-v2.5-flash', 'mimo-v2.5-pro'] : ['deepseek-v4-flash', 'deepseek-v4-pro']);
+    const models = routingProfiles?.allowed_models[agentId] ?? (agentId === 'mimo' ? ['mimo-v2.5', 'mimo-v2.5-pro'] : ['deepseek-v4-flash', 'deepseek-v4-pro']);
     const preferredModel = task.routing?.model && models.includes(task.routing.model) ? task.routing.model : models[0] ?? '';
     setReplyModel(preferredModel);
     setReplyEffort(task.routing?.reasoning_effort ?? 'medium');
@@ -1573,7 +1573,7 @@ function TaskDetailPage({
               </label>
               <div className="reply-routing-note">
                 {replyHasImageAttachment && replyAgentId === 'mimo'
-                  ? '检测到图片附件，本轮会自动使用 mimo-v2.5-flash。'
+                  ? '检测到图片附件，本轮会自动使用 mimo-v2.5。'
                   : `继续使用 ${agentDisplayName(task.agent)} 会话，只切换该 Agent 的模型/强度。`}
               </div>
             </div>
@@ -1993,7 +1993,7 @@ function RoutingSettingsPage({
       if (scenario === 'multimodal') {
         next.scenarios[scenario].current = {
           agent_id: 'mimo',
-          model: 'mimo-v2.5-flash',
+          model: 'mimo-v2.5',
           reasoning_effort: patch.reasoning_effort ?? currentSelection.reasoning_effort,
         };
         return next;
@@ -2023,7 +2023,7 @@ function RoutingSettingsPage({
         for (const scenario of Object.keys(next.scenarios) as TaskScenario[]) {
           const selection = next.scenarios[scenario].current;
           if (selection.agent_id === 'mimo' && selection.model === ultraSpeedModel) {
-            next.scenarios[scenario].current = { ...selection, model: scenario === 'simple' || scenario === 'normal' ? 'mimo-v2.5-flash' : 'mimo-v2.5-pro' };
+            next.scenarios[scenario].current = { ...selection, model: scenario === 'simple' || scenario === 'normal' ? 'mimo-v2.5' : 'mimo-v2.5-pro' };
           }
         }
       }
@@ -2073,7 +2073,7 @@ function RoutingSettingsPage({
                     <strong>{scenarioLabels[scenario]}</strong>
                     <p>{item.description}</p>
                   </div>
-                  {lockedMultimodal && <Pill tone="blue">MiMo flash only</Pill>}
+                  {lockedMultimodal && <Pill tone="blue">MiMo V2.5 only</Pill>}
                 </div>
                 <label>
                   <span>默认 Agent</span>
@@ -2122,7 +2122,7 @@ function RoutingSettingsPage({
           <div className="model-card">
             <AgentBadge agent="mimo" />
             <ul>
-              <li><code>mimo-v2.5-flash</code>：支持多模态；flash 价格，适合简单/普通任务。</li>
+              <li><code>mimo-v2.5</code>：支持多模态；V2.5 价格，适合简单/普通任务。</li>
               <li><code>mimo-v2.5-pro</code>：不支持多模态；pro 价格，适合复杂/高风险任务。</li>
               {ultraSpeedEnabled && <li><code>mimo-v2.5-pro-ultraspeed</code>：不支持多模态；ultra_speed 价格（约 Pro 3 倍），适合很急的复杂/大输出任务。</li>}
             </ul>

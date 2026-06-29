@@ -20,7 +20,7 @@ test("routing profiles expose scenarios, models, efforts, and pricing", () => {
   assert.deepStrictEqual(profiles.allowed_models["reasonix-tui"], [...REASONIX_MODELS]);
   assert.deepStrictEqual(profiles.reasoning_efforts, ["low", "medium", "high"]);
   assert.strictEqual(profiles.scenarios.multimodal.current.agent_id, "mimo");
-  assert.strictEqual(profiles.scenarios.multimodal.current.model, "mimo-v2.5-flash");
+  assert.strictEqual(profiles.scenarios.multimodal.current.model, "mimo-v2.5");
   assert.strictEqual(profiles.pricing_per_1m_cny.flash.input, 1);
   assert.strictEqual(profiles.pricing_per_1m_cny.pro.output, 6);
 });
@@ -56,11 +56,11 @@ test("manual routing respects explicit model and effort", () => {
   assert.strictEqual(result.config.reasoning_effort, "high");
 });
 
-test("multimodal tasks force MiMo flash and reject Reasonix", () => {
+test("multimodal tasks force MiMo V2.5 and reject Reasonix", () => {
   const mimo = resolveRouting("mimo", { routing_mode: "auto", has_images: true });
   assert.strictEqual(mimo.ok, true);
   assert.strictEqual(mimo.config.task_scenario, "multimodal");
-  assert.strictEqual(mimo.config.model, "mimo-v2.5-flash");
+  assert.strictEqual(mimo.config.model, "mimo-v2.5");
 
   const reasonix = resolveRouting("reasonix-tui", { routing_mode: "auto", task_scenario: "multimodal" });
   assert.strictEqual(reasonix.ok, false);
@@ -68,6 +68,7 @@ test("multimodal tasks force MiMo flash and reject Reasonix", () => {
 });
 
 test("model validation keeps MiMo and Reasonix model lists separate", () => {
+  assert.strictEqual(validateModelForAgent("mimo", "mimo-v2.5").ok, true);
   assert.strictEqual(validateModelForAgent("mimo", "mimo-v2.5-flash").ok, true);
   assert.strictEqual(validateModelForAgent("reasonix-tui", "deepseek-v4-pro").ok, true);
   const mimoInvalid = validateModelForAgent("mimo", "deepseek-v4-flash");
@@ -211,7 +212,7 @@ test("routing profile normalization drops stale ultra speed scenario override wh
   });
   assert.strictEqual(result.ok, true);
   assert.strictEqual(result.config.scenarios.complex, undefined);
-  assert.strictEqual(result.config.scenarios.normal.model, "mimo-v2.5-flash");
+  assert.strictEqual(result.config.scenarios.normal.model, "mimo-v2.5");
   assert.strictEqual(result.config.enable_mimo_pro_ultra_speed, undefined);
 });
 
