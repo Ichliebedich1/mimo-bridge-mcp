@@ -80,6 +80,8 @@ function Test-PortablePayload {
     "app\apps\local-daemon\dist\apps\local-daemon\src\index.js",
     "app\apps\local-daemon\dist\apps\local-daemon\src\launcher-cli.js",
     "app\apps\admin-ui\dist\index.html",
+    "mimo-bridge-client.mjs",
+    "MiMo Bridge Client.cmd",
     "MiMo Bridge Launcher.cmd",
     "Start MiMo Bridge.cmd",
     "Stop MiMo Bridge.cmd",
@@ -104,6 +106,13 @@ function Test-PortablePayload {
     Where-Object { $_.Name -in @("auth.json", "mimocode.jsonc") } |
     Select-Object -First 1
   Add-Check -Name "portable excludes known credential files" -Passed ($null -eq $sensitive) -Detail "$($sensitive.FullName)"
+
+  $textExtensions = @(".json", ".md", ".cmd", ".ps1", ".mjs", ".js", ".txt")
+  $sourcePathLeak = Get-ChildItem -LiteralPath $portableRoot -Force -Recurse -File -ErrorAction SilentlyContinue |
+    Where-Object { $textExtensions -contains $_.Extension.ToLowerInvariant() } |
+    Select-String -SimpleMatch $repoRoot -List -ErrorAction SilentlyContinue |
+    Select-Object -First 1
+  Add-Check -Name "portable excludes build machine source path" -Passed ($null -eq $sourcePathLeak) -Detail "$($sourcePathLeak.Path)"
 }
 
 if (-not $SkipPackageBuild) {

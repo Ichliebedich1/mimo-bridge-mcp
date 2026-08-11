@@ -1,5 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
+import { createHash } from "node:crypto";
 import { checkMimoVersion, type Config, type MimoVersion } from "../../../src/config.js";
 import { normalizeRoutingProfilesConfig } from "../../../src/services/model-routing.js";
 import type { AgentConfig, RoutingProfilesConfig } from "../../../src/types.js";
@@ -13,6 +14,12 @@ export interface DaemonConfig {
   agents: AgentConfig[];
   routingProfiles?: RoutingProfilesConfig;
   configError: string | null;
+  configPath: string;
+  configLoadedAt: string;
+  configFingerprint: string;
+  loadedConfigFileHash: string;
+  configSource: "file" | "environment" | "mixed";
+  restartCommand: string;
 }
 
 export interface PersistentConfig {
@@ -138,6 +145,8 @@ function stripUtf8Bom(value: string): string {
 export function loadDaemonConfig(): DaemonConfig {
   const host = "127.0.0.1" as const;
   const configPath = resolveConfigPath();
+  const configLoadedAt = new Date().toISOString();
+  const loadedConfigFileHash = hashConfigFile(configPath);
   const { config: persistent, error: loadError } = loadPersistentConfig(configPath);
 
   let configError: string | null = loadError;
@@ -194,6 +203,22 @@ export function loadDaemonConfig(): DaemonConfig {
     }
   }
 
+  const configSource = resolveConfigSource(persistent !== null);
+  const configFingerprint = sanitizedConfigFingerprint({ port, allowedRoots, agents, routingProfiles, mimoNodePath, mimoEntryPath, runtimeDir });
+  const restartCommand = "MiMo Bridge Launcher.cmd restart";
+  if (mcpConfig) {
+    mcpConfig.diagnostics = {
+      configFile: configPath,
+      configSource,
+      loadedAt: configLoadedAt,
+      fingerprint: configFingerprint,
+      allowedRootsCount: allowedRoots.length,
+      reloadRequired: false,
+      isReloadRequired: () => hashConfigFile(configPath) !== loadedConfigFileHash,
+      restartCommand,
+    };
+  }
+
   return {
     host,
     port,
@@ -203,7 +228,18 @@ export function loadDaemonConfig(): DaemonConfig {
     agents,
     routingProfiles,
     configError,
+    configPath,
+    configLoadedAt,
+    configFingerprint,
+    loadedConfigFileHash,
+    configSource,
+    restartCommand,
   };
+}
+
+export function isConfigReloadRequired(config: DaemonConfig): boolean {
+  if (!config.configPath || !config.loadedConfigFileHash) return false;
+  return hashConfigFile(config.configPath) !== config.loadedConfigFileHash;
 }
 
 export function savePersistentConfig(configPath: string, patch: Partial<PersistentConfig>): { ok: true; config: PersistentConfig } | { ok: false; error: string } {
@@ -285,4 +321,44 @@ function parsePort(value: string | undefined, fallback: number): number {
 function isValidPort(value: string): boolean {
   const port = Number(value);
   return value.trim().length > 0 && Number.isInteger(port) && port >= 1 && port <= 65535;
+}
+
+function hashConfigFile(configPath: string): string {
+  try {
+    return createHash("sha256").update(readFileSync(configPath)).digest("hex");
+  } catch {
+    return "missing";
+  }
+}
+
+function sha256(value: string): string {
+  return createHash("sha256").update(value, "utf8").digest("hex");
+}
+
+function sanitizedConfigFingerprint(input: {
+  port: number;
+  allowedRoots: string[];
+  agents: AgentConfig[];
+  routingProfiles: RoutingProfilesConfig;
+  mimoNodePath?: string;
+  mimoEntryPath?: string;
+  runtimeDir: string;
+}): string {
+  const sanitized = {
+    port: input.port,
+    allowedRootsCount: input.allowedRoots.length,
+    allowedRootHashes: input.allowedRoots.map((item) => sha256(resolve(item).toLowerCase())).sort(),
+    mimoNodeHash: typeof input.mimoNodePath === "string" ? sha256(resolve(input.mimoNodePath).toLowerCase()) : null,
+    mimoEntryHash: typeof input.mimoEntryPath === "string" ? sha256(resolve(input.mimoEntryPath).toLowerCase()) : null,
+    runtimeHash: typeof input.runtimeDir === "string" ? sha256(resolve(input.runtimeDir).toLowerCase()) : null,
+    agents: input.agents.map((agent) => ({ id: agent.id, kind: agent.kind, enabled: agent.enabled !== false })).sort((a, b) => a.id.localeCompare(b.id)),
+    routingProfiles: input.routingProfiles,
+  };
+  return sha256(JSON.stringify(sanitized));
+}
+
+function resolveConfigSource(hasPersistentConfig: boolean): "file" | "environment" | "mixed" {
+  const hasEnv = ["MIMO_NODE_PATH", "MIMO_ENTRY_PATH", "MIMO_ALLOWED_ROOTS", "MIMO_RUNTIME_DIR", "MIMO_DAEMON_PORT"].some((name) => process.env[name] !== undefined);
+  if (hasEnv && hasPersistentConfig) return "mixed";
+  return hasEnv ? "environment" : "file";
 }

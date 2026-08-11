@@ -2,13 +2,11 @@
 
 import { readFileSync } from "node:fs";
 import { pathToFileURL } from "node:url";
-import { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
+import { randomUUID } from "node:crypto";
 
 export const DEFAULT_BASE_URL = "http://127.0.0.1:3210";
 
 const DEFAULT_REST_TIMEOUT_MS = 15_000;
-const MCP_CLOSE_TIMEOUT_MS = 2_000;
 
 export function getBaseUrl(env = process.env) {
   return (env.MIMO_BRIDGE_URL || DEFAULT_BASE_URL).replace(/\/+$/, "");
@@ -170,12 +168,22 @@ async function startOperation({ args, baseUrl, stdin }) {
   const body = {
     ...input,
     workspace_path: input.workspace_path || process.cwd(),
+    idempotency_key: String(args["idempotency-key"] || input.idempotency_key || randomUUID()),
   };
   const response = await fetchJson(baseUrl, "/api/tasks", {
     method: "POST",
     body: JSON.stringify(body),
   });
-  return normalizeRestEnvelope("start", response, (data) => ({ task_id: data.task_id, status: data.status }));
+  const result = normalizeRestEnvelope("start", response, (data) => ({
+    task_id: data.task_id,
+    request_id: data.request_id,
+    status: data.status,
+    queue_state: data.queue_state,
+    idempotent_replay: Boolean(data.idempotent_replay),
+    idempotency_key: body.idempotency_key,
+  }));
+  if (result.exitCode !== 0) result.body.idempotency_key = body.idempotency_key;
+  return result;
 }
 
 async function agentListOperation({ baseUrl }) {
@@ -236,16 +244,23 @@ async function agentStartOperation({ args, baseUrl, stdin }) {
     ...input,
     agent_id: agentId,
     workspace_path: input.workspace_path || process.cwd(),
+    idempotency_key: String(args["idempotency-key"] || input.idempotency_key || randomUUID()),
   };
   const response = await fetchJson(baseUrl, "/api/agent-tasks", {
     method: "POST",
     body: JSON.stringify(body),
   });
-  return normalizeRestEnvelope("agent-start", response, (data) => ({
+  const result = normalizeRestEnvelope("agent-start", response, (data) => ({
     task_id: data.task_id,
     status: data.status,
     agent: data.agent ?? agentId,
+    request_id: data.request_id,
+    queue_state: data.queue_state,
+    idempotent_replay: Boolean(data.idempotent_replay),
+    idempotency_key: body.idempotency_key,
   }));
+  if (result.exitCode !== 0) result.body.idempotency_key = body.idempotency_key;
+  return result;
 }
 
 async function reviewOperation({ args, baseUrl }) {
@@ -551,66 +566,35 @@ function toSafeTaskSummary(task) {
 }
 
 async function waitForTask({ baseUrl, taskId, agentId, timeoutSeconds, detailLevel, maxChars, operation, toolName = "mimo_wait_task" }) {
-  const transport = new StreamableHTTPClientTransport(new URL("/mcp", baseUrl));
-  const client = new Client({ name: "mimo-bridge-client", version: "0.1.0" });
-
-  try {
-    await client.connect(transport);
-    const result = await client.callTool(
-      {
-        name: toolName,
-        arguments: {
-          task_id: taskId,
-          ...(agentId ? { agent_id: agentId } : {}),
-          timeout_seconds: timeoutSeconds,
-          detail_level: detailLevel,
-          max_chars: maxChars,
-        },
-      },
-      undefined,
-      { timeout: sdkRequestTimeoutMs(timeoutSeconds) }
-    );
-
-    const data = parseToolText(result);
-    if (data.error) {
-      return failure(operation, data.error, { task_id: taskId, status: data.status });
-    }
-
-    return success(operation, {
-      task_id: data.task_id || taskId,
-      agent: (data.agent ?? agentId) || undefined,
-      status: data.status,
-      timed_out: Boolean(data.timed_out),
-      waited_ms: data.waited_ms ?? 0,
-      review_package: data.review_package,
-    });
-  } catch (error) {
-    return failure(operation, error instanceof Error ? error.message : String(error), { task_id: taskId });
-  } finally {
-    await closeMcpClient(client);
-  }
-}
-
-function parseToolText(result) {
-  const text = result?.content?.[0]?.text;
-  if (typeof text !== "string" || text.length === 0) {
-    return result ?? {};
-  }
-  return JSON.parse(text);
-}
-
-async function closeMcpClient(client) {
-  await Promise.race([
-    client.close(),
-    new Promise((resolve) => setTimeout(resolve, MCP_CLOSE_TIMEOUT_MS)),
-  ]).catch(() => {});
+  const isAgent = toolName === "agent_wait_task" || Boolean(agentId);
+  const path = isAgent
+    ? `/api/agent-tasks/${encodeURIComponent(taskId)}/wait`
+    : `/api/tasks/${encodeURIComponent(taskId)}/wait`;
+  const response = await fetchJson(baseUrl, path, {
+    method: "POST",
+    timeoutMs: sdkRequestTimeoutMs(timeoutSeconds),
+    body: JSON.stringify({
+      ...(agentId ? { agent_id: agentId } : {}),
+      timeout_seconds: timeoutSeconds,
+      detail_level: detailLevel,
+      max_chars: maxChars,
+    }),
+  });
+  return normalizeRestEnvelope(operation, response, (data) => ({
+    task_id: data.task_id || taskId,
+    agent: (data.agent ?? agentId) || undefined,
+    status: data.status,
+    timed_out: Boolean(data.timed_out),
+    waited_ms: data.waited_ms ?? 0,
+    review_package: data.review_package,
+  }));
 }
 
 function helpOperation() {
   return success("help", {
     usage: [
       "node scripts/mimo-bridge-client.mjs health",
-      "node scripts/mimo-bridge-client.mjs start --json .\\runtime\\client-requests\\task.json",
+      "node scripts/mimo-bridge-client.mjs start --json .\\runtime\\client-requests\\task.json [--idempotency-key key]",
       "node scripts/mimo-bridge-client.mjs wait --task-id task_xxx --timeout-seconds 1800",
       "node scripts/mimo-bridge-client.mjs reply --task-id task_xxx --json .\\runtime\\client-requests\\reply.json --model mimo-v2.5-pro --reasoning-effort high",
       "node scripts/mimo-bridge-client.mjs start-and-wait --json .\\runtime\\client-requests\\task.json --timeout-seconds 1800",

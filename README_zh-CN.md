@@ -1,5 +1,7 @@
 # AgentBridge Local
 
+[English](README.md) | 简体中文
+
 > 原名：**MiMo Bridge MCP**。
 
 **AgentBridge Local 是一个本地优先的多 Agent 协作调度台。它让 Codex 通过 MCP 调度 MiMo Code、Reasonix TUI，以及未来更多本地编码 Agent。**
@@ -38,6 +40,7 @@ AgentBridge Local 的思路是把“判断”和“执行”拆开：
 - **MiMo Code 执行任务**：保留 `mimo_*` 兼容工具。
 - **Reasonix TUI 执行任务**：通过通用 `agent_*` 工具接入。
 - **多 Agent 队列**：MiMo 和 Reasonix 在修改范围不冲突时可以并行工作。
+- **可靠的 P0 任务准入**：先持久化任务占位记录，支持 `request_id`、幂等重试和最多 8 个并发任务。
 - **Git Worktree 隔离**：每个任务在独立 Worktree 中执行。
 - **动态任务边界**：每个任务都会记录本次允许修改和只读参考范围。
 - **低 Token 审查协议**：Codex 默认只读 Review Package，不读全仓、全日志、全 diff。
@@ -125,8 +128,42 @@ powershell -ExecutionPolicy Bypass -File apps/local-daemon/launcher.ps1 status
 powershell -ExecutionPolicy Bypass -File apps/local-daemon/launcher.ps1 start -Open
 powershell -ExecutionPolicy Bypass -File apps/local-daemon/launcher.ps1 stop
 powershell -ExecutionPolicy Bypass -File apps/local-daemon/launcher.ps1 restart -Open
+powershell -ExecutionPolicy Bypass -File apps/local-daemon/launcher.ps1 adopt
+powershell -ExecutionPolicy Bypass -File apps/local-daemon/launcher.ps1 allow-root -Path "C:\path\to\project" -Restart
 powershell -ExecutionPolicy Bypass -File apps/local-daemon/launcher.ps1 logs
 ```
+
+`allowedRoots` 是机器级安全边界，任务本身不能自动扩大它。`allow-root` 会解析真实路径、检查目录是否存在、按 Windows 大小写不敏感规则去重、写入当前配置，并可选择安全重启。`adopt` 只有在 localhost 端口所属 PID、Node 可执行文件、daemon 入口和健康身份全部精确匹配时才会接管现有进程。
+
+## MCP 任务创建契约
+
+`mimo_start_task` 和 `agent_start_task` 会在创建 Worktree 之前保存占位任务。正常新建请求会返回：
+
+- `task_id`
+- `request_id`
+- `status="preparing_worktree"`
+- `queue_state`
+- `idempotent_replay`
+
+客户端应发送 `idempotency_key`，超时重试时继续使用同一个键。同键同参数会返回原任务；同键不同参数会被拒绝，不会重复创建任务或 Worktree。
+
+启动阶段依次为：
+
+```text
+preparing_worktree -> starting_agent -> running
+```
+
+任一阶段失败都会保存包含 `code`、`message`、`phase`、`request_id`、发生时间和是否可重试的结构化 `error_detail`，同时保留旧的字符串 `error` 字段以兼容已有客户端。
+
+发行客户端只使用 Node 内置模块和 REST，不依赖源码目录中的 `node_modules` 或 MCP SDK：
+
+```powershell
+node scripts/mimo-bridge-client.mjs health
+node scripts/mimo-bridge-client.mjs start --json .\task.json --idempotency-key my-stable-key
+node scripts/mimo-bridge-client.mjs wait --task-id task_xxx --timeout-seconds 1800
+```
+
+便携版和安装版同时提供 `MiMo Bridge Client.cmd`，并使用发行包内置的 Node 运行时。
 
 ## 第一个任务怎么跑
 
@@ -154,7 +191,7 @@ powershell -ExecutionPolicy Bypass -File apps/local-daemon/launcher.ps1 logs
 
 | Agent | 状态 | 说明 |
 | --- | --- | --- |
-| MiMo Code | 已支持 | 主要执行 Agent。MiMo flash 支持多模态。 |
+| MiMo Code | 已支持 | 主要执行 Agent。任一已启用的 MiMo Code 模型都可通过 MiMo Code 的图片桥接处理多模态任务。 |
 | Reasonix TUI | 已支持 | 通过通用 `agent_*` 工具接入。 |
 | Reasonix GUI | 辅助打开 | 可以从管理后台打开，但目前不能保证直达具体会话。 |
 | 未来更多 Agent | 规划中 | Agent Registry 已为更多本地执行器预留结构。 |
@@ -166,6 +203,7 @@ AgentBridge Local 的安全设计比较保守：
 - daemon 只绑定 localhost。
 - 每个任务使用 Git Worktree 隔离。
 - 全局 `allowedRoots` 限制可操作目录。
+- 健康接口和目录越界错误只返回当前配置的脱敏指纹、数量、加载信息和本次请求的规范化路径，不枚举其他根目录。
 - 每个任务保存自己的可编辑/只读范围快照。
 - 越界修改会进入 Review Package 风险标记。
 - 浏览器只能触发固定打开动作，不能传任意命令。

@@ -10,9 +10,9 @@ It creates one shared `TaskStore`, task queue/running registry, and token-budget
 
 ## Run
 
-On this workstation:
+From the repository:
 
-    cd "C:\Users\86172\Desktop\MiMo Code project\Agent 协作项目\mimo-bridge-mcp\apps\local-daemon"
+    cd "<repository>\apps\local-daemon"
     powershell -ExecutionPolicy Bypass -File .\start-local.ps1
 
 Then open http://127.0.0.1:3210/.
@@ -25,9 +25,11 @@ After start-local.ps1 builds the daemon, use the launcher for lifecycle control:
     powershell -ExecutionPolicy Bypass -File .\launcher.ps1 start -Open
     powershell -ExecutionPolicy Bypass -File .\launcher.ps1 stop
     powershell -ExecutionPolicy Bypass -File .\launcher.ps1 restart -Open
+    powershell -ExecutionPolicy Bypass -File .\launcher.ps1 adopt
+    powershell -ExecutionPolicy Bypass -File .\launcher.ps1 allow-root -Path "C:\path\to\project" -Restart
     powershell -ExecutionPolicy Bypass -File .\launcher.ps1 logs
 
-The launcher writes its ownership state and bounded logs under %LOCALAPPDATA%\MiMoBridge. It only stops a daemon whose saved PID and command line match the built MiMo Bridge daemon entry. It will not kill an unrelated process merely because that process owns port 3210.
+The launcher writes its ownership state and bounded logs under %LOCALAPPDATA%\MiMoBridge. Adoption requires an exact localhost port owner, executable real path, daemon entry, and health identity match. It will not stop an unrelated or mismatched process merely because that process owns port 3210.
 
 First-run setup:
 
@@ -44,9 +46,9 @@ Autostart is disabled by default and is only enabled by the explicit command abo
 
 Manual build/run:
 
-    cd "C:\Users\86172\Desktop\MiMo Code project\Agent 协作项目\mimo-bridge-mcp\apps\admin-ui"
+    cd "<repository>\apps\admin-ui"
     npm.cmd run build
-    cd "C:\Users\86172\Desktop\MiMo Code project\Agent 协作项目\mimo-bridge-mcp\apps\local-daemon"
+    cd "<repository>\apps\local-daemon"
     npm.cmd run build
     npm.cmd run start
 

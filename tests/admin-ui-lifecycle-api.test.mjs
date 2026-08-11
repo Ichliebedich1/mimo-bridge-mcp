@@ -1,8 +1,16 @@
 import { test } from "node:test";
 import assert from "node:assert";
+import { readFileSync } from "node:fs";
 
 import { cancelTask, createTask, deleteTask, finishTask, openTaskTarget, replyTask, saveRoutingProfiles, worktreeTask } from "../apps/admin-ui/src/api.ts";
 import { shouldSyncRoutingDraftFromServer } from "../apps/admin-ui/src/routing-draft.ts";
+
+test("admin UI image task form permits manual MiMo model selection", () => {
+  const source = readFileSync(new URL("../apps/admin-ui/src/App.tsx", import.meta.url), "utf8");
+  assert.doesNotMatch(source, /系统会强制选择 MiMo V2\.5|多模态任务只能使用 MiMo 的 mimo-v2\.5/);
+  assert.match(source, /<select value=\{routingMode\}/);
+  assert.match(source, /任一已启用的 MiMo Code 模型/);
+});
 
 function installFetchMock() {
   const calls = [];

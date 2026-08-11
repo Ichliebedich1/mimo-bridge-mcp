@@ -192,6 +192,10 @@ test("MiMo completion automatically persists a review package", async () => {
       use_worktree: false,
       priority: 5,
     });
+    for (let i = 0; i < 50 && typeof completeTask !== "function"; i++) {
+      await new Promise((resolveWait) => setTimeout(resolveWait, 10));
+    }
+    assert.strictEqual(typeof completeTask, "function");
     completeTask({
       task_id: started.task_id,
       agent: "mimo",

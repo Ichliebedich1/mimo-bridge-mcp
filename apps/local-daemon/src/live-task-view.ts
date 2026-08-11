@@ -65,7 +65,7 @@ export function readLiveTaskView(
     return { error: "task not found" };
   }
 
-  const isLive = task.status === "running";
+  const isLive = ["preparing_worktree", "starting_agent", "running"].includes(task.status);
   const logRounds = findLogRounds(taskStore, taskId, task.current_round);
   const displayRound = isLive ? task.current_round : logRounds[logRounds.length - 1] ?? task.current_round;
   const logPaths = logRounds.map((round) => taskStore.getLogPath(taskId, round));

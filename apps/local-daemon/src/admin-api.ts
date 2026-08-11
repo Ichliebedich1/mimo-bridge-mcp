@@ -1,5 +1,7 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { z, type ZodError } from "zod";
+import { createHash } from "node:crypto";
+import { resolve } from "node:path";
 import { fail, ok } from "./api-result.js";
 import { readJsonBody, sendJson } from "./http-utils.js";
 import type { DaemonConfig } from "./daemon-config.js";
@@ -10,7 +12,7 @@ import { computeTaskReplyCapability } from "../../../src/services/task-reply-cap
 import { createOpenTaskTargetHandler } from "./task-open-actions.js";
 import { selectWorkspaceFolder } from "./workspace-folder-picker.js";
 import { getRoutingProfiles, normalizeRoutingProfilesConfig } from "../../../src/services/model-routing.js";
-import { resolveConfigPath, savePersistentConfig } from "./daemon-config.js";
+import { isConfigReloadRequired, resolveConfigPath, savePersistentConfig } from "./daemon-config.js";
 
 const StartTaskBodySchema = z.object({
   objective: z.string().min(1),
@@ -40,6 +42,7 @@ const StartTaskBodySchema = z.object({
   origin_codex_thread_id: z.string().optional(),
   origin_codex_thread_url: z.string().optional(),
   origin_source: z.string().optional(),
+  idempotency_key: z.string().min(1).max(128).optional(),
 });
 
 const AgentStartTaskBodySchema = StartTaskBodySchema.extend({
@@ -434,10 +437,13 @@ function getHealth(config: DaemonConfig, context: ToolContext) {
   return {
     daemon: {
       status: "ok",
+      identity: "mimo-bridge-local-daemon/v1",
       host: config.host,
       port: config.port,
       degraded: context.degraded,
       config_error: context.configError,
+      executable_fingerprint: pathFingerprint(process.execPath),
+      entry_fingerprint: pathFingerprint(process.argv[1] ?? ""),
     },
     mcp: {
       transport: "streamable_http",
@@ -449,6 +455,13 @@ function getHealth(config: DaemonConfig, context: ToolContext) {
       version: config.mimoVersion,
     },
     queue,
+    config: {
+      loaded_at: config.configLoadedAt,
+      fingerprint: config.configFingerprint,
+      allowed_roots_count: config.mcpConfig?.allowedRoots?.length ?? 0,
+      reload_required: isConfigReloadRequired(config),
+      restart_command: config.restartCommand,
+    },
     pending_reviews: {
       count: getPendingReviewCount(context.taskStore),
       command: "node scripts\\mimo-bridge-client.mjs recover",
@@ -513,7 +526,12 @@ function wrapToolResult(data: unknown) {
 }
 
 function toolStatusCode(data: unknown): number {
+  if (isToolError(data) && (data as Record<string, unknown>).code === "IDEMPOTENCY_CONFLICT") return 409;
   return isToolError(data) ? 400 : 200;
+}
+
+function pathFingerprint(value: string): string {
+  return createHash("sha256").update(value ? resolve(value).toLowerCase() : "", "utf8").digest("hex");
 }
 
 function isToolError(data: unknown): data is { error: string; details?: unknown } {

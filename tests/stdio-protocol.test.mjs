@@ -132,6 +132,13 @@ describe("STDIO MCP protocol", () => {
     assert.ok(toolNames.includes("mimo_queue_status"));
     assert.ok(toolNames.includes("mimo_token_status"));
     assert.ok(toolNames.includes("mimo_delete_task"));
+
+    const startTool = result.result.tools.find((tool) => tool.name === "mimo_start_task");
+    const agentStartTool = result.result.tools.find((tool) => tool.name === "agent_start_task");
+    assert.strictEqual(startTool.inputSchema.properties.max_rounds.maximum, 10);
+    assert.strictEqual(agentStartTool.inputSchema.properties.max_rounds.maximum, 10);
+    assert.ok(startTool.inputSchema.properties.idempotency_key);
+    assert.ok(agentStartTool.inputSchema.properties.idempotency_key);
   });
 
   it("mimo_list_tasks should return empty list initially", async () => {
@@ -185,7 +192,7 @@ describe("STDIO MCP protocol", () => {
     assert.match(parsed.error, /任务不存在/);
   });
 
-  it("mimo_cancel_task should cancel a running task", async () => {
+  it("mimo_cancel_task should cancel a preparing or running task", async () => {
     const result1 = await sendRequest("tools/call", {
       name: "mimo_start_task",
       arguments: {
@@ -199,7 +206,7 @@ describe("STDIO MCP protocol", () => {
     const text1 = result1.result.content[0].text;
     const parsed1 = JSON.parse(text1);
     assert.ok(parsed1.task_id);
-    assert.strictEqual(parsed1.status, "running");
+    assert.strictEqual(parsed1.status, "preparing_worktree");
 
     const taskId = parsed1.task_id;
 

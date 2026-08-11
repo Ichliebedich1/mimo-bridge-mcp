@@ -24,6 +24,7 @@ Expected:
 - Manifests target windows-10-11-x64.
 - Manifests report includes_mimo_credentials=false, includes_tasks=false, and includes_worktrees=false.
 - Installer -SelfTest passes.
+- Portable and installer payloads contain `mimo-bridge-client.mjs` and `MiMo Bridge Client.cmd`.
 - artifacts/release-validation.json is written.
 
 ## Clean Machine Portable Validation
@@ -44,6 +45,7 @@ Expected:
 - MCP is ready.
 - MiMo is configured.
 - Admin UI loads without requiring system Node.
+- `MiMo Bridge Client.cmd health` works from the extracted package without system Node or source `node_modules`.
 
 ## Clean Machine Installer Validation
 
@@ -77,6 +79,8 @@ Expected:
 - Invalid MiMo path: configuration should reject it.
 - Invalid allowed root: configuration should reject it.
 - Chinese/space path: installer and launcher should still run.
+- Exact unmanaged daemon identity: `adopt` succeeds only for matching port owner/executable/entry/health identity; each mismatch is refused and left running.
+- Captured launcher stdio: `start` and `restart` return after health while the detached daemon remains running.
 
 ## Reboot And Autostart
 
@@ -106,12 +110,15 @@ Expected:
 After health is confirmed:
 
 1. Configure Codex MCP to use http://127.0.0.1:3210/mcp.
-2. Create a small MiMo task from the admin UI or MCP.
-3. Use mimo_wait_task once instead of polling.
-4. Review the bounded Review Package.
-5. Merge or discard through the normal MCP workflow.
+2. In a Git repository whose path contains Chinese characters and spaces, create a MiMo task with `use_worktree=true` and a stable `idempotency_key`.
+3. Confirm task creation returns in less than five seconds with `task_id`, `request_id`, and `preparing_worktree`; confirm the queue later shows `starting_agent` and `running`.
+4. Retry the same request and key and confirm `idempotent_replay=true` with the same task and one Worktree. Retry the key with changed parameters and confirm a conflict without a new task.
+5. Use mimo_wait_task once instead of polling.
+6. Review the bounded Review Package and verify a forced phase failure is locatable by `request_id`.
+7. Merge or discard through the normal MCP workflow.
 
 Expected:
 
 - Codex and the admin UI see the same task queue.
+- Health, queue, error, runtime log, and installer log output do not contain other allowed-root values, source contents, credentials, raw config, or full daemon command lines.
 - No full repository, full diff, or full logs are required for normal review.

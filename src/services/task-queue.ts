@@ -5,6 +5,8 @@ export interface QueuedTask {
   editablePaths?: string[];
   priority: number;
   enqueuedAt: number;
+  requestId?: string;
+  getStatus?: () => string | undefined;
   execute: () => Promise<void>;
   cancel: () => void;
 }
@@ -25,6 +27,10 @@ export class TaskQueue {
 
   get running(): number {
     return this.runningCount;
+  }
+
+  get capacity(): number {
+    return this.maxConcurrent;
   }
 
   get isIdle(): boolean {
@@ -61,12 +67,26 @@ export class TaskQueue {
     this.queue = [];
   }
 
-  getQueuedTasks(): Array<{ taskId: string; agentId?: string; priority: number; enqueuedAt: number }> {
-    return this.queue.map((t) => ({
+  getQueuedTasks(): Array<{ taskId: string; agentId?: string; priority: number; enqueuedAt: number; requestId?: string; status?: string; queuePosition: number }> {
+    return this.queue.map((t, index) => ({
       taskId: t.taskId,
       agentId: t.agentId,
       priority: t.priority,
       enqueuedAt: t.enqueuedAt,
+      requestId: t.requestId,
+      status: t.getStatus?.(),
+      queuePosition: index + 1,
+    }));
+  }
+
+  getActiveTasks(): Array<{ taskId: string; agentId?: string; priority: number; enqueuedAt: number; requestId?: string; status?: string }> {
+    return this.runningTasks.map((t) => ({
+      taskId: t.taskId,
+      agentId: t.agentId,
+      priority: t.priority,
+      enqueuedAt: t.enqueuedAt,
+      requestId: t.requestId,
+      status: t.getStatus?.(),
     }));
   }
 
@@ -155,4 +175,4 @@ function pathsOverlap(left: string, right: string): boolean {
   return left === right || left.startsWith(right + "/") || right.startsWith(left + "/");
 }
 
-export const globalTaskQueue = new TaskQueue(4);
+export const globalTaskQueue = new TaskQueue(8);

@@ -1,7 +1,8 @@
+import { createHash, randomUUID } from "node:crypto";
 import { z } from "zod";
 import type { Config } from "../config.js";
 import type { TaskStore } from "../services/task-store.js";
-import type { AgentKind, TaskResult, WorktreeState } from "../types.js";
+import type { AgentKind, TaskErrorDetail, TaskResult, WorktreeState } from "../types.js";
 import { validateWorkspacePath, validateEditablePaths, validateMaxRounds, validateTimeout } from "../services/path-guard.js";
 import { writeTaskBrief } from "../services/prompt-builder.js";
 import { runMimoTask } from "../services/mimo-runner.js";
@@ -61,102 +62,89 @@ export const StartTaskSchema = z.object({
   origin_codex_thread_id: z.string().optional(),
   origin_codex_thread_url: z.string().optional(),
   origin_source: z.string().optional(),
+  idempotency_key: z.string().min(1).max(128).optional(),
 });
 
 export type StartTaskInput = z.infer<typeof StartTaskSchema>;
 
-export function createStartTaskHandler(
-  config: Config,
-  taskStore: TaskStore,
-  dependencies: StartTaskDependencies = {}
-) {
+export function createStartTaskHandler(config: Config, taskStore: TaskStore, dependencies: StartTaskDependencies = {}) {
   const runTask = dependencies.runTask ?? runMimoTask;
   const runningTasks = dependencies.runningTasks ?? globalRunningTasks;
   const taskQueue = dependencies.taskQueue ?? globalTaskQueue;
   const agentId = dependencies.agentId ?? "mimo";
   const agentKind = dependencies.agentKind ?? "mimo";
 
-  function executeTask(
-    taskId: string,
-    taskConfig: any,
-    worktreeState: WorktreeState | null,
-    editablePaths: string[]
-  ): Promise<void> {
+  const failTask = (taskId: string, requestId: string, phase: TaskErrorDetail["phase"], code: string, error: unknown, retryable = false) => {
+    const message = safeErrorMessage(error);
+    const detail: TaskErrorDetail = {
+      code,
+      message,
+      phase,
+      request_id: requestId,
+      occurred_at: new Date().toISOString(),
+      retryable,
+    };
+    taskStore.updateTaskStatus(taskId, "failed", message, detail);
+    process.stderr.write(`[task:${taskId}] request_id=${requestId} phase=${phase} code=${code}\n`);
+    try { refreshReviewPackage(taskStore, taskId); } catch { /* task may not have runner output yet */ }
+  };
+
+  function executeRunner(taskId: string, requestId: string, taskConfig: any, worktreeState: WorktreeState | null, editablePaths: string[]): Promise<void> {
     const task = taskStore.getTask(taskId);
-    if (!task) return Promise.resolve();
+    if (!task || task.status === "cancelled") return Promise.resolve();
+    taskStore.updateTaskQueueState(taskId, "active");
 
     return new Promise((resolve) => {
       let settled = false;
+      let agentStarted = false;
       const finish = () => {
         if (settled) return;
         settled = true;
         runningTasks.unregister(taskId);
         resolve();
       };
-
       const complete = (result: TaskResult) => {
         if (settled) return;
         try {
-          if (result.session_id) {
-            taskStore.updateTaskSession(taskId, result.session_id);
-          } else if (result.agent_session_path) {
-            taskStore.updateTaskAgentSession(taskId, result.agent_session_path);
-          }
+          if (result.session_id) taskStore.updateTaskSession(taskId, result.session_id);
+          else if (result.agent_session_path) taskStore.updateTaskAgentSession(taskId, result.agent_session_path);
           taskStore.updateTaskResult(taskId, result);
           taskStore.updateTaskStatus(taskId, result.status);
-
           if (worktreeState) {
             try {
               const gitManager = new GitWorktreeManager(task.config.workspace_path, config.runtimeDir);
               const summary = gitManager.getDiffSummaryForState(taskId, worktreeState, editablePaths);
-              worktreeState = {
-                ...worktreeState,
-                diff_summary: summary.diffStat,
-                out_of_bounds_files: summary.outOfBoundsFiles,
-                has_out_of_bounds_changes: summary.hasOutOfBoundsChanges,
-              };
+              worktreeState = { ...worktreeState, diff_summary: summary.diffStat, out_of_bounds_files: summary.outOfBoundsFiles, has_out_of_bounds_changes: summary.hasOutOfBoundsChanges };
               taskStore.updateTaskWorktree(taskId, worktreeState);
-            } catch (err) {
-              process.stderr.write(`[start-task] 获取 diff 摘要失败: ${err}\n`);
+            } catch {
+              process.stderr.write(`[task:${taskId}] request_id=${requestId} phase=running code=DIFF_SUMMARY_FAILED\n`);
             }
           }
           refreshReviewPackage(taskStore, taskId);
-        } finally {
-          finish();
-        }
+        } finally { finish(); }
       };
-
       const fail = (error: string) => {
         if (settled) return;
-        try {
-          taskStore.updateTaskStatus(taskId, "failed", error);
-          refreshReviewPackage(taskStore, taskId);
-        } finally {
-          finish();
-        }
+        try { failTask(taskId, requestId, agentStarted ? "running" : "starting_agent", agentStarted ? "AGENT_RUN_FAILED" : "AGENT_START_FAILED", error, true); }
+        finally { finish(); }
       };
 
       try {
-        const handle = runTask(
-          {
-            mimoNodePath: config.mimoNodePath,
-            mimoEntryPath: config.mimoEntryPath,
-            task: { ...task, config: taskConfig },
-            runtimeDir: config.runtimeDir,
-            timeoutMs: task.config.runtime_timeout_seconds * 1000,
-          },
-          complete,
-          fail
-        );
-
+        const latest = taskStore.getTask(taskId) ?? task;
+        const handle = runTask({
+          mimoNodePath: config.mimoNodePath,
+          mimoEntryPath: config.mimoEntryPath,
+          task: { ...latest, config: taskConfig },
+          runtimeDir: config.runtimeDir,
+          timeoutMs: latest.config.runtime_timeout_seconds * 1000,
+        }, complete, fail);
         if (!settled) {
-          runningTasks.register(taskId, () => {
-            handle.cancel();
-            finish();
-          });
+          agentStarted = true;
+          taskStore.updateTaskStatus(taskId, "running");
+          runningTasks.register(taskId, () => { handle.cancel(); finish(); });
         }
-      } catch (err) {
-        fail(err instanceof Error ? err.message : String(err));
+      } catch (error) {
+        fail(safeErrorMessage(error));
       }
     });
   }
@@ -164,54 +152,58 @@ export function createStartTaskHandler(
   return {
     schema: StartTaskSchema,
     handler: async (input: StartTaskInput) => {
+      const requestId = `req_${randomUUID()}`;
+      const idempotencyHash = input.idempotency_key ? sha256(input.idempotency_key) : undefined;
+      const requestFingerprint = sha256(stableStringify({ ...input, idempotency_key: undefined, agent_id: agentId }));
+
+      if (idempotencyHash) {
+        const existing = taskStore.findByIdempotencyHash(idempotencyHash);
+        if (existing) {
+          if (existing.request_fingerprint !== requestFingerprint) {
+            return { error: "idempotency_key 已用于不同的任务请求", code: "IDEMPOTENCY_CONFLICT", request_id: existing.request_id ?? requestId };
+          }
+          return {
+            task_id: existing.task_id,
+            request_id: existing.request_id,
+            status: existing.status,
+            queue_state: existing.queue_state ?? "none",
+            idempotent_replay: true,
+          };
+        }
+      }
+
       const workspaceValidation = validateWorkspacePath(input.workspace_path, config.allowedRoots);
       if (!workspaceValidation.allowed) {
-        return { error: workspaceValidation.reason };
+        const details = config.diagnostics ? {
+          config_file: config.diagnostics.configFile,
+          config_source: config.diagnostics.configSource,
+          config_loaded_at: config.diagnostics.loadedAt,
+          config_fingerprint: config.diagnostics.fingerprint,
+          reload_required: config.diagnostics.isReloadRequired?.() ?? config.diagnostics.reloadRequired,
+          normalized_workspace_path: workspaceValidation.normalizedPath,
+          allowed_roots_count: config.diagnostics.allowedRootsCount,
+          action_required: "add_allowed_root_then_restart",
+          restart_command: config.diagnostics.restartCommand,
+        } : { normalized_workspace_path: workspaceValidation.normalizedPath, allowed_roots_count: config.allowedRoots.length };
+        return { error: workspaceValidation.reason, code: "WORKSPACE_NOT_ALLOWED", request_id: requestId, details };
       }
-
-      const editableValidation = validateEditablePaths(input.editable_paths, input.workspace_path);
-      if (!editableValidation.allowed) {
-        return { error: editableValidation.reason };
-      }
-
+      const editableValidation = validateEditablePaths(input.editable_paths, workspaceValidation.normalizedPath ?? input.workspace_path);
+      if (!editableValidation.allowed) return { error: editableValidation.reason, code: "EDITABLE_PATH_INVALID", request_id: requestId };
       const maxRoundsValidation = validateMaxRounds(input.max_rounds);
-      if (!maxRoundsValidation.allowed) {
-        return { error: maxRoundsValidation.reason };
-      }
-
+      if (!maxRoundsValidation.allowed) return { error: maxRoundsValidation.reason, code: "MAX_ROUNDS_INVALID", request_id: requestId };
       const timeoutValidation = validateTimeout(input.runtime_timeout_seconds);
-      if (!timeoutValidation.allowed) {
-        return { error: timeoutValidation.reason };
-      }
+      if (!timeoutValidation.allowed) return { error: timeoutValidation.reason, code: "TIMEOUT_INVALID", request_id: requestId };
 
-      const scopeResult = computeTaskScope({
-        scope_mode: input.scope_mode,
-        include_tests: input.include_tests,
-        repo_wide_confirmed: input.repo_wide_confirmed,
-        editable_paths: input.editable_paths,
-        readonly_paths: input.readonly_paths,
-        workspace_path: input.workspace_path,
-        objective: input.objective,
-      });
-      if (!scopeResult.ok) {
-        return { error: scopeResult.error };
-      }
-
+      const normalizedWorkspace = workspaceValidation.normalizedPath ?? input.workspace_path;
+      const scopeResult = computeTaskScope({ ...input, workspace_path: normalizedWorkspace });
+      if (!scopeResult.ok) return { error: scopeResult.error, code: "SCOPE_INVALID", request_id: requestId };
       const hasImages = input.has_images || taskHasImageAttachment(input.attachments);
-      const routingResult = resolveRouting(agentKind, {
-        routing_mode: input.routing_mode,
-        task_scenario: input.task_scenario,
-        model: input.model,
-        reasoning_effort: input.reasoning_effort,
-        has_images: hasImages,
-      }, config.routingProfiles);
-      if (!routingResult.ok) {
-        return { error: routingResult.error };
-      }
+      const routingResult = resolveRouting(agentKind, { ...input, has_images: hasImages }, config.routingProfiles);
+      if (!routingResult.ok) return { error: routingResult.error, code: "ROUTING_INVALID", request_id: requestId };
 
       const task = taskStore.createTask({
         objective: input.objective,
-        workspace_path: input.workspace_path,
+        workspace_path: normalizedWorkspace,
         editable_paths: scopeResult.effective_config.editable_paths,
         readonly_paths: scopeResult.effective_config.readonly_paths,
         acceptance_criteria: input.acceptance_criteria,
@@ -223,106 +215,132 @@ export function createStartTaskHandler(
         origin_codex_thread_id: input.origin_codex_thread_id,
         origin_codex_thread_url: input.origin_codex_thread_url,
         origin_source: input.origin_source,
-      }, { agent: agentId });
+      }, {
+        agent: agentId,
+        status: "preparing_worktree",
+        request_id: requestId,
+        queue_state: "queued",
+        idempotency_key_hash: idempotencyHash,
+        request_fingerprint: requestFingerprint,
+      });
 
-      const attachmentResult = persistTaskAttachments(config.runtimeDir, task.task_id, input.attachments);
-      if (!attachmentResult.ok) {
-        taskStore.updateTaskStatus(task.task_id, "failed", attachmentResult.error);
-        return { error: attachmentResult.error };
-      }
-      task.config.attachments = attachmentResult.attachments;
-      taskStore.saveTask(task);
-
-      let worktreePath = input.workspace_path;
       let worktreeState: WorktreeState | null = null;
-      const gitManager = new GitWorktreeManager(input.workspace_path, config.runtimeDir);
-
-      if (input.use_worktree) {
-        if (!gitManager.isGitRepo()) {
-          taskStore.updateTaskStatus(task.task_id, "failed", "use_worktree=true 但工作区不是 Git 仓库");
-          return { error: "use_worktree=true 但工作区不是 Git 仓库" };
-        }
-
-        try {
-          const worktreeInfo = gitManager.createWorktree(task.task_id);
-          worktreePath = worktreeInfo.worktreePath;
-
-          worktreeState = {
-            repo_path: worktreeInfo.repoPath,
-            worktrees_root: worktreeInfo.worktreesRoot,
-            worktree_path: worktreeInfo.worktreePath,
-            branch_name: worktreeInfo.branchName,
-            base_commit: worktreeInfo.baseCommit,
-            base_branch: worktreeInfo.baseBranch,
-            diff_summary: null,
-            out_of_bounds_files: [],
-            has_out_of_bounds_changes: false,
-          };
-
-          taskStore.updateTaskWorktree(task.task_id, worktreeState);
-        } catch (err) {
-          taskStore.updateTaskStatus(task.task_id, "failed", `创建 Worktree 失败: ${err}`);
-          return { error: `创建 Worktree 失败: ${err}` };
-        }
-      }
-
-      const taskConfig = { ...task.config, workspace_path: worktreePath };
-      writeTaskBrief(taskConfig, task.task_id, task.current_round, `${config.runtimeDir}/briefs`);
-
+      let cancelled = false;
       const taskId = task.task_id;
       const editablePaths = scopeResult.effective_config.editable_paths;
-
+      const cleanupPreparedWorktree = () => {
+        if (!worktreeState) return;
+        try {
+          GitWorktreeManager.fromWorktreeState(worktreeState).discardWorktree(taskId, worktreeState.branch_name);
+          worktreeState = null;
+          taskStore.updateTaskWorktree(taskId, null);
+        } catch {
+          process.stderr.write(`[task:${taskId}] request_id=${requestId} phase=preparing_worktree code=WORKTREE_CLEANUP_FAILED\n`);
+        }
+      };
       const startedImmediately = taskQueue.enqueue({
         taskId,
         agentId,
-        workspacePath: input.workspace_path,
+        workspacePath: normalizedWorkspace,
         editablePaths,
         priority: input.priority,
         enqueuedAt: Date.now(),
+        requestId,
+        getStatus: () => taskStore.getTask(taskId)?.status,
         execute: async () => {
-          taskStore.updateTaskStatus(taskId, "running");
-          await executeTask(taskId, taskConfig, worktreeState, editablePaths);
+          await new Promise<void>((resolve) => setImmediate(resolve));
+          if (cancelled || taskStore.getTask(taskId)?.status === "cancelled") return;
+          taskStore.updateTaskQueueState(taskId, "active");
+          runningTasks.register(taskId, () => {
+            cancelled = true;
+            cleanupPreparedWorktree();
+            taskStore.updateTaskStatus(taskId, "cancelled");
+          });
+          try {
+            const attachmentResult = persistTaskAttachments(config.runtimeDir, taskId, input.attachments);
+            if (!attachmentResult.ok) throw new TaskPreparationError("ATTACHMENT_PERSIST_FAILED", attachmentResult.error);
+            const latest = taskStore.getTask(taskId);
+            if (!latest || cancelled) return;
+            latest.config.attachments = attachmentResult.attachments;
+            taskStore.saveTask(latest);
+
+            let worktreePath = normalizedWorkspace;
+            if (input.use_worktree) {
+              const gitManager = new GitWorktreeManager(normalizedWorkspace, config.runtimeDir);
+              if (!gitManager.isGitRepo()) throw new TaskPreparationError("NOT_A_GIT_REPOSITORY", "use_worktree=true 但工作区不是 Git 仓库");
+              const info = gitManager.createWorktree(taskId);
+              worktreePath = info.worktreePath;
+              worktreeState = {
+                repo_path: info.repoPath, worktrees_root: info.worktreesRoot, worktree_path: info.worktreePath,
+                branch_name: info.branchName, base_commit: info.baseCommit, base_branch: info.baseBranch,
+                diff_summary: null, out_of_bounds_files: [], has_out_of_bounds_changes: false,
+              };
+              taskStore.updateTaskWorktree(taskId, worktreeState);
+            }
+            if (cancelled) return;
+            const refreshed = taskStore.getTask(taskId);
+            if (!refreshed) return;
+            const taskConfig = { ...refreshed.config, workspace_path: worktreePath };
+            writeTaskBrief(taskConfig, taskId, refreshed.current_round, `${config.runtimeDir}/briefs`);
+            taskStore.updateTaskStatus(taskId, "starting_agent");
+            await new Promise<void>((resolve) => setImmediate(resolve));
+            if (!cancelled) await executeRunner(taskId, requestId, taskConfig, worktreeState, editablePaths);
+          } catch (error) {
+            const code = error instanceof TaskPreparationError ? error.code : "WORKTREE_PREPARATION_FAILED";
+            cleanupPreparedWorktree();
+            failTask(taskId, requestId, "preparing_worktree", code, error, code === "WORKTREE_PREPARATION_FAILED");
+          } finally {
+            if (taskStore.getTask(taskId)?.status !== "running") runningTasks.unregister(taskId);
+          }
         },
         cancel: () => {
-          if (worktreeState) {
-            const queuedWorktree = worktreeState;
-            const queuedGitManager = GitWorktreeManager.fromWorktreeState(queuedWorktree);
-            queuedGitManager.assertWorktreeState(taskId, queuedWorktree);
-            queuedGitManager.discardWorktree(taskId, queuedWorktree.branch_name);
-            taskStore.clearTaskWorktree(taskId);
-            worktreeState = null;
-          }
+          cancelled = true;
+          cleanupPreparedWorktree();
           taskStore.updateTaskStatus(taskId, "cancelled");
         },
       });
-
-      if (!startedImmediately) {
-        taskStore.updateTaskStatus(taskId, "queued");
-        return {
-          task_id: taskId,
-          status: "queued",
-          queue_position: taskQueue.size,
-        };
-      }
+      taskStore.updateTaskQueueState(taskId, startedImmediately ? "active" : "queued");
 
       return {
         task_id: taskId,
-        status: "running",
-        worktree_path: worktreePath,
+        request_id: requestId,
+        status: "preparing_worktree",
+        queue_state: startedImmediately ? "active" : "queued",
+        queue_position: startedImmediately ? 0 : taskQueue.size,
+        idempotent_replay: false,
       };
     },
-    cancelTask: (taskId: string) => {
-      if (taskQueue.cancel(taskId)) {
-        return true;
-      }
-      return runningTasks.cancel(taskId);
-    },
-    getQueueStatus: () => {
-      return {
-        running: runningTasks.size,
-        queued: taskQueue.size,
-        queue: taskQueue.getQueuedTasks(),
-      };
-    },
+    cancelTask: (taskId: string) => taskQueue.cancel(taskId) || runningTasks.cancel(taskId),
+    getQueueStatus: () => ({
+      capacity: taskQueue.capacity,
+      running: taskQueue.running,
+      queued: taskQueue.size,
+      active: taskQueue.getActiveTasks(),
+      queue: taskQueue.getQueuedTasks(),
+    }),
   };
+}
+
+class TaskPreparationError extends Error {
+  constructor(readonly code: string, message: string) { super(message); }
+}
+
+function sha256(value: string): string {
+  return createHash("sha256").update(value, "utf8").digest("hex");
+}
+
+function stableStringify(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(stableStringify).join(",")}]`;
+  if (value && typeof value === "object") {
+    return `{${Object.entries(value as Record<string, unknown>)
+      .filter(([, item]) => item !== undefined)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([key, item]) => `${JSON.stringify(key)}:${stableStringify(item)}`).join(",")}}`;
+  }
+  return JSON.stringify(value);
+}
+
+function safeErrorMessage(error: unknown): string {
+  const message = error instanceof Error ? error.message : String(error);
+  return message.replace(/[\r\n]+/g, " ").slice(0, 1000);
 }

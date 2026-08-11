@@ -82,7 +82,7 @@ test("agent_start_task runs Reasonix TUI one-shot task through Worktree review f
       runtime_timeout_seconds: 60,
     });
 
-    assert.strictEqual(started.status, "running");
+    assert.strictEqual(started.status, "preparing_worktree");
     assert.ok(started.task_id);
 
     for (let i = 0; i < 30; i++) {
@@ -208,7 +208,7 @@ test("agent_start_task auto routing can select Reasonix from scenario profile", 
       runtime_timeout_seconds: 60,
     });
 
-    assert.strictEqual(started.status, "running");
+    assert.strictEqual(started.status, "preparing_worktree");
     assert.ok(started.task_id);
     for (let i = 0; i < 30; i++) {
       const task = store.getTask(started.task_id);
@@ -293,7 +293,7 @@ test("agent_start_task auto-resumes Reasonix max_steps pause before failing", as
       runtime_timeout_seconds: 60,
     });
 
-    assert.strictEqual(started.status, "running");
+    assert.strictEqual(started.status, "preparing_worktree");
     for (let i = 0; i < 40; i++) {
       const task = store.getTask(started.task_id);
       if (task?.status === "review" || task?.status === "failed") {
@@ -421,7 +421,7 @@ test("agent_start_task records Reasonix token usage only when session exposes re
       runtime_timeout_seconds: 60,
     });
 
-    assert.strictEqual(started.status, "running");
+    assert.strictEqual(started.status, "preparing_worktree");
     for (let i = 0; i < 30; i++) {
       const task = store.getTask(started.task_id);
       if (task?.status === "review" || task?.status === "failed") {

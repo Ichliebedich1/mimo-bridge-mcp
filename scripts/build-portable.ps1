@@ -101,6 +101,13 @@ Copy-Item -LiteralPath (Join-Path $repoRoot "apps\local-daemon\start-production.
 Copy-Item -LiteralPath (Join-Path $repoRoot "apps\local-daemon\package.json") -Destination (Join-Path $appRoot "apps\local-daemon\package.json") -Force
 Copy-Item -LiteralPath (Join-Path $repoRoot "apps\local-daemon\README.md") -Destination (Join-Path $appRoot "apps\local-daemon\README.md") -Force
 Copy-Directory -Source (Join-Path $repoRoot "apps\admin-ui\dist") -Destination (Join-Path $appRoot "apps\admin-ui\dist")
+Copy-Item -LiteralPath (Join-Path $repoRoot "scripts\mimo-bridge-client.mjs") -Destination (Join-Path $packageRoot "mimo-bridge-client.mjs") -Force
+
+$clientCmd = @'
+@echo off
+"%~dp0node\node.exe" "%~dp0mimo-bridge-client.mjs" %*
+'@
+Write-Utf8NoBom -Path (Join-Path $packageRoot "MiMo Bridge Client.cmd") -Content $clientCmd
 
 $launcherCmd = @'
 @echo off
@@ -146,7 +153,9 @@ This is a portable application package for MiMo Bridge MCP.
    - port
 3. Run `Start MiMo Bridge.cmd` to start the local daemon and open the admin UI.
 4. Use `MiMo Bridge Launcher.cmd` for the interactive menu.
-5. Use `Stop MiMo Bridge.cmd` before moving or deleting the folder.
+5. Add a new project boundary explicitly with `MiMo Bridge Launcher.cmd allow-root --path "C:\path\to\project" --restart`.
+6. Use `MiMo Bridge Client.cmd health` or its `start`/`wait` commands for SDK-free scripted access.
+7. Use `Stop MiMo Bridge.cmd` before moving or deleting the folder.
 
 ## Data policy
 

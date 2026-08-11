@@ -237,7 +237,7 @@ function Get-ConfiguredPort {
         }
       }
     } catch {
-      Write-SetupLog "Could not read configured port from $($Paths.ConfigPath): $($_.Exception.Message)"
+      Write-SetupLog "Could not read configured port. errorType=$($_.Exception.GetType().Name)"
     }
   }
   return 3210
@@ -298,12 +298,12 @@ function Test-InstalledDaemonOwner {
   )
   foreach ($check in $checks) {
     if ($commandLine.IndexOf($check, [System.StringComparison]::OrdinalIgnoreCase) -lt 0) {
-      Write-SetupLog "Port owner is not a proven installed MiMo Bridge daemon. missing=$check pid=$($Owner.Pid) commandLine=$commandLine"
+      Write-SetupLog "Port owner is not a proven installed MiMo Bridge daemon. missing=$check pid=$($Owner.Pid)"
       return $false
     }
   }
 
-  Write-SetupLog "Port owner is a proven installed MiMo Bridge daemon. pid=$($Owner.Pid) commandLine=$commandLine"
+  Write-SetupLog "Port owner is a proven installed MiMo Bridge daemon. pid=$($Owner.Pid)"
   return $true
 }
 
@@ -367,7 +367,7 @@ function Assert-InstalledDaemonStopped {
   if (Test-Path -LiteralPath $Paths.StopCmd) {
     Write-SetupLog "Stopping installed daemon with $($Paths.StopCmd)"
     $stop = Invoke-LauncherCommand -Paths $Paths -Command "stop" -TimeoutMs 30000
-    Write-SetupLog "Stop command ran=$($stop.Ran) exit=$($stop.ExitCode) timedOut=$($stop.TimedOut) stdout=$($stop.Stdout) stderr=$($stop.Stderr)"
+    Write-SetupLog "Stop command ran=$($stop.Ran) exit=$($stop.ExitCode) timedOut=$($stop.TimedOut)"
     if ($stop.TimedOut) {
       throw "MiMo Bridge is still running and the installer could not stop it. Close MiMo Bridge, or reboot Windows, then run this installer again."
     }
@@ -427,7 +427,9 @@ function Test-StagedPayload {
     "app\apps\local-daemon\dist\apps\local-daemon\src\index.js",
     "app\apps\local-daemon\dist\apps\local-daemon\src\launcher-cli.js",
     "app\apps\local-daemon\launcher.ps1",
-    "app\apps\admin-ui\dist\index.html"
+    "app\apps\admin-ui\dist\index.html",
+    "mimo-bridge-client.mjs",
+    "MiMo Bridge Client.cmd"
   )
   foreach ($relativePath in $requiredFiles) {
     if (-not (Test-Path -LiteralPath (Join-Path $StageRoot $relativePath))) {
@@ -516,6 +518,8 @@ function Test-InstallerPayload {
       "app\apps\local-daemon\dist\apps\local-daemon\src\launcher-cli.js",
       "app\apps\local-daemon\launcher.ps1",
       "app\apps\admin-ui\dist\index.html",
+      "mimo-bridge-client.mjs",
+      "MiMo Bridge Client.cmd",
       "MiMo Bridge Launcher.cmd",
       "Start MiMo Bridge.cmd",
       "Stop MiMo Bridge.cmd",

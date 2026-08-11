@@ -43,6 +43,23 @@ export async function runLauncherCli(argv: string[] = process.argv.slice(2)): Pr
     return printResult(await controller.restart({ openUi: flags.open }), flags);
   }
 
+  if (command === "adopt") {
+    return printResult(await controller.adopt(), flags);
+  }
+
+  if (command === "allow-root") {
+    const pathIndex = argv.indexOf("--path");
+    const workspacePath = pathIndex >= 0 ? argv[pathIndex + 1] : undefined;
+    if (!workspacePath) {
+      console.error("allow-root 必须提供 --path <项目路径>");
+      return 1;
+    }
+    const updated = await controller.allowRoot(workspacePath);
+    if (!updated.ok || !argv.includes("--restart")) return printResult(updated, flags);
+    const restarted = await controller.restart({ openUi: flags.open });
+    return printResult(restarted, flags);
+  }
+
   if (command === "status") {
     return printStatus(await controller.status(), flags);
   }
@@ -284,6 +301,8 @@ function printHelp(): void {
   console.log("  launcher-cli.js start [--open] [--json]");
   console.log("  launcher-cli.js stop [--json]");
   console.log("  launcher-cli.js restart [--open] [--json]");
+  console.log("  launcher-cli.js adopt [--json]");
+  console.log("  launcher-cli.js allow-root --path <项目路径> [--restart] [--json]");
   console.log("  launcher-cli.js status [--json]");
   console.log("  launcher-cli.js logs [--lines 80] [--json]");
   console.log("  launcher-cli.js open");

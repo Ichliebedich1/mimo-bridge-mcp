@@ -227,7 +227,7 @@ function classifyTestResult(testResults: string): string {
 }
 
 function getRecommendation(task: TaskState, riskFlags: string[]): ReviewRecommendation {
-  if (task.status === "queued" || task.status === "running" || task.status === "waiting") return "wait";
+  if (["queued", "preparing_worktree", "starting_agent", "running", "waiting"].includes(task.status)) return "wait";
   if (riskFlags.includes("OUT_OF_BOUNDS_CHANGES") || riskFlags.includes("OUT_OF_SCOPE_CHANGES") || riskFlags.includes("TASK_FAILED") || riskFlags.includes("NON_ZERO_EXIT")) {
     return "reject";
   }

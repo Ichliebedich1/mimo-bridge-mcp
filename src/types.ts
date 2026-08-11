@@ -1,5 +1,7 @@
 export type TaskStatus =
   | "queued"
+  | "preparing_worktree"
+  | "starting_agent"
   | "running"
   | "waiting"
   | "review"
@@ -139,6 +141,22 @@ export interface TaskConfig {
 export interface TaskCreateOptions {
   agent?: string;
   session_id?: string | null;
+  status?: TaskStatus;
+  request_id?: string;
+  queue_state?: TaskQueueState;
+  idempotency_key_hash?: string;
+  request_fingerprint?: string;
+}
+
+export type TaskQueueState = "queued" | "active" | "none";
+
+export interface TaskErrorDetail {
+  code: string;
+  message: string;
+  phase: "validation" | "preparing_worktree" | "starting_agent" | "running" | "daemon";
+  request_id: string;
+  occurred_at: string;
+  retryable: boolean;
 }
 
 export interface WorktreeState {
@@ -207,6 +225,11 @@ export interface ReviewPackage {
 export interface TaskState {
   task_id: string;
   status: TaskStatus;
+  request_id?: string;
+  queue_state?: TaskQueueState;
+  phase_started_at?: string;
+  idempotency_key_hash?: string;
+  request_fingerprint?: string;
   agent: string;
   session_id: string | null;
   agent_session_path?: string | null;
@@ -222,6 +245,7 @@ export interface TaskState {
   raw_log_path: string;
   stderr_log_path: string;
   error: string | null;
+  error_detail?: TaskErrorDetail | null;
   exit_code: number | null;
   worktree: WorktreeState | null;
   review_package: ReviewPackage | null;
@@ -289,6 +313,7 @@ export interface StartTaskInput {
   origin_codex_thread_id?: string;
   origin_codex_thread_url?: string;
   origin_source?: string;
+  idempotency_key?: string;
 }
 
 export interface GetTaskInput {

@@ -48,7 +48,7 @@ const BASE_SCENARIOS: Record<TaskScenario, Omit<ScenarioRoutingProfile, "current
     description: "多模态/图片任务",
     supports_multimodal: true,
     recommended: {
-      mimo: { model: MIMO_BASE_MODEL, reasoning_effort: "medium", reason: "只有 MiMo V2.5 支持多模态输入" },
+      mimo: { model: MIMO_BASE_MODEL, reasoning_effort: "medium", reason: "MiMo Code 可通过多模态路由桥接图片输入" },
       "reasonix-tui": { model: "deepseek-v4-flash", reasoning_effort: "medium", reason: "Reasonix 当前不支持多模态，仅作为文本任务参考" },
     },
     default_current: { agent_id: "mimo", model: MIMO_BASE_MODEL, reasoning_effort: "medium" },
@@ -174,7 +174,7 @@ export function resolveRouting(
     return { ok: false, error: `未知任务场景: ${scenario}` };
   }
   if (scenario === "multimodal" && agentId !== "mimo") {
-    return { ok: false, error: "多模态任务只能使用 MiMo 的 mimo-v2.5 模型" };
+    return { ok: false, error: "多模态任务只能使用 MiMo Agent" };
   }
 
   const defaultSelection = getSelectionForAgent(agentId, scenario, profiles);
@@ -184,9 +184,6 @@ export function resolveRouting(
   const modelValidation = validateModelForAgent(agentId, model, profiles);
   if (!modelValidation.ok) {
     return modelValidation;
-  }
-  if (scenario === "multimodal" && !isMultimodalModel(model)) {
-    return { ok: false, error: "多模态任务必须使用 mimo-v2.5；mimo-v2.5-pro 和 mimo-v2.5-pro-ultraspeed 不支持多模态" };
   }
 
   const profile = getRoutingProfiles(profiles).scenarios[scenario];
@@ -252,7 +249,8 @@ export function canAgentHandleMultimodal(agent: AgentKind | RoutingAgentId): boo
 }
 
 export function isMultimodalModel(model: string): boolean {
-  return normalizeModelForAgent("mimo", model) === MIMO_BASE_MODEL;
+  const normalized = normalizeModelForAgent("mimo", model);
+  return MIMO_MODELS.includes(normalized as typeof MIMO_MODELS[number]) || normalized === MIMO_ULTRA_SPEED_MODEL;
 }
 
 export function reasoningEffortToMaxSteps(effort: ReasoningEffort): number {
@@ -289,7 +287,7 @@ function normalizeScenarioSelection(scenario: TaskScenario, input: unknown, conf
     : null;
   if (!agentId || !rawModel || !effort) return null;
   const model = normalizeModelForAgent(agentId, rawModel);
-  if (scenario === "multimodal" && (agentId !== "mimo" || !isMultimodalModel(model))) return null;
+  if (scenario === "multimodal" && agentId !== "mimo") return null;
   if (model === MIMO_ULTRA_SPEED_MODEL && !config?.enable_mimo_pro_ultra_speed) return null;
   if (!validateModelForAgent(agentId, model, config).ok) return null;
   return { agent_id: agentId, model, reasoning_effort: effort };

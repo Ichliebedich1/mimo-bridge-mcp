@@ -468,7 +468,8 @@ describe("concurrent start/reply with queue", () => {
     });
 
     assert.ok(result1.task_id);
-    assert.strictEqual(result1.status, "running");
+    assert.strictEqual(result1.status, "preparing_worktree");
+    assert.strictEqual(result1.queue_state, "active");
 
     const result2 = await handler.handler({
       objective: "第二个任务",
@@ -479,7 +480,8 @@ describe("concurrent start/reply with queue", () => {
     });
 
     assert.ok(result2.task_id);
-    assert.strictEqual(result2.status, "queued");
+    assert.strictEqual(result2.status, "preparing_worktree");
+    assert.strictEqual(result2.queue_state, "queued");
 
     runningTasks.cancelAll();
     taskQueue.cancelAll();
@@ -565,7 +567,8 @@ describe("concurrent start/reply with queue", () => {
       acceptance_criteria: [],
     });
 
-    assert.strictEqual(result2.status, "queued");
+    assert.strictEqual(result2.status, "preparing_worktree");
+    assert.strictEqual(result2.queue_state, "queued");
 
     const cancelModule = await import("../dist/tools/cancel-task.js");
     const cancelHandler = cancelModule.createCancelTaskHandler(store, { runningTasks, taskQueue });

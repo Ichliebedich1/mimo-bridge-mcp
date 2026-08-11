@@ -9,7 +9,9 @@ import {
   rmSync,
   statSync,
   writeFileSync,
+  realpathSync,
 } from "node:fs";
+import { createHash } from "node:crypto";
 import { createConnection } from "node:net";
 import { dirname, join, normalize, resolve } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
@@ -61,6 +63,7 @@ export interface ProcessInfo {
   pid: number;
   name?: string | null;
   commandLine?: string | null;
+  executablePath?: string | null;
 }
 
 export interface LauncherResult<T = unknown> {
@@ -189,6 +192,8 @@ export class LauncherController {
     ensureLauncherDirs(paths);
     const health = await this.checkHealth(portResolution.port);
     if (health.ok) {
+      const adopted = await this.adopt();
+      if (!adopted.ok) return adopted;
       if (options.openUi) {
         await this.openUi();
       }
@@ -211,34 +216,23 @@ export class LauncherController {
 
     const nodePath = resolveNodePath(this.deps.env);
     let child: SpawnedDaemon;
-    if (process.platform === "win32" && !this.deps.usesCustomSpawnDaemon) {
-      const launched = startDaemonWithPowerShell(paths, nodePath, this.deps.runPowerShell);
-      if (!launched.ok) {
-        return failResult("spawn_failed", "启动 daemon 进程失败：" + launched.error, launched.details);
-      }
-      child = { pid: launched.pid, unref: () => undefined };
-    } else {
-      const stdoutFd = openSync(paths.stdoutLogPath, "a");
-      const stderrFd = openSync(paths.stderrLogPath, "a");
-      try {
-        child = this.deps.spawnDaemon(nodePath, [paths.daemonEntryPath], {
-          cwd: paths.repoRoot,
-          detached: true,
-          stdio: ["ignore", stdoutFd, stderrFd],
-          env: {
-            ...this.deps.env,
-            MIMO_BRIDGE_LAUNCHED_BY: STATE_OWNER,
-          },
-          windowsHide: true,
-        });
-      } catch (error) {
-        closeIfNotStandardStream(stdoutFd);
-        closeIfNotStandardStream(stderrFd);
-        return failResult("spawn_failed", "启动 daemon 进程失败：" + stringifyError(error));
-      }
+    const stdoutFd = openSync(paths.stdoutLogPath, "a");
+    const stderrFd = openSync(paths.stderrLogPath, "a");
+    try {
+      child = this.deps.spawnDaemon(nodePath, [paths.daemonEntryPath], {
+        cwd: paths.repoRoot,
+        detached: true,
+        stdio: ["ignore", stdoutFd, stderrFd],
+        env: { ...this.deps.env, MIMO_BRIDGE_LAUNCHED_BY: STATE_OWNER },
+        windowsHide: true,
+      });
+    } catch (error) {
       closeIfNotStandardStream(stdoutFd);
       closeIfNotStandardStream(stderrFd);
+      return failResult("spawn_failed", "启动 daemon 进程失败：" + stringifyError(error));
     }
+    closeIfNotStandardStream(stdoutFd);
+    closeIfNotStandardStream(stderrFd);
 
     if (!child.pid || child.pid <= 0) {
       return failResult("spawn_failed", "启动 daemon 后没有拿到有效 PID。");
@@ -300,12 +294,21 @@ export class LauncherController {
     }
 
     const commandLine = await this.deps.readProcessCommandLine(state.pid);
-    if (!commandLine || !commandLineMatchesEntry(commandLine, state.daemonEntryPath)) {
+    if (!commandLine || !commandLineMatchesEntryStrict(commandLine, state.daemonEntryPath)) {
       return failResult(
         "ownership_check_failed",
         "PID " + state.pid + " 的命令行无法证明它是 MiMo Bridge daemon。为避免误杀进程，本次不停止它。",
         { pid: state.pid, commandLine }
       );
+    }
+
+    const health = await this.checkHealth(state.port);
+    if (health.ok) {
+      const owner = await this.deps.getPortProcessInfo(state.port);
+      const mismatch = verifyAdoptableIdentity(health.data, owner, state.nodePath, state.daemonEntryPath);
+      if (!owner || owner.pid !== state.pid || mismatch) {
+        return failResult("ownership_check_failed", "健康实例的严格身份与 launcher 状态不匹配，拒绝停止。", { pid: state.pid, reason: mismatch ?? "port owner PID 不匹配" });
+      }
     }
 
     if (!this.deps.killProcess(state.pid)) {
@@ -322,11 +325,59 @@ export class LauncherController {
   }
 
   async restart(options: StartOptions = {}): Promise<LauncherResult> {
-    const stopped = await this.stop({ waitMs: DEFAULT_STOP_TIMEOUT_MS });
+    let stopped = await this.stop({ waitMs: DEFAULT_STOP_TIMEOUT_MS });
+    if (!stopped.ok && stopped.status === "not_owned") {
+      const adopted = await this.adopt();
+      if (!adopted.ok) return adopted;
+      stopped = await this.stop({ waitMs: DEFAULT_STOP_TIMEOUT_MS });
+    }
     if (!stopped.ok && stopped.status !== "not_running") {
       return stopped;
     }
     return this.start(options);
+  }
+
+  async adopt(): Promise<LauncherResult> {
+    const paths = this.getPaths();
+    const portResolution = resolveLauncherPort(this.deps.env, paths.configPath);
+    if (portResolution.error) return failResult("config_error", portResolution.error);
+    const health = await this.checkHealth(portResolution.port);
+    if (!health.ok) return failResult("not_running", "没有可接管的健康 MiMo Bridge daemon。");
+    const owner = await this.deps.getPortProcessInfo(portResolution.port);
+    const nodePath = resolveNodePath(this.deps.env);
+    const mismatch = verifyAdoptableIdentity(health.data, owner, nodePath, paths.daemonEntryPath);
+    if (mismatch) {
+      return failResult("running_unmanaged", "运行中的实例身份与当前 launcher 不完全匹配，拒绝接管。", { reason: mismatch, pid: owner?.pid ?? null });
+    }
+    const state = createState(paths, owner!.pid, nodePath, portResolution.port, this.deps.now());
+    writeState(paths.statePath, state);
+    return { ok: true, status: "adopted", message: "已安全接管精确匹配的 MiMo Bridge daemon。", data: { pid: owner!.pid, port: portResolution.port } };
+  }
+
+  async allowRoot(workspacePath: string): Promise<LauncherResult> {
+    if (this.deps.env.MIMO_ALLOWED_ROOTS !== undefined) {
+      return failResult("environment_override", "MIMO_ALLOWED_ROOTS 环境变量正在覆盖配置文件，无法通过 launcher 修改。");
+    }
+    const loaded = this.readConfig();
+    if (loaded.error || !loaded.config) return failResult("config_error", loaded.error ?? "配置文件不存在，请先运行 configure。");
+    let normalized: string;
+    try {
+      normalized = realpathSync(resolve(workspacePath));
+      if (!statSync(normalized).isDirectory()) return failResult("invalid_root", "指定路径不是目录。");
+    } catch {
+      return failResult("invalid_root", "指定路径不存在或无法读取。");
+    }
+    const roots = [...(loaded.config.allowedRoots ?? [])];
+    const key = normalizeForCompare(normalized);
+    if (!roots.some((item) => normalizeForCompare(safeRealPath(item)) === key)) roots.push(normalized);
+    const result = this.writeConfig({ ...loaded.config, allowedRoots: roots });
+    if (!result.ok) return result;
+    return {
+      ok: true,
+      status: "allowed_root_added",
+      message: "已更新 allowedRoots；需要重启 daemon 后生效。",
+      data: { normalizedPath: normalized, allowedRootsCount: roots.length, restartCommand: "MiMo Bridge Launcher.cmd restart" },
+    };
   }
 
   async status(): Promise<LauncherResult<LauncherStatus>> {
@@ -337,12 +388,14 @@ export class LauncherController {
     const health = await this.checkHealth(port);
     const processAlive = state ? this.deps.isProcessAlive(state.pid) : false;
     const commandLine = state && processAlive ? await this.deps.readProcessCommandLine(state.pid) : null;
-    const ownerMatches = Boolean(state && commandLine && commandLineMatchesEntry(commandLine, state.daemonEntryPath));
     let portOwner: ProcessInfo | null = null;
     let status: LauncherStatus["state"];
 
     if (health.ok) {
-      status = state && ownerMatches ? "running" : "running_unmanaged";
+      portOwner = await this.deps.getPortProcessInfo(port);
+      const identityMismatch = verifyAdoptableIdentity(health.data, portOwner, resolveNodePath(this.deps.env), paths.daemonEntryPath);
+      const ownerMatches = Boolean(state && portOwner && state.pid === portOwner.pid && identityMismatch === null);
+      status = ownerMatches ? "running" : "running_unmanaged";
     } else if (state && processAlive) {
       status = "starting_or_unhealthy";
     } else if (await this.deps.isPortOpen(port, 500)) {
@@ -493,13 +546,13 @@ export class LauncherController {
     const deadline = Date.now() + timeoutMs;
     while (Date.now() < deadline) {
       if (!this.deps.isProcessAlive(state.pid)) {
-        return true;
+        // On Windows the PID can disappear just before cwd/log handles are fully
+        // released. Require a second observation so restart/upgrade callers do
+        // not race the process teardown tail.
+        await this.deps.sleep(100);
+        if (!this.deps.isProcessAlive(state.pid)) return true;
       }
-      const health = await this.checkHealth(state.port);
-      if (!health.ok) {
-        return true;
-      }
-      await this.deps.sleep(300);
+      await this.deps.sleep(100);
     }
     return !this.deps.isProcessAlive(state.pid);
   }
@@ -583,6 +636,31 @@ export function commandLineMatchesEntry(commandLine: string, entryPath: string):
   const entryParts = normalizedEntry.split(/\\+/).filter(Boolean);
   const stableEntryTail = entryParts.slice(-7).join("\\");
   return stableEntryTail.length > 0 && normalizedCommand.includes(stableEntryTail);
+}
+
+function verifyAdoptableIdentity(healthData: unknown, owner: ProcessInfo | null, nodePath: string, entryPath: string): string | null {
+  if (!owner) return "无法确定 localhost 监听端口的进程";
+  if (!owner.executablePath) return "无法读取监听进程的 executable";
+  if (normalizeForCompare(safeRealPath(owner.executablePath)) !== normalizeForCompare(safeRealPath(nodePath))) return "executable 不匹配";
+  if (!owner.commandLine || !commandLineMatchesEntryStrict(owner.commandLine, entryPath)) return "daemon entry 不匹配";
+  if (!isRecord(healthData) || healthData.ok !== true || !isRecord(healthData.data) || !isRecord(healthData.data.daemon)) return "健康身份响应无效";
+  const daemon = healthData.data.daemon;
+  if (daemon.identity !== "mimo-bridge-local-daemon/v1") return "健康身份不匹配";
+  if (daemon.executable_fingerprint !== pathFingerprint(nodePath)) return "健康 executable 指纹不匹配";
+  if (daemon.entry_fingerprint !== pathFingerprint(entryPath)) return "健康 daemon entry 指纹不匹配";
+  return null;
+}
+
+function commandLineMatchesEntryStrict(commandLine: string, entryPath: string): boolean {
+  return normalizeForCompare(commandLine).includes(normalizeForCompare(safeRealPath(entryPath)));
+}
+
+function pathFingerprint(value: string): string {
+  return createHash("sha256").update(resolve(value).toLowerCase(), "utf8").digest("hex");
+}
+
+function safeRealPath(value: string): string {
+  try { return realpathSync(resolve(value)); } catch { return resolve(value); }
 }
 
 export function readState(statePath: string): LauncherState | null {
@@ -781,7 +859,7 @@ async function defaultGetPortProcessInfo(port: number, runPowerShell: (script: s
     "$c = Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue | Select-Object -First 1\n" +
     "if ($null -eq $c) { exit 0 }\n" +
     "$p = Get-CimInstance Win32_Process -Filter ('ProcessId=' + $c.OwningProcess)\n" +
-    "[pscustomobject]@{ pid = [int]$c.OwningProcess; name = $p.Name; commandLine = $p.CommandLine } | ConvertTo-Json -Compress\n";
+    "[pscustomobject]@{ pid = [int]$c.OwningProcess; name = $p.Name; commandLine = $p.CommandLine; executablePath = $p.ExecutablePath } | ConvertTo-Json -Compress\n";
   const result = runPowerShell(script, 10_000);
   if (result.status !== 0 || result.stdout.trim().length === 0) {
     return null;
@@ -793,6 +871,7 @@ async function defaultGetPortProcessInfo(port: number, runPowerShell: (script: s
         pid: parsed.pid,
         name: typeof parsed.name === "string" ? parsed.name : null,
         commandLine: typeof parsed.commandLine === "string" ? parsed.commandLine : null,
+        executablePath: typeof parsed.executablePath === "string" ? parsed.executablePath : null,
       };
     }
   } catch {

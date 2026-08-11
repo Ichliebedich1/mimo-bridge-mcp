@@ -10,6 +10,16 @@ export interface Config {
   runtimeDir: string;
   agents: AgentConfig[];
   routingProfiles?: RoutingProfilesConfig;
+  diagnostics?: {
+    configFile: string;
+    configSource: "file" | "environment" | "mixed";
+    loadedAt: string;
+    fingerprint: string;
+    allowedRootsCount: number;
+    reloadRequired: boolean;
+    isReloadRequired?: () => boolean;
+    restartCommand: string;
+  };
 }
 
 export interface MimoVersion {

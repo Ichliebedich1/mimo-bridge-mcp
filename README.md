@@ -1,5 +1,7 @@
 # AgentBridge Local
 
+English | [简体中文](README_zh-CN.md)
+
 > Formerly **MiMo Bridge MCP**.
 
 **AgentBridge Local is a local-first MCP orchestration console that lets Codex coordinate MiMo Code, Reasonix TUI, and future local coding agents without giving up review control.**
@@ -39,6 +41,7 @@ That means Codex can stay in the expensive, high-leverage seat: planning, bounda
 - **MiMo Code execution** through legacy `mimo_*` tools and the shared task queue.
 - **Reasonix TUI execution** through generic `agent_*` tools.
 - **Agent-aware task queue** that can run MiMo and Reasonix in parallel when their editable paths do not overlap.
+- **Durable P0 task admission** with a persisted placeholder, request correlation, idempotent retries, and an eight-task concurrency ceiling.
 - **Git Worktree isolation** for task changes.
 - **Dynamic task scope** with per-task editable/read-only boundaries.
 - **Low-token Review Package protocol** for Codex review.
@@ -126,8 +129,12 @@ powershell -ExecutionPolicy Bypass -File apps/local-daemon/launcher.ps1 status
 powershell -ExecutionPolicy Bypass -File apps/local-daemon/launcher.ps1 start -Open
 powershell -ExecutionPolicy Bypass -File apps/local-daemon/launcher.ps1 stop
 powershell -ExecutionPolicy Bypass -File apps/local-daemon/launcher.ps1 restart -Open
+powershell -ExecutionPolicy Bypass -File apps/local-daemon/launcher.ps1 adopt
+powershell -ExecutionPolicy Bypass -File apps/local-daemon/launcher.ps1 allow-root -Path "C:\path\to\project" -Restart
 powershell -ExecutionPolicy Bypass -File apps/local-daemon/launcher.ps1 logs
 ```
+
+`allowedRoots` is a machine-level boundary and is never expanded by a task. The `allow-root` command resolves and validates the directory, de-duplicates it case-insensitively, writes the active config, and optionally performs a safe restart. `adopt` succeeds only when the localhost port owner, Node executable, daemon entry, and health identity all match exactly.
 
 ## MCP Endpoint
 
@@ -143,6 +150,20 @@ Then ask Codex to start with a bounded task, for example:
 Use AgentBridge Local. Ask MiMo or Reasonix to update only docs/example.md.
 Review the result through the Review Package first, then merge only if the scope and tests are clean.
 ```
+
+`mimo_start_task` and `agent_start_task` persist and return a placeholder before Worktree creation. A successful new request returns `task_id`, `request_id`, `status="preparing_worktree"`, `queue_state`, and `idempotent_replay`. Clients should send `idempotency_key` and reuse it after a timeout; the same key with different parameters is rejected.
+
+Task startup progresses through `preparing_worktree -> starting_agent -> running`. A phase failure stores a structured `error_detail` with its `request_id`, while the legacy string `error` remains available for compatibility.
+
+The release-safe client uses only Node built-in modules and REST, so it does not require this source tree's `node_modules` or the MCP SDK:
+
+```powershell
+node scripts/mimo-bridge-client.mjs health
+node scripts/mimo-bridge-client.mjs start --json .\task.json --idempotency-key my-stable-key
+node scripts/mimo-bridge-client.mjs wait --task-id task_xxx --timeout-seconds 1800
+```
+
+Portable and installed distributions provide the same entry as `MiMo Bridge Client.cmd` and run it with the bundled Node runtime.
 
 ## First Task Flow
 
@@ -181,7 +202,7 @@ flowchart TD
 
 | Agent | Status | Notes |
 | --- | --- | --- |
-| MiMo Code | Supported | Main Windows-first coding executor. Supports multimodal through MiMo flash routing. |
+| MiMo Code | Supported | Main Windows-first coding executor. Any enabled MiMo Code model may handle image tasks through MiMo Code's multimodal bridge routing. |
 | Reasonix TUI | Supported | Runs through generic `agent_*` tools and shared Worktree/review flow. |
 | Reasonix GUI | Companion only | Can be opened from the Admin UI, but direct deep-link to a specific session is not guaranteed. |
 | Future agents | Planned | The generic Agent Registry is designed for more local runners. |
@@ -193,6 +214,7 @@ AgentBridge Local intentionally keeps a narrow safety boundary:
 - The daemon binds to localhost only.
 - Tasks run in Git Worktrees.
 - Machine-level `allowedRoots` limit which folders can be touched.
+- Health and workspace-boundary errors expose only the active config metadata, a redacted fingerprint, counts, and the requested normalized path; they never enumerate other allowed roots.
 - Each task records its own editable/read-only scope snapshot.
 - Out-of-scope changes appear in Review Package risk flags.
 - Browser open actions are fixed actions, not arbitrary command execution.

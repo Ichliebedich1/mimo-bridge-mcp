@@ -21,7 +21,7 @@ The browser never directly reads `runtime/tasks`, raw logs, or Worktree files, a
 
 ## Run in development
 
-    cd "C:\Users\86172\Desktop\MiMo Code project\Agent 协作项目\mimo-bridge-mcp\apps\admin-ui"
+    cd "<repository>\apps\admin-ui"
     npm.cmd install
     npm.cmd run dev
 

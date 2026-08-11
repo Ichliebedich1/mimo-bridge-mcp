@@ -1,6 +1,6 @@
 param(
   [Parameter(Position = 0)]
-  [ValidateSet("menu", "start", "stop", "restart", "status", "logs", "open", "configure", "shortcut", "autostart", "mcp-info", "help")]
+  [ValidateSet("menu", "start", "stop", "restart", "adopt", "allow-root", "status", "logs", "open", "configure", "shortcut", "autostart", "mcp-info", "help")]
   [string]$Command = "menu",
 
   [Parameter(Position = 1)]
@@ -8,6 +8,8 @@ param(
 
   [switch]$Open,
   [switch]$Json,
+  [string]$Path = "",
+  [switch]$Restart,
   [int]$Lines = 80
 )
 
@@ -29,6 +31,13 @@ if (-not $nodePath) {
 $argsList = @($Command)
 if ($Command -eq "autostart" -and $SubCommand) {
   $argsList += $SubCommand
+}
+if ($Command -eq "allow-root" -and $Path) {
+  $argsList += "--path"
+  $argsList += $Path
+}
+if ($Restart) {
+  $argsList += "--restart"
 }
 if ($Open) {
   $argsList += "--open"

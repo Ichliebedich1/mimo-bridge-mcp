@@ -2,6 +2,9 @@ import { describe, it, beforeEach, after } from "node:test";
 import assert from "node:assert";
 import { existsSync, mkdirSync, rmSync, writeFileSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
+import { resolve } from "node:path";
+import { createHash } from "node:crypto";
+import { createServer } from "node:http";
 import {
   LauncherController,
   getLauncherDataDir,
@@ -29,7 +32,8 @@ describe("launcher-controller", () => {
     const controller = new LauncherController({
       paths,
       dependencies: {
-        fetchHealth: async () => healthOk(3210),
+        fetchHealth: async () => healthOk(3210, paths),
+        getPortProcessInfo: async () => processInfo(paths, 777),
         isPortOpen: async () => false,
         spawnDaemon: () => {
           spawnCalls += 1;
@@ -44,6 +48,45 @@ describe("launcher-controller", () => {
     assert.strictEqual(result.ok, true);
     assert.strictEqual(result.status, "already_running");
     assert.strictEqual(spawnCalls, 0);
+  });
+
+  it("adopts only an exact executable, daemon entry, port owner, and health identity match", async () => {
+    const paths = makePaths("adopt-strict");
+    const cases = [
+      { name: "executable", owner: { ...processInfo(paths, 701), executablePath: join(testDir, "other-node.exe") }, health: healthOk(3210, paths) },
+      { name: "entry", owner: { ...processInfo(paths, 702), commandLine: `"${process.execPath}" "C:\\other\\index.js"` }, health: healthOk(3210, paths) },
+      { name: "identity", owner: processInfo(paths, 703), health: { ...healthOk(3210, paths), data: { ok: true, data: { daemon: { status: "ok", identity: "other" }, security: { localhost_only: true } } } } },
+    ];
+    for (const item of cases) {
+      const controller = new LauncherController({
+        paths,
+        dependencies: { fetchHealth: async () => item.health, getPortProcessInfo: async () => item.owner },
+      });
+      const result = await controller.adopt();
+      assert.strictEqual(result.ok, false, item.name);
+      assert.strictEqual(result.status, "running_unmanaged", item.name);
+      assert.strictEqual(existsSync(paths.statePath), false, item.name);
+    }
+  });
+
+  it("adds and de-duplicates an explicit allowed root", async () => {
+    const paths = makePaths("allow-root");
+    const allowedRoot = join(testDir, "新设备 项目");
+    mkdirSync(allowedRoot, { recursive: true });
+    const controller = new LauncherController({ paths, dependencies: { env: {} } });
+    const initial = {
+      mimoNodePath: process.execPath,
+      mimoEntryPath: paths.daemonEntryPath,
+      allowedRoots: [paths.repoRoot],
+      runtimeDir: join(paths.dataDir, "runtime"),
+      port: 3210,
+    };
+    assert.strictEqual(controller.writeConfig(initial).ok, true);
+    assert.strictEqual((await controller.allowRoot(allowedRoot)).ok, true);
+    assert.strictEqual((await controller.allowRoot(allowedRoot)).ok, true);
+    const saved = JSON.parse(readFileSync(paths.configPath, "utf8"));
+    assert.strictEqual(saved.allowedRoots.length, 2);
+    assert.strictEqual(saved.allowedRoots[1], allowedRoot);
   });
 
   it("reports a port conflict before spawning", async () => {
@@ -107,23 +150,22 @@ describe("launcher-controller", () => {
     assert.strictEqual(state.daemonEntryPath, paths.daemonEntryPath);
   });
 
-  it("starts through PowerShell with a quoted daemon path on Windows", async () => {
+  it("starts on Windows with detached stdio and does not use PowerShell Start-Process", async () => {
     if (process.platform !== "win32") {
       return;
     }
     const paths = makePaths("start-powershell path with spaces");
     const health = [healthDown(3210), healthOk(3210)];
-    let scriptText = "";
+    let spawnOptions;
     const controller = new LauncherController({
       paths,
       dependencies: {
         sleep: async () => undefined,
         fetchHealth: async () => health.shift() ?? healthOk(3210),
         isPortOpen: async () => false,
-        runPowerShell: (script, timeoutMs) => {
-          scriptText = script;
-          assert.strictEqual(timeoutMs, 60_000);
-          return { status: 0, stdout: "24680\n", stderr: "" };
+        spawnDaemon: (_nodePath, _args, options) => {
+          spawnOptions = options;
+          return { pid: 24680, unref: () => undefined };
         },
       },
     });
@@ -133,10 +175,51 @@ describe("launcher-controller", () => {
 
     assert.strictEqual(result.ok, true);
     assert.strictEqual(result.status, "started");
-    assert.ok(scriptText.includes("Start-Process"));
-    assert.ok(scriptText.includes("$entryArg = '\"' + $entryPath + '\"'"));
+    assert.strictEqual(spawnOptions.detached, true);
+    assert.strictEqual(spawnOptions.stdio[0], "ignore");
+    assert.strictEqual(spawnOptions.windowsHide, true);
     assert.ok(state);
     assert.strictEqual(state.pid, 24680);
+  });
+
+  it("real detached start returns after health while the daemon remains alive", async () => {
+    const paths = makePaths("real-detached");
+    const port = await reservePort();
+    writeFileSync(paths.configPath, JSON.stringify({ port }));
+    writeFileSync(paths.daemonEntryPath, `
+      import { createServer } from "node:http";
+      import { createHash } from "node:crypto";
+      import { resolve } from "node:path";
+      const fp = (v) => createHash("sha256").update(resolve(v).toLowerCase(), "utf8").digest("hex");
+      const server = createServer((_req, res) => {
+        res.writeHead(200, { "content-type": "application/json" });
+        res.end(JSON.stringify({ ok: true, data: { daemon: { status: "ok", identity: "mimo-bridge-local-daemon/v1", executable_fingerprint: fp(process.execPath), entry_fingerprint: fp(process.argv[1]) }, security: { localhost_only: true } } }));
+      });
+      server.listen(${port}, "127.0.0.1");
+      process.on("SIGTERM", () => server.close(() => process.exit(0)));
+    `);
+    let ownedPid = 0;
+    const controller = new LauncherController({
+      paths,
+      dependencies: {
+        env: { ...process.env, MIMO_BRIDGE_NODE_PATH: process.execPath },
+        getPortProcessInfo: async () => processInfo(paths, ownedPid),
+        readProcessCommandLine: async () => `"${process.execPath}" "${paths.daemonEntryPath}"`,
+        killProcess: (pid) => { try { process.kill(pid); return true; } catch { return false; } },
+      },
+    });
+    try {
+      const startedAt = Date.now();
+      const result = await controller.start({ waitMs: 5000 });
+      const state = readState(paths.statePath);
+      ownedPid = state?.pid ?? 0;
+      assert.strictEqual(result.ok, true);
+      assert.ok(Date.now() - startedAt < 7000);
+      assert.strictEqual(await isListening(port), true);
+      assert.strictEqual((await controller.stop({ waitMs: 5000 })).ok, true);
+    } finally {
+      if (ownedPid) { try { process.kill(ownedPid); } catch { /* already stopped */ } }
+    }
   });
 
   it("refuses to stop a healthy daemon without launcher ownership state", async () => {
@@ -145,7 +228,8 @@ describe("launcher-controller", () => {
     const controller = new LauncherController({
       paths,
       dependencies: {
-        fetchHealth: async () => healthOk(3210),
+        fetchHealth: async () => healthOk(3210, paths),
+        getPortProcessInfo: async () => processInfo(paths, 333),
         killProcess: () => {
           killCalls += 1;
           return true;
@@ -193,7 +277,8 @@ describe("launcher-controller", () => {
       paths,
       dependencies: {
         sleep: async () => undefined,
-        fetchHealth: async () => healthOk(3210),
+        fetchHealth: async () => healthOk(3210, paths),
+        getPortProcessInfo: async () => processInfo(paths, 333),
         isProcessAlive: () => alive,
         readProcessCommandLine: async () => "node \"" + paths.daemonEntryPath + "\"",
         killProcess: () => {
@@ -314,17 +399,35 @@ function writeLauncherState(paths, pid) {
   });
 }
 
-function healthOk(port) {
+function healthOk(port, paths) {
   return {
     ok: true,
     url: "http://127.0.0.1:" + port + "/api/health",
     data: {
       ok: true,
       data: {
-        daemon: { status: "ok" },
+        daemon: {
+          status: "ok",
+          identity: "mimo-bridge-local-daemon/v1",
+          executable_fingerprint: paths ? fingerprint(process.execPath) : undefined,
+          entry_fingerprint: paths ? fingerprint(paths.daemonEntryPath) : undefined,
+        },
         security: { localhost_only: true },
       },
     },
+  };
+}
+
+function fingerprint(value) {
+  return createHash("sha256").update(resolve(value).toLowerCase(), "utf8").digest("hex");
+}
+
+function processInfo(paths, pid) {
+  return {
+    pid,
+    name: "node.exe",
+    executablePath: process.execPath,
+    commandLine: `"${process.execPath}" "${paths.daemonEntryPath}"`,
   };
 }
 
@@ -334,4 +437,18 @@ function healthDown(port) {
     url: "http://127.0.0.1:" + port + "/api/health",
     error: "ECONNREFUSED",
   };
+}
+
+function reservePort() {
+  return new Promise((resolvePort) => {
+    const server = createServer();
+    server.listen(0, "127.0.0.1", () => {
+      const port = server.address().port;
+      server.close(() => resolvePort(port));
+    });
+  });
+}
+
+function isListening(port) {
+  return fetch(`http://127.0.0.1:${port}/api/health`).then((response) => response.ok).catch(() => false);
 }

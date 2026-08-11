@@ -19,6 +19,7 @@ export type ApiResult<T> =
 export type HealthResponse = {
   daemon: {
     status: string;
+    identity?: string;
     host?: string;
     port?: number;
     degraded: boolean;
@@ -34,6 +35,13 @@ export type HealthResponse = {
     version: unknown;
   };
   queue: QueueStatusResponse;
+  config?: {
+    loaded_at: string;
+    fingerprint: string;
+    allowed_roots_count: number;
+    reload_required: boolean;
+    restart_command: string;
+  };
   pending_reviews?: {
     count: number;
     command: string;
@@ -50,9 +58,11 @@ export type HealthResponse = {
 };
 
 export type QueueStatusResponse = {
+  capacity?: number;
   running: number;
   queued: number;
-  queue: Array<{ taskId: string; agentId?: string; priority: number; enqueuedAt: number }>;
+  active?: Array<{ taskId: string; agentId?: string; priority: number; enqueuedAt: number; requestId?: string; status?: string }>;
+  queue: Array<{ taskId: string; agentId?: string; priority: number; enqueuedAt: number; requestId?: string; status?: string; queuePosition?: number }>;
 };
 
 export type AgentStatusResponse = {
@@ -330,11 +340,12 @@ export async function selectWorkspaceFolder(): Promise<WorkspaceFolderSelectResp
 }
 
 export async function createTask(input: CreateTaskInput): Promise<TaskActionResult> {
-  const { agent_id: agentId, ...taskInput } = input;
+  const requestInput = { ...input, idempotency_key: input.idempotency_key || crypto.randomUUID() };
+  const { agent_id: agentId, ...taskInput } = requestInput;
   if (!agentId || agentId === 'mimo') {
     return unwrap(await postJson<TaskActionResult>('/api/tasks', taskInput));
   }
-  return unwrap(await postJson<TaskActionResult>('/api/agent-tasks', input));
+  return unwrap(await postJson<TaskActionResult>('/api/agent-tasks', requestInput));
 }
 
 export async function replyTask(

@@ -59,3 +59,23 @@
 
 - Decision: Reasonix integration should aim for the same Bridge workflow as MiMo: start task, wait once, review package first, focused escalation, Codex-controlled merge/discard, live viewer output, safe deletion, and admin UI visibility.
 - Reason: the user wants Reasonix to become a peer execution agent, not a limited side integration.
+
+## 2026-08-12: Task Admission Must Be Durable And Fast
+
+- Decision: validate and persist a `preparing_worktree` placeholder before starting attachments, Worktree, brief, or model work; correlate the full lifecycle with `request_id` and client `idempotency_key`.
+- Reason: client timeouts must not produce duplicate tasks, and slow Git/model startup must not block task creation beyond the five-second admission contract.
+
+## 2026-08-12: Allowed Roots Never Follow Task Input
+
+- Decision: keep `allowedRoots` as an explicit local machine boundary; add roots only through the launcher command and restart, while health/errors expose fingerprints and counts rather than other root values.
+- Reason: automatically trusting each requested workspace would turn a task parameter into an unconfirmed privilege expansion and leak local filesystem structure.
+
+## 2026-08-12: Parallel Capacity Is Eight With Conflict Serialization
+
+- Decision: the shared queue may run eight tasks only when their normalized editable scopes are known and non-overlapping; overlapping or unknown scopes remain serialized.
+- Reason: the user may run up to eight MiMo instances, but write isolation remains more important than filling every slot.
+
+## 2026-08-12: Multimodal Is A MiMo Agent Capability
+
+- Decision: image tasks remain restricted to MiMo Agent, but may use any enabled MiMo Code model instead of being rewritten to MiMo V2.5.
+- Reason: MiMo Code now supplies a multimodal bridge route for models without native image input; Reasonix remains text-only in this integration.

@@ -29,7 +29,7 @@ export function createCancelTaskHandler(
         return { error: `任务不存在: ${input.task_id}` };
       }
 
-      if (task.status !== "running" && task.status !== "waiting" && task.status !== "queued") {
+      if (!["preparing_worktree", "starting_agent", "running", "waiting", "queued"].includes(task.status)) {
         return { error: `任务状态不允许取消: ${task.status}` };
       }
 

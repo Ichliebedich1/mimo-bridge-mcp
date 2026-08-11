@@ -230,12 +230,15 @@ test("mimo_start_task completion audits the saved runtime worktree", async () =>
       runtime_timeout_seconds: 60,
       use_worktree: true,
     });
-    assert.strictEqual(started.status, "running");
-    assert.strictEqual(runnerWorkspace, started.worktree_path);
+    assert.strictEqual(started.status, "preparing_worktree");
+    for (let i = 0; i < 50 && !runnerWorkspace; i++) await new Promise((resolveWait) => setTimeout(resolveWait, 20));
+    const prepared = taskStore.getTask(started.task_id);
+    assert.ok(prepared?.worktree);
+    assert.strictEqual(runnerWorkspace, prepared.worktree.worktree_path);
 
-    writeFileSync(join(started.worktree_path, "outside.txt"), "committed outside\n");
-    execFileSync("git", ["add", "outside.txt"], { cwd: started.worktree_path });
-    execFileSync("git", ["commit", "-m", "outside change"], { cwd: started.worktree_path });
+    writeFileSync(join(prepared.worktree.worktree_path, "outside.txt"), "committed outside\n");
+    execFileSync("git", ["add", "outside.txt"], { cwd: prepared.worktree.worktree_path });
+    execFileSync("git", ["commit", "-m", "outside change"], { cwd: prepared.worktree.worktree_path });
 
     completeTask({
       task_id: started.task_id,

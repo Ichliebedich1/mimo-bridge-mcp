@@ -22,6 +22,8 @@ import { createAgentMergeTaskHandler } from "../../../src/tools/agent-merge-task
 import { createAgentDeleteTaskHandler } from "../../../src/tools/agent-delete-task.js";
 import { createAgentQueueStatusHandler } from "../../../src/tools/agent-queue-status.js";
 import { createAgentListTasksHandler } from "../../../src/tools/agent-list-tasks.js";
+import { TaskQueue } from "../../../src/services/task-queue.js";
+import { RunningTaskRegistry } from "../../../src/services/running-tasks.js";
 import type { DaemonConfig } from "./daemon-config.js";
 
 type UnavailableHandler = {
@@ -62,6 +64,9 @@ export interface ToolContext {
 
 export function createToolContext(config: DaemonConfig): ToolContext {
   const taskStore = new TaskStore(config.runtimeDir);
+  taskStore.reconcileInterruptedTasks();
+  const taskQueue = new TaskQueue(8);
+  const runningTasks = new RunningTaskRegistry();
   const getTask = createGetTaskHandler(taskStore);
   const waitTask = createWaitTaskHandler(taskStore);
   const pendingReviews = createPendingReviewsHandler(taskStore);
@@ -73,7 +78,7 @@ export function createToolContext(config: DaemonConfig): ToolContext {
   const agentList = createAgentListHandler(agentRegistry);
   const agentGetTask = createAgentGetTaskHandler(taskStore);
   const agentWaitTask = createAgentWaitTaskHandler(taskStore);
-  const cancelTask = createCancelTaskHandler(taskStore);
+  const cancelTask = createCancelTaskHandler(taskStore, { taskQueue, runningTasks });
   const finishTask = createFinishTaskHandler(taskStore);
   const listTasks = createListTasksHandler(taskStore);
   const mergeTask = createMergeTaskHandler(taskStore, { runtimeDir: config.runtimeDir });
@@ -81,7 +86,8 @@ export function createToolContext(config: DaemonConfig): ToolContext {
   const deleteTask = createDeleteTaskHandler(taskStore);
 
   const unavailable = createUnavailableHandler(config.configError ?? "MiMo configuration is unavailable.");
-  const startTask = config.mcpConfig ? createStartTaskHandler(config.mcpConfig, taskStore) : unavailable;
+  const sharedDependencies = { taskQueue, runningTasks };
+  const startTask = config.mcpConfig ? createStartTaskHandler(config.mcpConfig, taskStore, sharedDependencies) : unavailable;
   const agentQueueStatus = createAgentQueueStatusHandler({
     getQueueStatus: () => ("getQueueStatus" in startTask ? startTask.getQueueStatus() : { running: 0, queued: 0, queue: [] }),
   });
@@ -92,11 +98,11 @@ export function createToolContext(config: DaemonConfig): ToolContext {
     configError: config.configError,
     tools: {
       startTask,
-      agentStartTask: config.mcpConfig ? createAgentStartTaskHandler(config.mcpConfig, config.agents, taskStore) : unavailable,
-      agentReplyTask: config.mcpConfig ? createAgentReplyTaskHandler(config.mcpConfig, config.agents, taskStore) : unavailable,
+      agentStartTask: config.mcpConfig ? createAgentStartTaskHandler(config.mcpConfig, config.agents, taskStore, sharedDependencies) : unavailable,
+      agentReplyTask: config.mcpConfig ? createAgentReplyTaskHandler(config.mcpConfig, config.agents, taskStore, sharedDependencies) : unavailable,
       agentGetTask,
       agentWaitTask,
-      agentCancelTask: createAgentCancelTaskHandler(taskStore),
+      agentCancelTask: createAgentCancelTaskHandler(taskStore, sharedDependencies),
       agentFinishTask: createAgentFinishTaskHandler(taskStore),
       agentMergeTask: createAgentMergeTaskHandler(taskStore, { runtimeDir: config.runtimeDir }),
       agentDeleteTask: createAgentDeleteTaskHandler(taskStore),
@@ -107,7 +113,7 @@ export function createToolContext(config: DaemonConfig): ToolContext {
       waitTask,
       pendingReviews,
       agentList,
-      replyTask: config.mcpConfig ? createReplyTaskHandler(config.mcpConfig, taskStore) : unavailable,
+      replyTask: config.mcpConfig ? createReplyTaskHandler(config.mcpConfig, taskStore, sharedDependencies) : unavailable,
       cancelTask,
       finishTask,
       listTasks,

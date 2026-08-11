@@ -1,5 +1,7 @@
 export type TaskStatus =
   | 'queued'
+  | 'preparing_worktree'
+  | 'starting_agent'
   | 'running'
   | 'waiting'
   | 'review'
@@ -105,7 +107,7 @@ export type Task = {
 export type QueueItem = {
   taskId: string;
   title: string;
-  status: 'running' | 'queued';
+  status: 'preparing_worktree' | 'starting_agent' | 'running' | 'queued';
   position?: number;
   startedAt?: string;
   note: string;
@@ -131,6 +133,7 @@ export type CreateTaskInput = {
   reasoning_effort?: ReasoningEffort;
   has_images?: boolean;
   attachments?: CreateTaskAttachment[];
+  idempotency_key?: string;
 };
 
 export type TaskActionResult = {

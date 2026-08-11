@@ -76,5 +76,5 @@ export function createWaitTaskHandler(taskStore: TaskStore, dependencies: WaitTa
 }
 
 function isActive(status: string): boolean {
-  return status === "queued" || status === "running";
+  return status === "queued" || status === "preparing_worktree" || status === "starting_agent" || status === "running";
 }

@@ -25,6 +25,7 @@ export function createAgentQueueStatusHandler(dependencies: AgentQueueStatusDepe
         ...base,
         agent_id: input.agent_id,
         queue: base.queue.filter((task) => task.agentId === input.agent_id),
+        active: base.active.filter((task) => task.agentId === input.agent_id),
       };
     },
   };
@@ -32,20 +33,25 @@ export function createAgentQueueStatusHandler(dependencies: AgentQueueStatusDepe
 
 function defaultQueueStatus() {
   return {
+    capacity: globalTaskQueue.capacity,
     running: globalRunningTasks.size,
     queued: globalTaskQueue.size,
+    active: globalTaskQueue.getActiveTasks(),
     queue: globalTaskQueue.getQueuedTasks(),
   };
 }
 
-function normalizeQueueStatus(value: unknown): { running: number; queued: number; queue: Array<Record<string, unknown>> } {
+function normalizeQueueStatus(value: unknown): { capacity: number; running: number; queued: number; active: Array<Record<string, unknown>>; queue: Array<Record<string, unknown>> } {
   if (!isRecord(value)) {
-    return { running: 0, queued: 0, queue: [] };
+    return { capacity: 8, running: 0, queued: 0, active: [], queue: [] };
   }
   const queue = Array.isArray(value.queue) ? value.queue.filter(isRecord) : [];
+  const active = Array.isArray(value.active) ? value.active.filter(isRecord) : [];
   return {
+    capacity: typeof value.capacity === "number" ? value.capacity : 8,
     running: typeof value.running === "number" ? value.running : 0,
     queued: typeof value.queued === "number" ? value.queued : queue.length,
+    active,
     queue,
   };
 }

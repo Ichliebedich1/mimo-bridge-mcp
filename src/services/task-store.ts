@@ -1,7 +1,7 @@
 import { readFileSync, writeFileSync, mkdirSync, existsSync, readdirSync, renameSync, unlinkSync } from "node:fs";
 import { join, resolve, normalize } from "node:path";
 import { randomUUID } from "node:crypto";
-import type { TaskState, TaskConfig, TaskStatus, WorktreeState, ReviewPackage, TaskCreateOptions } from "../types.js";
+import type { TaskState, TaskConfig, TaskStatus, WorktreeState, ReviewPackage, TaskCreateOptions, TaskErrorDetail, TaskQueueState } from "../types.js";
 
 const TASK_ID_PATTERN = /^task_[a-f0-9]{12}$/;
 
@@ -23,6 +23,7 @@ export class TaskStore {
   private briefsDir: string;
   private logsDir: string;
   private runtimeDir: string;
+  private idempotencyIndex = new Map<string, { taskId: string; requestFingerprint: string }>();
 
   constructor(runtimeDir: string) {
     this.runtimeDir = resolve(runtimeDir);
@@ -33,6 +34,7 @@ export class TaskStore {
     this.ensureDir(this.tasksDir);
     this.ensureDir(this.briefsDir);
     this.ensureDir(this.logsDir);
+    this.rebuildIdempotencyIndex();
   }
 
   private ensureDir(dir: string): void {
@@ -63,7 +65,12 @@ export class TaskStore {
 
     const task: TaskState = {
       task_id: taskId,
-      status: "queued",
+      status: options.status ?? "queued",
+      request_id: options.request_id,
+      queue_state: options.queue_state ?? "none",
+      phase_started_at: now,
+      idempotency_key_hash: options.idempotency_key_hash,
+      request_fingerprint: options.request_fingerprint,
       agent: options.agent ?? "mimo",
       session_id: options.session_id ?? null,
       agent_session_path: null,
@@ -79,6 +86,7 @@ export class TaskStore {
       raw_log_path: "",
       stderr_log_path: "",
       error: null,
+      error_detail: null,
       exit_code: null,
       worktree: null,
       review_package: null,
@@ -132,16 +140,35 @@ export class TaskStore {
         }
       }
     }
+    if (task.idempotency_key_hash && task.request_fingerprint) {
+      this.idempotencyIndex.set(task.idempotency_key_hash, {
+        taskId: task.task_id,
+        requestFingerprint: task.request_fingerprint,
+      });
+    }
   }
 
-  updateTaskStatus(taskId: string, status: TaskStatus, error?: string): TaskState | null {
+  updateTaskStatus(taskId: string, status: TaskStatus, error?: string, errorDetail?: TaskErrorDetail): TaskState | null {
     const task = this.getTask(taskId);
     if (!task) return null;
 
     task.status = status;
+    task.phase_started_at = new Date().toISOString();
+    if (["accepted", "failed", "cancelled", "abandoned", "review", "waiting"].includes(status)) {
+      task.queue_state = "none";
+    }
     if (error) {
       task.error = error;
     }
+    if (errorDetail) task.error_detail = errorDetail;
+    this.saveTask(task);
+    return task;
+  }
+
+  updateTaskQueueState(taskId: string, queueState: TaskQueueState): TaskState | null {
+    const task = this.getTask(taskId);
+    if (!task) return null;
+    task.queue_state = queueState;
     this.saveTask(task);
     return task;
   }
@@ -154,6 +181,30 @@ export class TaskStore {
     task.current_round += 1;
     this.saveTask(task);
     return task;
+  }
+
+  findByIdempotencyHash(hash: string): TaskState | null {
+    const indexed = this.idempotencyIndex.get(hash);
+    return indexed ? this.getTask(indexed.taskId) : null;
+  }
+
+  reconcileInterruptedTasks(): number {
+    let updated = 0;
+    for (const task of this.listTasks(Number.MAX_SAFE_INTEGER)) {
+      if (!["queued", "preparing_worktree", "starting_agent", "running"].includes(task.status)) continue;
+      const requestId = task.request_id ?? `req_recovered_${task.task_id.slice(5)}`;
+      const message = "守护进程在任务执行期间重启";
+      this.updateTaskStatus(task.task_id, "failed", message, {
+        code: "DAEMON_RESTARTED",
+        message,
+        phase: "daemon",
+        request_id: requestId,
+        occurred_at: new Date().toISOString(),
+        retryable: false,
+      });
+      updated++;
+    }
+    return updated;
   }
 
   updateTaskAgentSession(taskId: string, sessionPath: string): TaskState | null {
@@ -185,7 +236,7 @@ export class TaskStore {
     return task;
   }
 
-  updateTaskWorktree(taskId: string, worktree: WorktreeState): TaskState | null {
+  updateTaskWorktree(taskId: string, worktree: WorktreeState | null): TaskState | null {
     const task = this.getTask(taskId);
     if (!task) return null;
 
@@ -261,11 +312,27 @@ export class TaskStore {
     }
     unlinkSync(taskFilePath);
 
+    if (task?.idempotency_key_hash) {
+      this.idempotencyIndex.delete(task.idempotency_key_hash);
+    }
+
     if (task) {
       this.recordTombstone(task.task_id, task.session_id);
     }
 
     return true;
+  }
+
+  private rebuildIdempotencyIndex(): void {
+    this.idempotencyIndex.clear();
+    for (const task of this.listTasks(Number.MAX_SAFE_INTEGER).reverse()) {
+      if (task.idempotency_key_hash && task.request_fingerprint) {
+        this.idempotencyIndex.set(task.idempotency_key_hash, {
+          taskId: task.task_id,
+          requestFingerprint: task.request_fingerprint,
+        });
+      }
+    }
   }
 
   private recordTombstone(taskId: string, sessionId: string | null): void {

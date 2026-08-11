@@ -92,8 +92,11 @@ describe("shared concurrency with queue", () => {
       acceptance_criteria: [],
     });
 
-    assert.strictEqual(first.status, "running");
-    assert.strictEqual(second.status, "queued");
+    await waitUntil(() => runnerInvocations === 1);
+    assert.strictEqual(first.status, "preparing_worktree");
+    assert.strictEqual(first.queue_state, "active");
+    assert.strictEqual(second.status, "preparing_worktree");
+    assert.strictEqual(second.queue_state, "queued");
     assert.strictEqual(runnerInvocations, 1);
 
     completions[0]({
@@ -110,7 +113,7 @@ describe("shared concurrency with queue", () => {
       stderr_log_path: "",
       error: null,
     });
-    await new Promise((resolve) => setImmediate(resolve));
+    await waitUntil(() => runnerInvocations === 2);
 
     assert.strictEqual(runnerInvocations, 2);
     runningTasks.cancelAll();
@@ -166,9 +169,11 @@ describe("shared concurrency with queue", () => {
       acceptance_criteria: [],
     });
 
-    assert.strictEqual(first.status, "running");
+    await waitUntil(() => runnerInvocations === 1);
+    assert.strictEqual(first.status, "preparing_worktree");
     assert.strictEqual(reply.status, "queued");
-    assert.strictEqual(third.status, "queued");
+    assert.strictEqual(third.status, "preparing_worktree");
+    assert.strictEqual(third.queue_state, "queued");
     assert.strictEqual(runnerInvocations, 1);
 
     completions[0]({
@@ -185,7 +190,7 @@ describe("shared concurrency with queue", () => {
       stderr_log_path: "",
       error: null,
     });
-    await new Promise((resolve) => setImmediate(resolve));
+    await waitUntil(() => runnerInvocations === 2);
 
     assert.strictEqual(runnerInvocations, 2);
     completions[1]({
@@ -202,7 +207,7 @@ describe("shared concurrency with queue", () => {
       stderr_log_path: "",
       error: null,
     });
-    await new Promise((resolve) => setImmediate(resolve));
+    await waitUntil(() => runnerInvocations === 3);
 
     assert.strictEqual(runnerInvocations, 3);
     runningTasks.cancelAll();
@@ -257,7 +262,7 @@ describe("shared concurrency with queue", () => {
     taskQueue.cancelAll();
   });
 
-  it("should remove a queued task Worktree and branch when cancelled", async () => {
+  it("should cancel a queued task before creating any Worktree or branch", async () => {
     const subDir = join(testDir, "cancel-worktree");
     const repoDir = join(subDir, "repo");
     const runtimeDir = join(subDir, "runtime");
@@ -299,19 +304,17 @@ describe("shared concurrency with queue", () => {
       use_worktree: true,
     });
     const queuedTask = store.getTask(queued.task_id);
-    const worktreePath = queuedTask.worktree.worktree_path;
-    const branchName = queuedTask.worktree.branch_name;
 
-    assert.strictEqual(queued.status, "queued");
-    assert.strictEqual(existsSync(worktreePath), true);
+    assert.strictEqual(queued.status, "preparing_worktree");
+    assert.strictEqual(queued.queue_state, "queued");
+    assert.strictEqual(queuedTask.worktree, null);
 
     const cancelHandler = createCancelTaskHandler(store, { runningTasks, taskQueue });
     const cancelled = await cancelHandler.handler({ task_id: queued.task_id });
 
     assert.strictEqual(cancelled.status, "cancelled");
-    assert.strictEqual(existsSync(worktreePath), false);
     assert.strictEqual(store.getTask(queued.task_id).worktree, null);
-    assert.strictEqual(execFileSync("git", ["branch", "--list", branchName], { cwd: repoDir, encoding: "utf-8" }).trim(), "");
+    assert.strictEqual(execFileSync("git", ["branch", "--list", `task/${queued.task_id}`], { cwd: repoDir, encoding: "utf-8" }).trim(), "");
     runningTasks.cancelAll();
     taskQueue.cancelAll();
   });
@@ -354,9 +357,11 @@ describe("shared concurrency with queue", () => {
     });
     const cancelHandler = createCancelTaskHandler(store, { runningTasks, taskQueue });
 
-    assert.strictEqual(second.status, "queued");
+    await waitUntil(() => runnerInvocations === 1);
+    assert.strictEqual(second.status, "preparing_worktree");
+    assert.strictEqual(second.queue_state, "queued");
     await cancelHandler.handler({ task_id: first.task_id });
-    await new Promise((resolve) => setImmediate(resolve));
+    await waitUntil(() => runnerInvocations === 2);
 
     assert.strictEqual(runnerCancellations, 1);
     assert.strictEqual(runnerInvocations, 2);
@@ -404,9 +409,11 @@ describe("shared concurrency with queue", () => {
       acceptance_criteria: [],
     });
 
-    assert.strictEqual(second.status, "queued");
+    await waitUntil(() => runnerInvocations === 1);
+    assert.strictEqual(second.status, "preparing_worktree");
+    assert.strictEqual(second.queue_state, "queued");
     failures[0]("runner failed");
-    await new Promise((resolve) => setImmediate(resolve));
+    await waitUntil(() => runnerInvocations === 2);
 
     assert.strictEqual(runnerInvocations, 2);
     assert.strictEqual(store.getTask(first.task_id).status, "failed");
@@ -442,7 +449,7 @@ describe("shared concurrency with queue", () => {
     });
 
     assert.ok(result1.task_id);
-    assert.strictEqual(result1.status, "running");
+    assert.strictEqual(result1.status, "preparing_worktree");
 
     const result2 = await handler.handler({
       objective: "第二个任务",
@@ -453,7 +460,8 @@ describe("shared concurrency with queue", () => {
     });
 
     assert.ok(result2.task_id);
-    assert.strictEqual(result2.status, "queued");
+    assert.strictEqual(result2.status, "preparing_worktree");
+    assert.strictEqual(result2.queue_state, "queued");
 
     runningTasks.cancelAll();
     taskQueue.cancelAll();
@@ -540,7 +548,7 @@ describe("shared concurrency with queue", () => {
 
     assert.ok(result1.task_id);
 
-    await new Promise((r) => setTimeout(r, 500));
+    await waitUntil(() => taskQueue.running === 0, 10000);
 
     const result2 = await handler.handler({
       objective: "第二个任务",
@@ -551,9 +559,18 @@ describe("shared concurrency with queue", () => {
     });
 
     assert.ok(result2.task_id);
-    assert.strictEqual(result2.status, "running");
+    assert.strictEqual(result2.status, "preparing_worktree");
+    assert.strictEqual(result2.queue_state, "active");
 
     runningTasks.cancelAll();
     taskQueue.cancelAll();
   });
 });
+
+async function waitUntil(predicate, timeoutMs = 2000) {
+  const deadline = Date.now() + timeoutMs;
+  while (!predicate() && Date.now() < deadline) {
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+  assert.strictEqual(predicate(), true, "background transition timed out");
+}

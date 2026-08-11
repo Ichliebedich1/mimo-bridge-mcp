@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { createServer } from "node:http";
-import { writeFileSync, mkdtempSync, rmSync, readFileSync } from "node:fs";
+import { writeFileSync, mkdtempSync, rmSync, readFileSync, copyFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Readable } from "node:stream";
@@ -156,6 +156,62 @@ test("start command reads UTF-8 JSON file with Chinese path text", async () => {
   } finally {
     await closeServer(mock.server);
     rmSync(tmpDir, { recursive: true, force: true });
+  }
+});
+
+test("release client runs from an isolated directory without node_modules", async () => {
+  const isolated = mkdtempSync(join(tmpdir(), "mimo-client-zero-deps-"));
+  const isolatedClient = join(isolated, "mimo-bridge-client.mjs");
+  copyFileSync(CLIENT_PATH, isolatedClient);
+  const mock = await startMockServer((req, res) => {
+    if (req.url === "/api/health") {
+      res.writeHead(200, { "content-type": "application/json" });
+      res.end(JSON.stringify({ ok: true, data: { daemon: { status: "ok" } } }));
+      return;
+    }
+    res.writeHead(404).end("{}");
+  });
+  try {
+    const result = await new Promise((resolveResult) => {
+      const proc = spawn(process.execPath, [isolatedClient, "health"], {
+        cwd: isolated,
+        env: { ...process.env, MIMO_BRIDGE_URL: mock.baseUrl },
+        stdio: ["ignore", "pipe", "pipe"],
+      });
+      let stdout = "";
+      proc.stdout.on("data", (chunk) => { stdout += chunk; });
+      proc.on("close", (code) => resolveResult({ code, stdout }));
+    });
+    assert.equal(result.code, 0);
+    assert.equal(JSON.parse(result.stdout).ok, true);
+  } finally {
+    await closeServer(mock.server);
+    rmSync(isolated, { recursive: true, force: true });
+  }
+});
+
+test("wait command uses the fixed REST wait endpoint", async () => {
+  let receivedBody;
+  const mock = await startMockServer((req, res) => {
+    if (req.url === "/api/tasks/task_rest_wait/wait" && req.method === "POST") {
+      const chunks = [];
+      req.on("data", (chunk) => chunks.push(chunk));
+      req.on("end", () => {
+        receivedBody = JSON.parse(Buffer.concat(chunks).toString("utf8"));
+        res.writeHead(200, { "content-type": "application/json" });
+        res.end(JSON.stringify({ ok: true, data: { task_id: "task_rest_wait", status: "review", timed_out: false, waited_ms: 12 } }));
+      });
+      return;
+    }
+    res.writeHead(404).end("{}");
+  });
+  try {
+    const result = await runClient(["wait", "--task-id", "task_rest_wait", "--timeout-seconds", "1"], { env: { MIMO_BRIDGE_URL: mock.baseUrl } });
+    assert.equal(result.code, 0);
+    assert.equal(JSON.parse(result.stdout).status, "review");
+    assert.equal(receivedBody.timeout_seconds, 1);
+  } finally {
+    await closeServer(mock.server);
   }
 });
 
@@ -939,6 +995,7 @@ test("start-and-wait returns structured error when daemon is unreachable", async
   assert.equal(out.ok, false);
   assert.equal(out.operation, "start-and-wait");
   assert.match(out.error, /Cannot connect|did not respond/);
+  assert.ok(out.idempotency_key);
 });
 
 test("all CLI outputs include ok and operation fields", async () => {

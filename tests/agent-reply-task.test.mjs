@@ -84,7 +84,7 @@ test("agent_reply_task resumes a Reasonix TUI task through recorded session path
       use_worktree: true,
       runtime_timeout_seconds: 60,
     });
-    assert.strictEqual(started.status, "running");
+    assert.strictEqual(started.status, "preparing_worktree");
 
     const firstRound = await waitForTerminal(store, started.task_id);
     assert.ok(firstRound);
@@ -216,7 +216,7 @@ test("agent_reply_task allows failed Reasonix task to continue when session path
       use_worktree: true,
       runtime_timeout_seconds: 60,
     });
-    assert.strictEqual(started.status, "running");
+    assert.strictEqual(started.status, "preparing_worktree");
 
     const firstRound = await waitForTerminal(store, started.task_id);
     assert.ok(firstRound);

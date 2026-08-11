@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ClipboardEvent, type FormEvent, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ClipboardEvent, type FormEvent, type ReactNode } from 'react';
 import {
   cancelTask,
   createTask,
@@ -82,6 +82,8 @@ const navItems: Array<{ key: Page; label: string; icon: string }> = [
 
 const statusMeta: Record<TaskStatus, { label: string; tone: string; helper: string }> = {
   queued: { label: '排队中', tone: 'neutral', helper: '可查看、取消' },
+  preparing_worktree: { label: '准备 Worktree', tone: 'amber', helper: '正在准备工作目录，可取消' },
+  starting_agent: { label: '启动 Agent', tone: 'blue', helper: '正在启动模型进程，可取消' },
   running: { label: '运行中', tone: 'blue', helper: '可查看摘要、取消' },
   waiting: { label: '等待回复', tone: 'amber', helper: '可回复、取消' },
   review: { label: '待审查', tone: 'purple', helper: '可审查、回复、合并、验收或放弃' },
@@ -132,7 +134,7 @@ const DEFAULT_ROUTING_PROFILES: RoutingProfiles = {
       description: '多模态/图片任务',
       supports_multimodal: true,
       recommended: {
-        mimo: { model: 'mimo-v2.5', reasoning_effort: 'medium', reason: '只有 MiMo V2.5 支持多模态输入' },
+        mimo: { model: 'mimo-v2.5', reasoning_effort: 'medium', reason: 'MiMo Code 可通过多模态路由桥接图片输入' },
         'reasonix-tui': { model: 'deepseek-v4-flash', reasoning_effort: 'medium', reason: 'Reasonix 当前不支持多模态，仅作为文本任务参考' },
       },
       current: { agent_id: 'mimo', model: 'mimo-v2.5', reasoning_effort: 'medium' },
@@ -223,9 +225,10 @@ function App() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [actionBusy, setActionBusy] = useState<string | null>(null);
   const [selectedForBatch, setSelectedForBatch] = useState<string[]>([]);
+  const createRetryRef = useRef<{ signature: string; key: string } | null>(null);
 
   const selectedTask = tasks.find((task) => task.id === selectedTaskId) ?? null;
-  const runningCount = Math.max(health?.queue.running ?? 0, tasks.filter((task) => task.status === 'running').length);
+  const runningCount = Math.max(health?.queue.running ?? 0, tasks.filter((task) => ['preparing_worktree', 'starting_agent', 'running'].includes(task.status)).length);
   const pendingInterventionCount = health?.pending_reviews?.count ?? tasks.filter((task) => task.status === 'review' || task.status === 'failed').length;
   const apiReachable = health !== null;
   const apiReady = apiReachable && !health.daemon.degraded;
@@ -336,9 +339,13 @@ function App() {
 
   async function handleCreateTask(input: CreateTaskInput) {
     const agentName = input.agent_id === 'reasonix-tui' ? 'Reasonix TUI' : 'MiMo';
-    const result = await runAction(`正在创建 ${agentName} 任务…`, '任务已提交给本地守护进程。', () => createTask(input));
+    const signature = createTaskSignature(input);
+    const key = createRetryRef.current?.signature === signature ? createRetryRef.current.key : crypto.randomUUID();
+    createRetryRef.current = { signature, key };
+    const result = await runAction(`正在创建 ${agentName} 任务…`, '任务已提交给本地守护进程。', () => createTask({ ...input, idempotency_key: key }));
     const taskId = typeof result?.task_id === 'string' ? result.task_id : '';
     if (taskId) {
+      createRetryRef.current = null;
       setSelectedTaskId(taskId);
       setPage('detail');
       await refreshTaskDetail(taskId, input.agent_id || 'mimo');
@@ -624,6 +631,20 @@ function App() {
   );
 }
 
+function createTaskSignature(input: CreateTaskInput): string {
+  return JSON.stringify({
+    ...input,
+    idempotency_key: undefined,
+    attachments: (input.attachments ?? []).map((item) => ({
+      name: item.name,
+      mime_type: item.mime_type,
+      size_bytes: item.size_bytes,
+      kind: item.kind,
+      edge: item.base64.slice(0, 16) + item.base64.slice(-16),
+    })),
+  });
+}
+
 function pageTitle(page: Page) {
   const titles: Record<Page, string> = {
     overview: '总览',
@@ -741,7 +762,7 @@ function TasksPage({
   const filtered = showSafeDeleteOnly ? statusFiltered.filter((task) => task.canDelete) : statusFiltered;
   const safeDeleteCount = statusFiltered.filter((task) => task.canDelete).length;
   const batchDeleteCount = filtered.filter((task) => selectedTaskIds.includes(task.id) && task.canDelete).length;
-  const statuses: Array<'all' | TaskStatus> = ['all', 'queued', 'running', 'waiting', 'review', 'accepted', 'failed', 'cancelled', 'abandoned'];
+  const statuses: Array<'all' | TaskStatus> = ['all', 'queued', 'preparing_worktree', 'starting_agent', 'running', 'waiting', 'review', 'accepted', 'failed', 'cancelled', 'abandoned'];
 
   function toggleSelect(taskId: string, checked: boolean) {
     onSelectedTaskIdsChange(checked
@@ -858,10 +879,10 @@ function CreateTaskPage({
   useEffect(() => {
     if (hasImages || attachments.some((attachment) => attachment.kind === 'image')) {
       setTaskScenario('multimodal');
-      setRoutingMode('auto');
       setHasImages(true);
+      if (routingMode === 'manual' && agentId !== 'mimo') setAgentId('mimo');
     }
-  }, [attachments, hasImages]);
+  }, [agentId, attachments, hasImages, routingMode]);
 
   useEffect(() => {
     if (routingMode === 'manual' && (!model || !allowedModels.includes(model))) {
@@ -894,12 +915,8 @@ function CreateTaskPage({
       return;
     }
     const attachmentHasImages = attachments.some((attachment) => attachment.kind === 'image');
-    if ((hasImages || attachmentHasImages) && routingMode === 'manual') {
-      setFormError('多模态任务请使用 Auto 模式，系统会强制选择 MiMo V2.5。');
-      return;
-    }
-    if (routingMode === 'manual' && taskScenario === 'multimodal' && (selectedRoutingAgent !== 'mimo' || effectiveModel !== 'mimo-v2.5')) {
-      setFormError('多模态任务只能使用 MiMo 的 mimo-v2.5。');
+    if (routingMode === 'manual' && taskScenario === 'multimodal' && selectedRoutingAgent !== 'mimo') {
+      setFormError('多模态任务只能使用 MiMo Agent，但可选择任一已启用的 MiMo Code 模型。');
       return;
     }
 
@@ -1002,7 +1019,7 @@ function CreateTaskPage({
             </label>
             <label>
               <span>路由模式</span>
-              <select disabled={hasImages} value={routingMode} onChange={(event) => setRoutingMode(event.target.value as RoutingMode)}>
+              <select value={routingMode} onChange={(event) => setRoutingMode(event.target.value as RoutingMode)}>
                 <option value="auto">Auto（按规则自动判断）</option>
                 <option value="manual">Manual（手动选择）</option>
               </select>
@@ -1011,7 +1028,7 @@ function CreateTaskPage({
           </div>
           <label className="toggle-row">
             <input checked={hasImages} onChange={(event) => setHasImages(event.target.checked)} type="checkbox" />
-            <span>包含图片/多模态输入（自动使用 MiMo V2.5）</span>
+            <span>包含图片/多模态输入（使用 MiMo Code 图片桥接）</span>
           </label>
           <div className="routing-preview">
             <strong>本次将使用</strong>
@@ -1023,14 +1040,14 @@ function CreateTaskPage({
             <>
               <label>
                 <span>执行 Agent *</span>
-                <select value={agentId} onChange={(event) => setAgentId(event.target.value)}>
+                <select disabled={hasImages} value={agentId} onChange={(event) => setAgentId(event.target.value)}>
                   {agentOptions.map((agent) => (
                     <option key={agent.id} value={agent.id}>
                       {agent.display_name || agent.id} ({agent.status})
                     </option>
                   ))}
                 </select>
-                <small className="field-help">MiMo 支持多模态 flash；Reasonix TUI 当前只支持文本任务。</small>
+                <small className="field-help">图片任务固定使用 MiMo Agent，但模型可从所有已启用的 MiMo Code 模型中选择；Reasonix TUI 当前只支持文本任务。</small>
               </label>
               <div className="split-fields">
                 <label>
@@ -1743,16 +1760,16 @@ function EmptyTaskDetail({ onCreate }: { onCreate: () => void }) {
 }
 
 function QueuePage({ queueItems, onOpenTask }: { queueItems: QueueItem[]; onOpenTask: (taskId: string) => void }) {
-  const runningItems = queueItems.filter((item) => item.status === 'running');
+  const runningItems = queueItems.filter((item) => item.status !== 'queued');
   const queuedItems = queueItems.filter((item) => item.status === 'queued');
 
   return (
     <div className="page-grid">
       <section className="panel wide">
-        <PanelHeader title="队列状态" helper="显示 running、queued 和队列项。" />
+        <PanelHeader title="队列状态" helper="显示 preparing_worktree、starting_agent、running 和 queued。" />
         <div className="warning-card">
           <strong>P4 串行队列已启用</strong>
-          <p>返回 queued 表示任务尚未启动，会等待当前 Runner 完成、失败或取消后再执行。</p>
+          <p>阶段状态表示当前执行位置；queued 表示受容量或路径冲突限制仍在等待。</p>
         </div>
         <div className="queue-lanes">
           <div>
@@ -1913,6 +1930,16 @@ function SystemPage({ agents, health, apiError }: { agents: AgentStatusResponse[
           <SystemRow label="MCP 入口" status={health ? health.mcp.status : '未连接'} detail={health ? health.mcp.transport + ' · ' + health.mcp.endpoint : '等待本地守护进程'} />
           <SystemRow label="管理 API" status={health ? '在线' : '降级'} detail="固定 REST 路由映射；不允许浏览器传任意 MCP 工具名。" />
           <SystemRow
+            label="配置快照"
+            status={health?.config?.reload_required ? '需要重载' : '已加载'}
+            detail={health?.config ? `加载于 ${new Date(health.config.loaded_at).toLocaleString('zh-CN')}；指纹 ${health.config.fingerprint.slice(0, 12)}；allowedRoots ${health.config.allowed_roots_count} 个` : '尚未读取配置元数据'}
+          />
+          <SystemRow
+            label="配置重载命令"
+            status={health?.config?.reload_required ? '请执行' : '无需执行'}
+            detail={health?.config?.restart_command ?? 'MiMo Bridge Launcher.cmd restart'}
+          />
+          <SystemRow
             label="敏感路径暴露"
             status={health?.security.raw_paths_exposed ? '需检查' : '已规避'}
             detail="界面不展示原始日志绝对路径、Worktree 路径和环境变量。"
@@ -1993,7 +2020,7 @@ function RoutingSettingsPage({
       if (scenario === 'multimodal') {
         next.scenarios[scenario].current = {
           agent_id: 'mimo',
-          model: 'mimo-v2.5',
+          model,
           reasoning_effort: patch.reasoning_effort ?? currentSelection.reasoning_effort,
         };
         return next;
@@ -2058,14 +2085,14 @@ function RoutingSettingsPage({
             <input checked={ultraSpeedEnabled} onChange={(event) => toggleUltraSpeed(event.target.checked)} type="checkbox" />
             <span>启用 MiMo V2.5 Pro Ultra Speed（内测，高速高价）</span>
           </label>
-          <p className="field-help">默认关闭。约为 Pro 3 倍价格，不支持多模态，适合很急的复杂任务或大输出任务。开启后可在模型下拉中选择。</p>
+          <p className="field-help">默认关闭。约为 Pro 3 倍价格；MiMo Code 可在图片任务中桥接多模态输入。开启后可在模型下拉中选择。</p>
         </div>
         <div className="routing-grid">
           {(Object.keys(scenarioLabels) as TaskScenario[]).map((scenario) => {
             const item = draft.scenarios[scenario];
             const selection = item.current;
             const allowedModels = draft.allowed_models[selection.agent_id];
-            const lockedMultimodal = scenario === 'multimodal';
+            const lockedMultimodalAgent = scenario === 'multimodal';
             return (
               <div className="routing-card" key={scenario}>
                 <div className="routing-card-head">
@@ -2073,12 +2100,12 @@ function RoutingSettingsPage({
                     <strong>{scenarioLabels[scenario]}</strong>
                     <p>{item.description}</p>
                   </div>
-                  {lockedMultimodal && <Pill tone="blue">MiMo V2.5 only</Pill>}
+                  {lockedMultimodalAgent && <Pill tone="blue">MiMo 图片桥接</Pill>}
                 </div>
                 <label>
                   <span>默认 Agent</span>
                   <select
-                    disabled={lockedMultimodal}
+                    disabled={lockedMultimodalAgent}
                     value={selection.agent_id}
                     onChange={(event) => updateScenario(scenario, { agent_id: event.target.value as RoutingAgentId })}
                   >
@@ -2089,7 +2116,6 @@ function RoutingSettingsPage({
                 <label>
                   <span>默认模型</span>
                   <select
-                    disabled={lockedMultimodal}
                     value={selection.model}
                     onChange={(event) => updateScenario(scenario, { model: event.target.value })}
                   >
@@ -2122,9 +2148,9 @@ function RoutingSettingsPage({
           <div className="model-card">
             <AgentBadge agent="mimo" />
             <ul>
-              <li><code>mimo-v2.5</code>：支持多模态；V2.5 价格，适合简单/普通任务。</li>
-              <li><code>mimo-v2.5-pro</code>：不支持多模态；pro 价格，适合复杂/高风险任务。</li>
-              {ultraSpeedEnabled && <li><code>mimo-v2.5-pro-ultraspeed</code>：不支持多模态；ultra_speed 价格（约 Pro 3 倍），适合很急的复杂/大输出任务。</li>}
+              <li><code>mimo-v2.5</code>：支持 MiMo Code 多模态桥接；V2.5 价格，适合简单/普通任务。</li>
+              <li><code>mimo-v2.5-pro</code>：支持 MiMo Code 多模态桥接；pro 价格，适合复杂/高风险任务。</li>
+              {ultraSpeedEnabled && <li><code>mimo-v2.5-pro-ultraspeed</code>：支持 MiMo Code 多模态桥接；ultra_speed 价格（约 Pro 3 倍）。</li>}
             </ul>
           </div>
           <div className="model-card">
@@ -2484,15 +2510,20 @@ function filterLabel(status: 'all' | TaskStatus) {
 
 function toQueueItems(queue: QueueStatusResponse, tasks: Task[]): QueueItem[] {
   const taskById = new Map(tasks.map((task) => [task.id, task]));
-  const running = tasks
-    .filter((task) => task.status === 'running')
-    .map((task) => ({
-      taskId: task.id,
-      title: task.title,
-      status: 'running' as const,
-      startedAt: task.updatedAt,
-      note: '来自 /api/tasks；后续写任务由 P4 队列串行执行。',
-    }));
+  const activeSource = queue.active && queue.active.length > 0
+    ? queue.active.map((item) => ({ taskId: item.taskId, status: item.status, enqueuedAt: item.enqueuedAt }))
+    : tasks.filter((task) => ['preparing_worktree', 'starting_agent', 'running'].includes(task.status)).map((task) => ({ taskId: task.id, status: task.status, enqueuedAt: Date.parse(task.updatedAt) }));
+  const running = activeSource.map((item) => {
+    const task = taskById.get(item.taskId);
+    const status: QueueItem['status'] = item.status === 'preparing_worktree' || item.status === 'starting_agent' ? item.status : 'running';
+    return {
+      taskId: item.taskId,
+      title: task?.title ?? item.taskId,
+      status,
+      startedAt: task?.updatedAt,
+      note: '当前阶段：' + status + '；启动时间 ' + new Date(item.enqueuedAt).toLocaleTimeString('zh-CN'),
+    };
+  });
 
   const queued = queue.queue.map((item, index) => {
     const task = taskById.get(item.taskId);
@@ -2500,7 +2531,7 @@ function toQueueItems(queue: QueueStatusResponse, tasks: Task[]): QueueItem[] {
       taskId: item.taskId,
       title: task?.title ?? item.taskId,
       status: 'queued' as const,
-      position: index + 1,
+      position: item.queuePosition ?? index + 1,
       note: '优先级 ' + item.priority + '；排队时间 ' + new Date(item.enqueuedAt).toLocaleTimeString('zh-CN'),
     };
   });

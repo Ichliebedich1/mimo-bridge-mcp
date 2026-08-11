@@ -415,13 +415,25 @@ test("admin API exposes safe reply capability for resumable Reasonix tasks", asy
 test("admin API health reports pending review count", async () => {
   const fixture = createContext();
   try {
-    const result = await callApi(fixture.context, "GET", "/api/health");
+    const result = await callApi(fixture.context, "GET", "/api/health", undefined, {
+      configPath: join(tmpdir(), "missing-mimo-config.json"),
+      configLoadedAt: "2026-08-12T00:00:00.000Z",
+      configFingerprint: "sanitized-hash",
+      loadedConfigFileHash: "missing",
+      restartCommand: "MiMo Bridge Launcher.cmd restart",
+    });
     assert.strictEqual(result.statusCode, 200);
     assert.strictEqual(result.body.ok, true);
     assert.strictEqual(result.body.data.pending_reviews.count, 1);
     assert.match(result.body.data.pending_reviews.command, /recover/);
     assert.ok(Array.isArray(result.body.data.agents.configured));
     assert.strictEqual(result.body.data.agents.endpoint, "/api/agents");
+    assert.strictEqual(result.body.data.config.loaded_at, "2026-08-12T00:00:00.000Z");
+    assert.strictEqual(result.body.data.config.fingerprint, "sanitized-hash");
+    assert.strictEqual(result.body.data.config.allowed_roots_count, 0);
+    assert.strictEqual(result.body.data.config.reload_required, false);
+    assert.strictEqual(result.body.data.daemon.identity, "mimo-bridge-local-daemon/v1");
+    assert.strictEqual(JSON.stringify(result.body).includes("allowedRoots"), false);
   } finally {
     fixture.cleanup();
   }

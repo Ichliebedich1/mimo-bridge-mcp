@@ -4,6 +4,7 @@ import { existsSync, lstatSync, realpathSync } from "node:fs";
 export interface PathGuardResult {
   allowed: boolean;
   reason?: string;
+  normalizedPath?: string;
 }
 
 export function validateWorkspacePath(
@@ -11,7 +12,7 @@ export function validateWorkspacePath(
   allowedRoots: string[]
 ): PathGuardResult {
   if (!isAbsolute(workspacePath)) {
-    return { allowed: false, reason: "workspace_path 必须是绝对路径" };
+    return { allowed: false, reason: "workspace_path 必须是绝对路径", normalizedPath: normalize(resolve(workspacePath)) };
   }
 
   let normalized: string;
@@ -21,21 +22,21 @@ export function validateWorkspacePath(
     try {
       normalized = normalize(resolve(workspacePath));
     } catch {
-      return { allowed: false, reason: `路径解析失败: ${workspacePath}` };
+      return { allowed: false, reason: "路径解析失败" };
     }
   }
 
   if (!existsSync(normalized)) {
-    return { allowed: false, reason: `路径不存在: ${normalized}` };
+    return { allowed: false, reason: `路径不存在: ${normalized}`, normalizedPath: normalized };
   }
 
   try {
     const stat = lstatSync(normalized);
     if (!stat.isDirectory()) {
-      return { allowed: false, reason: `路径不是目录: ${normalized}` };
+      return { allowed: false, reason: `路径不是目录: ${normalized}`, normalizedPath: normalized };
     }
   } catch {
-    return { allowed: false, reason: `无法读取路径信息: ${normalized}` };
+    return { allowed: false, reason: `无法读取路径信息: ${normalized}`, normalizedPath: normalized };
   }
 
   const isAllowed = allowedRoots.some((root) => {
@@ -54,10 +55,11 @@ export function validateWorkspacePath(
     return {
       allowed: false,
       reason: `路径不在允许的根目录范围内: ${normalized}`,
+      normalizedPath: normalized,
     };
   }
 
-  return { allowed: true };
+  return { allowed: true, normalizedPath: normalized };
 }
 
 function resolveRealPath(pathToResolve: string): string {

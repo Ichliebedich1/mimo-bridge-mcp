@@ -56,7 +56,7 @@ test("manual routing respects explicit model and effort", () => {
   assert.strictEqual(result.config.reasoning_effort, "high");
 });
 
-test("multimodal tasks force MiMo V2.5 and reject Reasonix", () => {
+test("multimodal auto routing uses its MiMo profile default and rejects Reasonix", () => {
   const mimo = resolveRouting("mimo", { routing_mode: "auto", has_images: true });
   assert.strictEqual(mimo.ok, true);
   assert.strictEqual(mimo.config.task_scenario, "multimodal");
@@ -139,15 +139,15 @@ test("ultra speed pricing is always exposed in routing profiles", () => {
   assert.strictEqual(profiles.pricing_per_1m_cny.ultra_speed.cache_hit, 0.075);
 });
 
-test("ultra speed is rejected for multimodal tasks even when enabled", () => {
+test("ultra speed is accepted for multimodal tasks through MiMo Code image bridging when enabled", () => {
   const result = resolveRouting("mimo", {
     routing_mode: "manual",
     task_scenario: "multimodal",
     model: MIMO_ULTRA_SPEED_MODEL,
     reasoning_effort: "medium",
   }, { enable_mimo_pro_ultra_speed: true });
-  assert.strictEqual(result.ok, false);
-  assert.match(result.error, /多模态/);
+  assert.strictEqual(result.ok, true);
+  assert.strictEqual(result.config.model, "mimo-v2.5-pro-ultraspeed");
 });
 
 test("ultra speed can be selected via manual routing when enabled", () => {

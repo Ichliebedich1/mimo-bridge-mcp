@@ -26,6 +26,8 @@ Local daemon -> task queue/store -> MiMo PTY runner
 
 The daemon loads `%LOCALAPPDATA%\MiMoBridge\config.json` by default. `MIMO_BRIDGE_CONFIG` selects another file, and per-field environment variables override persisted values.
 
+`allowedRoots` remains a machine-level hard boundary. A task cannot expand it. New roots are added locally with `MiMo Bridge Launcher.cmd allow-root --path "<project>" --restart`, which validates the real directory before writing config. `/api/health` reports the config source, load time, redacted stable fingerprint, allowed-root count, disk-change flag, and restart command without returning root values or raw config.
+
 - `start-local.ps1` builds and starts the development daemon.
 - `start-production.ps1` starts existing artifacts through the launcher path.
 - Portable packages set `MIMO_BRIDGE_CONFIG` and `MIMO_BRIDGE_DATA_DIR` to package-local `data`.
@@ -43,6 +45,21 @@ mimo_start_task
 
 The read-only UI live viewer polls only while its modal is open. Codex should not repeatedly poll unchanged task status.
 
+## Task Admission And Startup
+
+```text
+validate request and normalized paths
+  -> resolve idempotency key
+  -> persist placeholder (preparing_worktree + request_id)
+  -> return to caller
+  -> background queue (capacity 8, path-conflict aware)
+  -> prepare attachments / Worktree / brief
+  -> starting_agent
+  -> running
+```
+
+Only the idempotency-key hash and normalized request fingerprint are persisted. Same-key/same-request retries replay the original task; same-key/different-request attempts fail with `IDEMPOTENCY_CONFLICT`. Every phase failure records a bounded `error_detail={code,message,phase,request_id,occurred_at,retryable}`. On daemon startup, orphaned non-terminal tasks become `DAEMON_RESTARTED` failures so they remain observable instead of appearing indefinitely active.
+
 ## Windows Startup And Distribution
 
 ```text
@@ -54,3 +71,5 @@ User shortcut / portable launcher / installer shortcut
 ```
 
 The Windows release line targets Windows 10/11 x64. Packages include built UI/daemon artifacts, production dependencies, and an architecture-matched Node runtime. MiMo authentication remains device-local and is never packaged.
+
+The launcher starts Node detached with ignored stdin and file-backed stdout/stderr, so the launcher exits after health succeeds. Existing unmanaged instances may be adopted only when PID ownership of the localhost port, executable real path, daemon-entry path, and health fingerprints all match exactly; restart never terminates a mismatched process.
