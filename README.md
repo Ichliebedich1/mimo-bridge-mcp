@@ -165,6 +165,14 @@ node scripts/mimo-bridge-client.mjs wait --task-id task_xxx --timeout-seconds 18
 
 Portable and installed distributions provide the same entry as `MiMo Bridge Client.cmd` and run it with the bundled Node runtime.
 
+The matching Codex usage skill is versioned under `skills/use-mimo-bridge-mcp` and included in both distributions. Installation is explicit so an existing customized skill is never silently overwritten:
+
+```powershell
+& "$env:LOCALAPPDATA\MiMoBridgeApp\Install MiMo Bridge Codex Skill.cmd"
+```
+
+The command backs up an existing `use-mimo-bridge-mcp` skill before replacement. Open a new Codex session afterward if the skill list was already cached.
+
 ## First Task Flow
 
 1. Open the Admin UI.

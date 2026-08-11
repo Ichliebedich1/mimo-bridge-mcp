@@ -22,9 +22,9 @@ Expected:
 - Portable ZIP exists and is non-empty.
 - Installer EXE exists and is non-empty.
 - Manifests target windows-10-11-x64.
-- Manifests report includes_mimo_credentials=false, includes_tasks=false, and includes_worktrees=false.
+- Manifests report includes_codex_skill=true, includes_mimo_credentials=false, includes_tasks=false, and includes_worktrees=false.
 - Installer -SelfTest passes.
-- Portable and installer payloads contain `mimo-bridge-client.mjs` and `MiMo Bridge Client.cmd`.
+- Portable and installer payloads contain `mimo-bridge-client.mjs`, `MiMo Bridge Client.cmd`, `Install MiMo Bridge Codex Skill.cmd`, and `codex-skill/use-mimo-bridge-mcp`.
 - artifacts/release-validation.json is written.
 
 ## Clean Machine Portable Validation
@@ -46,6 +46,7 @@ Expected:
 - MiMo is configured.
 - Admin UI loads without requiring system Node.
 - `MiMo Bridge Client.cmd health` works from the extracted package without system Node or source `node_modules`.
+- `Install MiMo Bridge Codex Skill.cmd -DestinationRoot <temporary-skills-directory>` installs the bundled Skill, and a second run backs up the existing copy before replacement.
 
 ## Clean Machine Installer Validation
 

@@ -165,6 +165,14 @@ node scripts/mimo-bridge-client.mjs wait --task-id task_xxx --timeout-seconds 18
 
 便携版和安装版同时提供 `MiMo Bridge Client.cmd`，并使用发行包内置的 Node 运行时。
 
+配套 Codex Skill 的规范副本位于 `skills/use-mimo-bridge-mcp`，便携包和安装包都会携带它。为了避免静默覆盖用户自行修改的 Skill，安装或更新必须显式执行：
+
+```powershell
+& "$env:LOCALAPPDATA\MiMoBridgeApp\Install MiMo Bridge Codex Skill.cmd"
+```
+
+命令会先备份已有的 `use-mimo-bridge-mcp`，再安装新版。如果 Codex 已缓存 Skill 列表，请新开一个 Codex 会话。
+
 ## 第一个任务怎么跑
 
 1. 打开管理后台。

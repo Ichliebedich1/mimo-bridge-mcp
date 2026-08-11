@@ -145,6 +145,7 @@ $manifest = [ordered]@{
   output = $installerExe
   builder = "mingw-resource-stub"
   includes_node = $true
+  includes_codex_skill = $true
   includes_mimo_credentials = $false
   includes_tasks = $false
   includes_worktrees = $false

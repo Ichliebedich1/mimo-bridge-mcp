@@ -70,6 +70,6 @@ User shortcut / portable launcher / installer shortcut
   -> admin UI opens in the browser
 ```
 
-The Windows release line targets Windows 10/11 x64. Packages include built UI/daemon artifacts, production dependencies, and an architecture-matched Node runtime. MiMo authentication remains device-local and is never packaged.
+The Windows release line targets Windows 10/11 x64. Packages include built UI/daemon artifacts, production dependencies, an architecture-matched Node runtime, and the versioned `use-mimo-bridge-mcp` Codex skill. Skill installation is an explicit command that backs up any existing copy; packages never silently overwrite `%CODEX_HOME%/skills` or the default user skill directory. MiMo authentication remains device-local and is never packaged.
 
 The launcher starts Node detached with ignored stdin and file-backed stdout/stderr, so the launcher exits after health succeeds. Existing unmanaged instances may be adopted only when PID ownership of the localhost port, executable real path, daemon-entry path, and health fingerprints all match exactly; restart never terminates a mismatched process.

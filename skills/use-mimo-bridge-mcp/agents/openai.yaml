@@ -1,0 +1,4 @@
+interface:
+  display_name: "MiMo Bridge MCP Usage"
+  short_description: "发行客户端、幂等启动、安全等待、恢复和低上下文审查。"
+  default_prompt: "使用 $use-mimo-bridge-mcp，通过 MiMo Bridge MCP 发起带幂等键的有界任务，按 P0 阶段等待，并从 Review Package 开始安全审查。"

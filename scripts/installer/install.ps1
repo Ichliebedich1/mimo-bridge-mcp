@@ -429,7 +429,12 @@ function Test-StagedPayload {
     "app\apps\local-daemon\launcher.ps1",
     "app\apps\admin-ui\dist\index.html",
     "mimo-bridge-client.mjs",
-    "MiMo Bridge Client.cmd"
+    "MiMo Bridge Client.cmd",
+    "Install-Codex-Skill.ps1",
+    "Install MiMo Bridge Codex Skill.cmd",
+    "codex-skill\use-mimo-bridge-mcp\SKILL.md",
+    "codex-skill\use-mimo-bridge-mcp\references\playbook.md",
+    "codex-skill\use-mimo-bridge-mcp\agents\openai.yaml"
   )
   foreach ($relativePath in $requiredFiles) {
     if (-not (Test-Path -LiteralPath (Join-Path $StageRoot $relativePath))) {
@@ -467,6 +472,8 @@ function Install-StagedPayload {
     $itemsMovedToBackup = (Move-ChildIfExists -SourceParent $Paths.InstallRoot -DestinationParent $backupRoot -Name "app") -or $itemsMovedToBackup
     $itemsMovedToBackup = (Move-ChildIfExists -SourceParent $Paths.InstallRoot -DestinationParent $backupRoot -Name "node") -or $itemsMovedToBackup
     $itemsMovedToBackup = (Move-ChildIfExists -SourceParent $Paths.InstallRoot -DestinationParent $backupRoot -Name "data") -or $itemsMovedToBackup
+    $itemsMovedToBackup = (Move-ChildIfExists -SourceParent $Paths.InstallRoot -DestinationParent $backupRoot -Name "codex-skill") -or $itemsMovedToBackup
+    $itemsMovedToBackup = (Move-ChildIfExists -SourceParent $Paths.InstallRoot -DestinationParent $backupRoot -Name "Install-Codex-Skill.ps1") -or $itemsMovedToBackup
     foreach ($cmdFile in Get-ChildItem -LiteralPath $Paths.InstallRoot -Filter "*.cmd" -Force -ErrorAction SilentlyContinue) {
       Move-Item -LiteralPath $cmdFile.FullName -Destination (Join-Path $backupRoot $cmdFile.Name)
       $itemsMovedToBackup = $true
@@ -480,6 +487,8 @@ function Install-StagedPayload {
         Remove-KnownChild -Parent $Paths.InstallRoot -Name "app"
         Remove-KnownChild -Parent $Paths.InstallRoot -Name "node"
         Remove-KnownChild -Parent $Paths.InstallRoot -Name "data"
+        Remove-KnownChild -Parent $Paths.InstallRoot -Name "codex-skill"
+        Remove-KnownChild -Parent $Paths.InstallRoot -Name "Install-Codex-Skill.ps1"
         Get-ChildItem -LiteralPath $Paths.InstallRoot -Filter "*.cmd" -Force -ErrorAction SilentlyContinue | Remove-Item -Force -ErrorAction SilentlyContinue
         Copy-Directory -Source $backupRoot -Destination $Paths.InstallRoot -SkipTopLevelData $false
         $cleanupBackup = $true
@@ -520,6 +529,11 @@ function Test-InstallerPayload {
       "app\apps\admin-ui\dist\index.html",
       "mimo-bridge-client.mjs",
       "MiMo Bridge Client.cmd",
+      "Install-Codex-Skill.ps1",
+      "Install MiMo Bridge Codex Skill.cmd",
+      "codex-skill\use-mimo-bridge-mcp\SKILL.md",
+      "codex-skill\use-mimo-bridge-mcp\references\playbook.md",
+      "codex-skill\use-mimo-bridge-mcp\agents\openai.yaml",
       "MiMo Bridge Launcher.cmd",
       "Start MiMo Bridge.cmd",
       "Stop MiMo Bridge.cmd",
@@ -771,13 +785,15 @@ function Install-App {
     "Target: Windows 10/11 x64.",
     "User data is stored under LOCALAPPDATA\MiMoBridge.",
     "MiMo credentials, task logs, active tasks, and Worktrees are not bundled.",
-    "MiMo Code must be installed and logged in separately on this computer."
+    "MiMo Code must be installed and logged in separately on this computer.",
+    "Run Install MiMo Bridge Codex Skill.cmd to explicitly install or update the bundled Codex usage skill; an existing copy is backed up."
   ) -join [Environment]::NewLine
   Write-Utf8NoBom -Path (Join-Path $paths.InstallRoot "README_INSTALLED.md") -Content ($readme + [Environment]::NewLine)
 
   New-Shortcut -ShortcutPath (Join-Path $paths.StartMenuDir "Start MiMo Bridge.lnk") -TargetPath $paths.StartCmd -WorkingDirectory $paths.InstallRoot -Description "Start MiMo Bridge"
   New-Shortcut -ShortcutPath (Join-Path $paths.StartMenuDir "Configure MiMo Bridge.lnk") -TargetPath $paths.ConfigureCmd -WorkingDirectory $paths.InstallRoot -Description "Configure MiMo Bridge"
   New-Shortcut -ShortcutPath (Join-Path $paths.StartMenuDir "Stop MiMo Bridge.lnk") -TargetPath $paths.StopCmd -WorkingDirectory $paths.InstallRoot -Description "Stop MiMo Bridge"
+  New-Shortcut -ShortcutPath (Join-Path $paths.StartMenuDir "Install MiMo Bridge Codex Skill.lnk") -TargetPath (Join-Path $paths.InstallRoot "Install MiMo Bridge Codex Skill.cmd") -WorkingDirectory $paths.InstallRoot -Description "Install or update the MiMo Bridge Codex usage skill"
   New-Shortcut -ShortcutPath (Join-Path $paths.StartMenuDir "Uninstall MiMo Bridge.lnk") -TargetPath "powershell.exe" -Arguments ('-NoProfile -ExecutionPolicy Bypass -File "' + $paths.MaintenanceScript + '" -Uninstall') -WorkingDirectory $paths.InstallRoot -Description "Uninstall MiMo Bridge"
   if ($createDesktop) {
     New-Shortcut -ShortcutPath $paths.DesktopShortcut -TargetPath $paths.StartCmd -WorkingDirectory $paths.InstallRoot -Description "Start MiMo Bridge"

@@ -68,6 +68,7 @@ function Test-ManifestBooleans {
   )
   Add-Check -Name "$Name target" -Passed ($Manifest.target -eq "windows-10-11-x64") -Detail "$($Manifest.target)"
   Add-Check -Name "$Name includes node" -Passed ([bool]$Manifest.includes_node) -Detail "$($Manifest.includes_node)"
+  Add-Check -Name "$Name includes Codex skill" -Passed ([bool]$Manifest.includes_codex_skill) -Detail "$($Manifest.includes_codex_skill)"
   Add-Check -Name "$Name excludes MiMo credentials" -Passed (-not [bool]$Manifest.includes_mimo_credentials) -Detail "$($Manifest.includes_mimo_credentials)"
   Add-Check -Name "$Name excludes tasks" -Passed (-not [bool]$Manifest.includes_tasks) -Detail "$($Manifest.includes_tasks)"
   Add-Check -Name "$Name excludes worktrees" -Passed (-not [bool]$Manifest.includes_worktrees) -Detail "$($Manifest.includes_worktrees)"
@@ -82,6 +83,11 @@ function Test-PortablePayload {
     "app\apps\admin-ui\dist\index.html",
     "mimo-bridge-client.mjs",
     "MiMo Bridge Client.cmd",
+    "Install-Codex-Skill.ps1",
+    "Install MiMo Bridge Codex Skill.cmd",
+    "codex-skill\use-mimo-bridge-mcp\SKILL.md",
+    "codex-skill\use-mimo-bridge-mcp\references\playbook.md",
+    "codex-skill\use-mimo-bridge-mcp\agents\openai.yaml",
     "MiMo Bridge Launcher.cmd",
     "Start MiMo Bridge.cmd",
     "Stop MiMo Bridge.cmd",

@@ -102,12 +102,30 @@ Copy-Item -LiteralPath (Join-Path $repoRoot "apps\local-daemon\package.json") -D
 Copy-Item -LiteralPath (Join-Path $repoRoot "apps\local-daemon\README.md") -Destination (Join-Path $appRoot "apps\local-daemon\README.md") -Force
 Copy-Directory -Source (Join-Path $repoRoot "apps\admin-ui\dist") -Destination (Join-Path $appRoot "apps\admin-ui\dist")
 Copy-Item -LiteralPath (Join-Path $repoRoot "scripts\mimo-bridge-client.mjs") -Destination (Join-Path $packageRoot "mimo-bridge-client.mjs") -Force
+Copy-Directory -Source (Join-Path $repoRoot "skills\use-mimo-bridge-mcp") -Destination (Join-Path $packageRoot "codex-skill\use-mimo-bridge-mcp")
+Copy-Item -LiteralPath (Join-Path $repoRoot "scripts\install-codex-skill.ps1") -Destination (Join-Path $packageRoot "Install-Codex-Skill.ps1") -Force
+$bundledSkillFiles = @(
+  "codex-skill\use-mimo-bridge-mcp\SKILL.md",
+  "codex-skill\use-mimo-bridge-mcp\references\playbook.md",
+  "codex-skill\use-mimo-bridge-mcp\agents\openai.yaml"
+)
+foreach ($relativePath in $bundledSkillFiles) {
+  if (-not (Test-Path -LiteralPath (Join-Path $packageRoot $relativePath))) {
+    throw "Portable package missing bundled Codex skill file: $relativePath"
+  }
+}
 
 $clientCmd = @'
 @echo off
 "%~dp0node\node.exe" "%~dp0mimo-bridge-client.mjs" %*
 '@
 Write-Utf8NoBom -Path (Join-Path $packageRoot "MiMo Bridge Client.cmd") -Content $clientCmd
+
+$installCodexSkillCmd = @'
+@echo off
+powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0Install-Codex-Skill.ps1" %*
+'@
+Write-Utf8NoBom -Path (Join-Path $packageRoot "Install MiMo Bridge Codex Skill.cmd") -Content $installCodexSkillCmd
 
 $launcherCmd = @'
 @echo off
@@ -155,7 +173,8 @@ This is a portable application package for MiMo Bridge MCP.
 4. Use `MiMo Bridge Launcher.cmd` for the interactive menu.
 5. Add a new project boundary explicitly with `MiMo Bridge Launcher.cmd allow-root --path "C:\path\to\project" --restart`.
 6. Use `MiMo Bridge Client.cmd health` or its `start`/`wait` commands for SDK-free scripted access.
-7. Use `Stop MiMo Bridge.cmd` before moving or deleting the folder.
+7. Run `Install MiMo Bridge Codex Skill.cmd` to explicitly install or update the bundled Codex usage skill. An existing copy is backed up first.
+8. Use `Stop MiMo Bridge.cmd` before moving or deleting the folder.
 
 ## Data policy
 
@@ -191,6 +210,7 @@ $manifest = [ordered]@{
   source_commit = $commit
   generated_at = (Get-Date).ToUniversalTime().ToString("o")
   includes_node = $true
+  includes_codex_skill = $true
   includes_mimo_credentials = $false
   includes_tasks = $false
   includes_worktrees = $false
